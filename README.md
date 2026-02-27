@@ -1,5 +1,4 @@
 ** Tools
-- Generic Attach to Target Nameplate (may not have public?)
 - Nameplate / Name automation
     - SOFTTARGET is unused by nameplate devs, so we need to tap into options
     - Show / Hide based on conditions

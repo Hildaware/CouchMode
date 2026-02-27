@@ -1,178 +1,156 @@
-local addonName = ...
+local addonName     = ...
 
 ---@class ConsoleTools: AceAddon
-local addon     = LibStub('AceAddon-3.0'):GetAddon(addonName)
+local addon         = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class CastRing: AceModule
 ---@field preview boolean
-local castRing  = addon:NewModule('CastRing', 'AceEvent-3.0')
+local castRing      = addon:NewModule('CastRing', 'AceEvent-3.0')
 ---@cast castRing +AceEvent-3.0
 
-local CastUtil  = addon.CastUtil
+local CastUtil      = addon.CastUtil
 
-local frame, ringTex, borderRingTex, borderInnerRingTex, cooldown, latencyCD, sparkTex, iconMask, icon, spellName, castTimer
+local MEDIA         = {
+    RING         = "Interface\\AddOns\\ConsoleTools\\Media\\CastRing.blp",
+    BORDER       = "interface/azerite/azerite",
+    BORDER_ATLAS = "Azerite-Trait-Ring-Open",
+    ICON_MASK    = "Interface\\CharacterFrame\\TempPortraitAlphaMask",
+}
 
-local RING_TEX  = "Interface\\AddOns\\ConsoleTools\\Media\\CastRing.blp"
+---@class CastRingGUI
+---@field frame Frame
+---@field ringTex Texture
+---@field borderRingTex Texture
+---@field borderInnerRingTex Texture
+---@field cooldown Cooldown
+---@field latencyCD Cooldown
+---@field sparkTex Texture
+---@field iconMask MaskTexture
+---@field icon Texture
+---@field spellName FontString
+---@field castTimer FontString
+local gui           = {}
+local lastTimerText = ""
 
-
--- ── Blizzard cast bar suppression ─────────────────────────────────────────────
-local hidingCastBar = false
-local castBarHooked = false
-
-local function EnsureCastBarHook()
-    ---@diagnostic disable-next-line: undefined-global
-    if castBarHooked or not CastingBarFrame then return end
-    castBarHooked = true
-    ---@diagnostic disable-next-line: undefined-global
-    CastingBarFrame:HookScript("OnShow", function(self)
-        if hidingCastBar then self:Hide() end
-    end)
-end
-
-local HOLE_RATIO = 0.72 -- fraction of ring size that is the inner hole (matches Ring.tga)
+local HOLE_RATIO    = 0.72 -- fraction of ring size that is the inner hole (matches Ring.tga)
 
 local function cfg()
     return addon.db.profile.castRing
 end
 
 function castRing:ApplyCastBarHide()
-    hidingCastBar = cfg().hideBlizzardCastBar
-
-    ---@diagnostic disable-next-line: undefined-global
-    if hidingCastBar and PlayerCastingBarFrame then
-        PlayerCastingBarFrame.RegisterEvent = function() end
-        PlayerCastingBarFrame:UnregisterAllEvents()
-        PlayerCastingBarFrame:Hide()
-    end
+    CastUtil.ConfigureBlizzardCastBar(cfg().hideBlizzardCastBar)
 end
 
 -- ── Refresh ───────────────────────────────────────────────────────────────────
 function castRing:Refresh()
-    if not frame then return end
+    if not gui.frame then return end
     local c = cfg()
 
-    frame:SetFrameStrata(c.frameStrata)
-    frame:SetSize(c.size, c.size)
-    frame:ClearAllPoints()
-    frame:SetPoint("CENTER", UIParent, "CENTER", c.xPos, c.yPos)
+    gui.frame:SetFrameStrata(c.frameStrata)
+    gui.frame:SetSize(c.size, c.size)
+    gui.frame:ClearAllPoints()
+    gui.frame:SetPoint("CENTER", UIParent, "CENTER", c.xPos, c.yPos)
 
-    frame:SetMovable(not c.locked)
-    frame:EnableMouse(not c.locked)
+    gui.frame:SetMovable(not c.locked)
+    gui.frame:EnableMouse(not c.locked)
 
     local holeSize = math.floor(c.size * HOLE_RATIO)
-    iconMask:SetSize(holeSize, holeSize)
-    icon:SetSize(holeSize, holeSize)
+    gui.iconMask:SetSize(holeSize, holeSize)
+    gui.icon:SetSize(holeSize, holeSize)
 
     local cc = c.castColor
-    ringTex:SetVertexColor(cc.r, cc.g, cc.b, cc.a)
+    gui.ringTex:SetVertexColor(cc.r, cc.g, cc.b, cc.a)
 
-    borderRingTex:SetShown(c.showBorder)
-    borderInnerRingTex:SetShown(c.showBorder)
+    gui.borderRingTex:SetShown(c.showBorder)
+    gui.borderInnerRingTex:SetShown(c.showBorder)
     if c.showBorder then
         local bc = c.borderColor
-        borderRingTex:SetVertexColor(bc.r, bc.g, bc.b, bc.a)
-        borderRingTex:SetSize(c.size + c.borderWidth * 2, c.size + c.borderWidth * 2)
-        borderInnerRingTex:SetVertexColor(bc.r, bc.g, bc.b, bc.a)
-        borderInnerRingTex:SetSize(c.size - c.borderWidth * 2, c.size - c.borderWidth * 2)
+        gui.borderRingTex:SetVertexColor(bc.r, bc.g, bc.b, bc.a)
+        gui.borderRingTex:SetSize(c.size + c.borderWidth * 2, c.size + c.borderWidth * 2)
+        gui.borderInnerRingTex:SetVertexColor(bc.r, bc.g, bc.b, bc.a)
+        gui.borderInnerRingTex:SetSize(c.size - c.borderWidth * 2, c.size - c.borderWidth * 2)
     end
 
-    icon:SetShown(c.showIcon)
-    spellName:SetShown(c.showSpellName)
-    castTimer:SetShown(c.showTimer)
+    gui.icon:SetShown(c.showIcon)
+    gui.spellName:SetShown(c.showSpellName)
+    gui.castTimer:SetShown(c.showTimer)
 end
 
 -- ── UI Construction ───────────────────────────────────────────────────────────
 function castRing:CreateUI()
-    frame = CreateFrame("Frame", "CastRingFrame", UIParent)
-    frame:SetFrameStrata(cfg().frameStrata)
-    frame:SetFrameLevel(10)
-    frame:Hide()
+    gui.frame = CreateFrame("Frame", "CastRingFrame", UIParent)
+    gui.frame:SetFrameStrata(cfg().frameStrata)
+    gui.frame:SetFrameLevel(10)
+    gui.frame:Hide()
 
-    CastUtil.ApplyDragToMove(frame, cfg)
+    CastUtil.ApplyDragToMove(gui.frame, cfg)
 
-    -- Border rings — same texture as main ring at slightly larger and smaller sizes.
-    -- The extra outer rim extends past the swipe area (always visible as outer outline).
-    -- The smaller ring's inner radius peeks into the hole (inner outline).
-    -- Both are in BACKGROUND so the ARTWORK ringTex and cooldown frames sit above them.
-    borderRingTex = frame:CreateTexture(nil, "BACKGROUND")
-    -- borderRingTex:SetTexture(RING_TEX)
-    borderRingTex:SetTexture("interface/azerite/azerite")
-    borderRingTex:SetAtlas("Azerite-Trait-Ring-Open")
-    borderRingTex:SetPoint("CENTER", frame, "CENTER")
+    gui.borderRingTex = gui.frame:CreateTexture(nil, "BACKGROUND")
+    gui.borderRingTex:SetTexture(MEDIA.BORDER)
+    gui.borderRingTex:SetAtlas(MEDIA.BORDER_ATLAS)
+    gui.borderRingTex:SetPoint("CENTER", gui.frame, "CENTER")
 
-    borderInnerRingTex = frame:CreateTexture(nil, "BACKGROUND")
-    -- borderInnerRingTex:SetTexture(RING_TEX)
-    borderInnerRingTex:SetTexture("interface/azerite/azerite")
-    borderInnerRingTex:SetAtlas("Azerite-Trait-Ring-Open")
-    borderInnerRingTex:SetPoint("CENTER", frame, "CENTER")
-    -- Sizes and colors set by Refresh()
+    gui.borderInnerRingTex = gui.frame:CreateTexture(nil, "BACKGROUND")
+    gui.borderInnerRingTex:SetTexture(MEDIA.BORDER)
+    gui.borderInnerRingTex:SetAtlas(MEDIA.BORDER_ATLAS)
+    gui.borderInnerRingTex:SetPoint("CENTER", gui.frame, "CENTER")
 
-    -- Ring texture — ADD blend so it glows over whatever is behind the frame
-    ringTex = frame:CreateTexture(nil, "ARTWORK")
-    ringTex:SetAllPoints()
-    ringTex:SetTexture(RING_TEX)
-    -- ringTex:SetBlendMode("ADD")
+    gui.ringTex = gui.frame:CreateTexture(nil, "ARTWORK")
+    gui.ringTex:SetAllPoints()
+    gui.ringTex:SetTexture(MEDIA.RING)
 
-    -- Cooldown drives the circular sweep animation
-    cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
-    cooldown:SetAllPoints()
-    cooldown:SetFrameLevel(frame:GetFrameLevel() + 1)
-    cooldown:SetDrawBling(false)
-    cooldown:SetDrawEdge(false)
-    cooldown:SetHideCountdownNumbers(true)
-    cooldown:SetSwipeTexture(RING_TEX, 0.5, 0.5, 0.5, 1)
-    -- cooldown:SetSwipeColor(0, 0, 0, 1)
+    gui.cooldown = CreateFrame("Cooldown", nil, gui.frame, "CooldownFrameTemplate")
+    gui.cooldown:SetAllPoints()
+    gui.cooldown:SetFrameLevel(gui.frame:GetFrameLevel() + 1)
+    gui.cooldown:SetDrawBling(false)
+    gui.cooldown:SetDrawEdge(false)
+    gui.cooldown:SetHideCountdownNumbers(true)
+    gui.cooldown:SetSwipeTexture(MEDIA.RING, 0.5, 0.5, 0.5, 1)
 
-    -- Latency indicator — sits ABOVE the main cooldown so its red dark area is always
-    -- visible at 12 o'clock. Pre-started in StartCast() so only the latency/duration
-    -- fraction of dark remains, placing the red arc at the cast completion point.
-    latencyCD = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
-    latencyCD:SetAllPoints()
-    latencyCD:SetFrameLevel(frame:GetFrameLevel() + 2)
-    latencyCD:SetDrawBling(false)
-    latencyCD:SetDrawEdge(false)
-    latencyCD:SetHideCountdownNumbers(true)
-    latencyCD:SetSwipeTexture(RING_TEX, 0, 0, 0, 1)
-    latencyCD:SetSwipeColor(.85, .25, .25, 1)
+    gui.latencyCD = CreateFrame("Cooldown", nil, gui.frame, "CooldownFrameTemplate")
+    gui.latencyCD:SetAllPoints()
+    gui.latencyCD:SetFrameLevel(gui.frame:GetFrameLevel() + 2)
+    gui.latencyCD:SetDrawBling(false)
+    gui.latencyCD:SetDrawEdge(false)
+    gui.latencyCD:SetHideCountdownNumbers(true)
+    gui.latencyCD:SetSwipeTexture(MEDIA.RING, 0, 0, 0, 1)
+    gui.latencyCD:SetSwipeColor(.85, .25, .25, 1)
 
-    -- Spark — bright glow at the leading arc edge; positioned per-frame in OnUpdate.
-    local sparkFrame = CreateFrame("Frame", nil, frame)
+    local sparkFrame = CreateFrame("Frame", nil, gui.frame)
     sparkFrame:SetAllPoints()
-    sparkFrame:SetFrameLevel(frame:GetFrameLevel() + 3)
-    sparkTex = sparkFrame:CreateTexture(nil, "OVERLAY")
-    sparkTex:SetColorTexture(1, 0.9, 0.6, 1)
-    sparkTex:SetBlendMode("ADD")
-    sparkTex:Hide()
+    sparkFrame:SetFrameLevel(gui.frame:GetFrameLevel() + 3)
+    gui.sparkTex = sparkFrame:CreateTexture(nil, "OVERLAY")
+    gui.sparkTex:SetColorTexture(1, 0.9, 0.6, 1)
+    gui.sparkTex:SetBlendMode("ADD")
+    gui.sparkTex:Hide()
 
-    -- Icon frame sits below the ring so the spell icon shows through the center hole
-    local iconFrame = CreateFrame("Frame", nil, frame)
+    local iconFrame = CreateFrame("Frame", nil, gui.frame)
     iconFrame:SetAllPoints()
-    iconFrame:SetFrameLevel(frame:GetFrameLevel() - 1)
+    iconFrame:SetFrameLevel(gui.frame:GetFrameLevel() - 1)
 
-    -- Circular mask clips the icon to the hole shape
-    iconMask = iconFrame:CreateMaskTexture()
-    iconMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-    iconMask:SetPoint("CENTER")
+    gui.iconMask = iconFrame:CreateMaskTexture()
+    gui.iconMask:SetTexture(MEDIA.ICON_MASK)
+    gui.iconMask:SetPoint("CENTER")
 
-    icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("CENTER")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    icon:AddMaskTexture(iconMask)
+    gui.icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    gui.icon:SetPoint("CENTER")
+    gui.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    gui.icon:AddMaskTexture(gui.iconMask)
 
-    spellName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    spellName:SetPoint("TOP", frame, "BOTTOM", 0, -4)
-    spellName:SetTextColor(1, 1, 1, 1)
+    gui.spellName = gui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    gui.spellName:SetPoint("TOP", gui.frame, "BOTTOM", 0, -4)
+    gui.spellName:SetTextColor(1, 1, 1, 1)
 
-    castTimer = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    castTimer:SetPoint("TOP", spellName, "BOTTOM", 0, -2)
-    castTimer:SetTextColor(1, 0.82, 0, 1)
+    gui.castTimer = gui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    gui.castTimer:SetPoint("TOP", gui.spellName, "BOTTOM", 0, -2)
+    gui.castTimer:SetTextColor(1, 0.82, 0, 1)
 
-    frame:SetScript("OnUpdate", function()
+    gui.frame:SetScript("OnUpdate", function()
         if not castRing.castEndTime then return end
-        local now       = GetTime()
-        local remaining = castRing.castEndTime - now
-        if remaining < 0 then remaining = 0 end
-        castTimer:SetText(string.format("%.1f", remaining))
+
+        local remaining
+        lastTimerText, remaining = CastUtil.UpdateTimer(gui.castTimer, castRing.castEndTime, lastTimerText)
 
         if cfg().showSpark and castRing.castDuration then
             local c        = cfg()
@@ -182,15 +160,15 @@ function castRing:CreateUI()
             local innerR   = outerR * HOLE_RATIO
             local midR     = (outerR + innerR) / 2
             local bandH    = outerR - innerR
-            sparkTex:SetSize(bandH * 0.3, bandH * 1.15)
-            sparkTex:ClearAllPoints()
-            sparkTex:SetPoint("CENTER", frame, "CENTER",
+            gui.sparkTex:SetSize(bandH * 0.3, bandH * 1.15)
+            gui.sparkTex:ClearAllPoints()
+            gui.sparkTex:SetPoint("CENTER", gui.frame, "CENTER",
                 midR * math.sin(angle),
                 midR * math.cos(angle))
-            sparkTex:SetRotation(-angle)
-            sparkTex:SetShown(true)
+            gui.sparkTex:SetRotation(-angle)
+            gui.sparkTex:SetShown(true)
         else
-            sparkTex:Hide()
+            gui.sparkTex:Hide()
         end
     end)
 
@@ -202,8 +180,8 @@ local function MoveToNameplate()
     local np = C_NamePlate.GetNamePlateForUnit("target")
     if not np then return end
     local c = cfg()
-    frame:ClearAllPoints()
-    frame:SetPoint(c.nameplateAnchor, np, c.nameplateRelative, c.nameplateXOffset, c.nameplateYOffset)
+    gui.frame:ClearAllPoints()
+    gui.frame:SetPoint(c.nameplateAnchor, np, c.nameplateRelative, c.nameplateXOffset, c.nameplateYOffset)
 end
 
 -- ── Cast lifecycle ────────────────────────────────────────────────────────────
@@ -220,23 +198,20 @@ function castRing:StartCast(isChannel)
     self.castDuration = duration
     self.isChannel    = isChannel
 
-    cooldown:SetReverse(isChannel) -- fills for casts, drains for channels
+    gui.cooldown:SetReverse(isChannel)
 
-    -- Fixed latency indicator: pre-start latencyCD so only the latency/duration fraction
-    -- of dark remains at 12 o'clock (the cast completion point). Scaling duration by K
-    -- slows the shrink rate to 1/K per cast, keeping the arc visually static.
-    local latency  = select(4, GetNetStats()) / 1000
+    local latency  = CastUtil.GetLatency()
     local K        = 100
     local totalDur = duration * K
-    latencyCD:SetReverse(isChannel)
-    latencyCD:SetCooldown(startTime - totalDur * (1 - latency / duration), totalDur)
+    gui.latencyCD:SetReverse(isChannel)
+    gui.latencyCD:SetCooldown(startTime - totalDur * (1 - latency / duration), totalDur)
 
-    ringTex:SetVertexColor(CastUtil.ResolveColor(cfg(), isChannel))
+    gui.ringTex:SetVertexColor(CastUtil.ResolveColor(cfg(), isChannel))
 
-    cooldown:SetCooldown(startTime, duration)
-    icon:SetTexture(texture)
-    spellName:SetText(name)
-    frame:Show()
+    gui.cooldown:SetCooldown(startTime, duration)
+    gui.icon:SetTexture(texture)
+    gui.spellName:SetText(name)
+    gui.frame:Show()
 
     if cfg().attachToNameplate then
         ---@diagnostic disable-next-line: param-type-mismatch
@@ -247,8 +222,7 @@ function castRing:StartCast(isChannel)
             if pcb then pcb:HideFallback() end
             MoveToNameplate()
         else
-            -- No nameplate: fall back to the standard cast bar
-            frame:Hide()
+            gui.frame:Hide()
             local pcb = addon:GetModule('PlayerCastBar', true)
             ---@diagnostic disable-next-line: undefined-field
             if pcb then pcb:ShowFallback(isChannel) end
@@ -261,13 +235,14 @@ function castRing:StopCast()
     self.castDuration    = nil
     self.currentCastGUID = nil
     self.isChannel       = nil
-    cooldown:SetCooldown(0, 0)
-    latencyCD:SetCooldown(0, 0)
-    sparkTex:Hide()
+    gui.cooldown:SetCooldown(0, 0)
+    gui.latencyCD:SetCooldown(0, 0)
+    gui.sparkTex:Hide()
+    lastTimerText = ""
     if not self.preview then
-        frame:Hide()
+        gui.frame:Hide()
     end
-    -- Also clear any active fallback display on the standard cast bar
+
     local pcb = addon:GetModule('PlayerCastBar', true)
     ---@diagnostic disable-next-line: undefined-field
     if pcb then pcb:HideFallback() end
@@ -277,23 +252,21 @@ function castRing:TogglePreview()
     if self.preview then
         self.preview = false
         if not self.castEndTime then
-            frame:Hide()
+            gui.frame:Hide()
         end
     else
         self.preview = true
         local cc = cfg().castColor
-        ringTex:SetVertexColor(cc.r, cc.g, cc.b, cc.a)
-        frame:Show()
+        gui.ringTex:SetVertexColor(cc.r, cc.g, cc.b, cc.a)
+        gui.frame:Show()
         if cfg().attachToNameplate then
             MoveToNameplate()
         end
     end
 end
 
--- Called by options when nameplate anchor/offset settings change, to reposition
--- the frame live if it is already visible (preview or active cast).
 function castRing:UpdateNameplateAnchor()
-    if not frame:IsShown() then return end
+    if not gui.frame:IsShown() then return end
     if not cfg().attachToNameplate then return end
     MoveToNameplate()
 end
@@ -307,7 +280,7 @@ function castRing:UpdateCast(isChannel)
     local startTime  = startTimeMS / 1000
     local endTime    = endTimeMS / 1000
     self.castEndTime = endTime
-    cooldown:SetCooldown(startTime, endTime - startTime)
+    gui.cooldown:SetCooldown(startTime, endTime - startTime)
 end
 
 -- ── Event handlers ────────────────────────────────────────────────────────────
@@ -352,21 +325,19 @@ function castRing:OnNamePlateAdded(_, unitToken)
     if not self.castEndTime then return end
     if not cfg().attachToNameplate then return end
     if not UnitIsUnit(unitToken, "target") then return end
-    -- Nameplate appeared mid-cast: hide the fallback bar and move ring to nameplate
     local pcb = addon:GetModule('PlayerCastBar', true)
     ---@diagnostic disable-next-line: undefined-field
     if pcb then pcb:HideFallback() end
     MoveToNameplate()
-    frame:Show()
+    gui.frame:Show()
 end
 
 function castRing:OnNamePlateRemoved(_, unitToken)
     if not self.castEndTime then return end
     if not cfg().attachToNameplate then return end
     if not UnitIsUnit(unitToken, "target") then return end
-    -- Nameplate gone mid-cast: hide ring and show the standard cast bar instead
-    frame:ClearAllPoints()
-    frame:Hide()
+    gui.frame:ClearAllPoints()
+    gui.frame:Hide()
     local pcb = addon:GetModule('PlayerCastBar', true)
     ---@diagnostic disable-next-line: undefined-field
     if pcb then pcb:ShowFallback(self.isChannel) end
@@ -382,10 +353,10 @@ function castRing:OnTargetChanged()
         ---@diagnostic disable-next-line: undefined-field
         if pcb then pcb:HideFallback() end
         MoveToNameplate()
-        frame:Show()
+        gui.frame:Show()
     else
-        frame:ClearAllPoints()
-        frame:Hide()
+        gui.frame:ClearAllPoints()
+        gui.frame:Hide()
         local pcb = addon:GetModule('PlayerCastBar', true)
         ---@diagnostic disable-next-line: undefined-field
         if pcb then pcb:ShowFallback(self.isChannel) end
@@ -401,17 +372,14 @@ function castRing:OnEnable()
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNamePlateRemoved")
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
 
-    EnsureCastBarHook()
     self:ApplyCastBarHide()
 
-    -- Sync castRingMode on PlayerCastBar if attachToNameplate is already on
     if cfg().attachToNameplate then
         local pcb = addon:GetModule('PlayerCastBar', true)
         ---@diagnostic disable-next-line: undefined-field
         if pcb then pcb:SetCastRingMode(true) end
     end
 
-    -- Catch an in-progress cast (e.g. after /reload)
     if UnitCastingInfo("player") then
         self:StartCast(false)
     elseif UnitChannelInfo("player") then
@@ -424,11 +392,10 @@ function castRing:OnDisable()
     self.isChannel = nil
     hidingCastBar  = false
     self:UnregisterAllEvents()
-    if frame then
-        frame:SetScript("OnUpdate", nil)
-        frame:Hide()
+    if gui.frame then
+        gui.frame:SetScript("OnUpdate", nil)
+        gui.frame:Hide()
     end
-    -- Restore PlayerCastBar to independent self-managed mode
     local pcb = addon:GetModule('PlayerCastBar', true)
     ---@diagnostic disable-next-line: undefined-field
     if pcb then pcb:SetCastRingMode(false) end

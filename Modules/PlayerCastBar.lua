@@ -274,15 +274,10 @@ function castBar:CreateUI()
 
     gui.frame:SetScript("OnUpdate", function()
         if not castBar.castEndTime then return end
-        local remaining = castBar.castEndTime - GetTime()
 
-        if remaining < 0 then remaining = 0 end
+        local remaining
+        lastTimerText, remaining = CastUtil.UpdateTimer(gui.castTimer, castBar.castEndTime, lastTimerText)
 
-        local newTimerText = string.format("%.1f", remaining)
-        if newTimerText ~= lastTimerText then
-            gui.castTimer:SetText(newTimerText)
-            lastTimerText = newTimerText
-        end
         local total = castBar.castDuration or 1
         local value = castBar.isChannel and (remaining / total) or ((total - remaining) / total)
         gui.leftBar.bar:SetWidth(value * gui.barFullWidth)
@@ -316,7 +311,7 @@ function castBar:StartCastInternal(isChannel)
     gui.rightBar.spark:SetVertexColor(r, g, b, a)
 
     if c.showLatency then
-        local latency      = select(4, GetNetStats()) / 1000
+        local latency      = CastUtil.GetLatency()
         local latencyWidth = math.min((latency / duration) * gui.barFullWidth, gui.barFullWidth)
         gui.leftBar.latency:SetWidth(latencyWidth)
         gui.rightBar.latency:SetWidth(latencyWidth)
