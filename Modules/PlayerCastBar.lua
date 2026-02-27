@@ -194,7 +194,7 @@ function castBar:Refresh()
     gui.frame:EnableMouse(not c.locked)
 
     if gui.iconFrame then
-        gui.iconFrame:SetSize(c.height * 3, c.height * 2)
+        gui.iconFrame:SetSize(c.height * 2.5, c.height * 2)
         gui.barFullWidth = (c.width - c.height * 2) / 2 + 2
     end
 

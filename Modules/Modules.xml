@@ -3,4 +3,6 @@
     <Include file = 'CastUtil.lua' />
     <Include file = 'PlayerCastBar.lua' />
     <Include file = 'CastRing.lua' />
+    <Include file = 'TooltipAutomation.lua' />
+    <Include file = 'PlayerHealthBar.lua' />
 </UI>

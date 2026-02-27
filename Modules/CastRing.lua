@@ -11,7 +11,7 @@ local castRing      = addon:NewModule('CastRing', 'AceEvent-3.0')
 local CastUtil      = addon.CastUtil
 
 local MEDIA         = {
-    RING         = "Interface\\AddOns\\ConsoleTools\\Media\\CastRing.blp",
+    RING         = "Interface\\AddOns\\ConsoleTools\\Media\\CastRingSM.blp",
     BORDER       = "interface/azerite/azerite",
     BORDER_ATLAS = "Azerite-Trait-Ring-Open",
     ICON_MASK    = "Interface\\CharacterFrame\\TempPortraitAlphaMask",
@@ -160,7 +160,7 @@ function castRing:CreateUI()
             local innerR   = outerR * HOLE_RATIO
             local midR     = (outerR + innerR) / 2
             local bandH    = outerR - innerR
-            gui.sparkTex:SetSize(bandH * 0.3, bandH * 1.15)
+            gui.sparkTex:SetSize(bandH * 0.3, bandH * .65)
             gui.sparkTex:ClearAllPoints()
             gui.sparkTex:SetPoint("CENTER", gui.frame, "CENTER",
                 midR * math.sin(angle),
