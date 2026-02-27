@@ -1,0 +1,13 @@
+** Tools
+- Generic Attach to Target Nameplate (may not have public?)
+- Nameplate / Name automation
+    - SOFTTARGET is unused by nameplate devs, so we need to tap into options
+    - Show / Hide based on conditions
+        - Combat
+        - Location (Dungeons, Raids, Cities, World)
+- Tooltip automation
+    - SOFTTARGET still
+        - Currently, it'll show tooltips in combat for friendly, and that's not great
+- Simple health bar attached to CP buttons?
+    - Have some options to show / hide based on conditions
+        - Health %, Combat, etc.

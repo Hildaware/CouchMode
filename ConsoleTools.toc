@@ -1,0 +1,16 @@
+## Interface: 120001
+## Title: Console Tools
+## Notes: Utilities to make WoW a more 'Console-like' experience
+## Author: Sel
+## Version: 12.0.1
+# IconTexture: Interface\AddOns\ConsoleBags\Media\Logo
+# OptionalDeps: ConsolePort, Masque, Pawn, CanIMogIt, Scrap
+## SavedVariables: ConsoleToolsDB
+# X-Curse-Project-ID: 950246
+
+Libs/Libs.xml
+Core/Core.xml
+Modules/Modules.xml
+# GUI/Components/BaseComponents/BaseComponents.xml
+# GUI/GUI.xml
+ConsoleTools.lua
