@@ -5,4 +5,5 @@
     <Include file = 'CastRing.lua' />
     <Include file = 'TooltipAutomation.lua' />
     <Include file = 'PlayerHealthBar.lua' />
+    <Include file = 'GenericTools.lua' />
 </UI>

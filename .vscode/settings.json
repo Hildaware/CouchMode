@@ -24,7 +24,8 @@
         "ACCEPT",
         "CANCEL",
         "ColorPickerFrame",
-        "CastingBarFrame"
+        "CastingBarFrame",
+        "BuffFrame"
     ],
     "Lua.type.weakUnionCheck": true
 }

@@ -57,6 +57,8 @@ function CastUtil.RegisterCastEvents(module)
     module:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnChannelStart")
     module:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     module:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "OnChannelUpdate")
+    module:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START", "OnChannelStart")
+    module:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnChannelStop")
 end
 
 --- Returns r, g, b, a for the cast color from a module's config table.

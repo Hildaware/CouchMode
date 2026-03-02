@@ -203,8 +203,10 @@ function castRing:StartCast(isChannel)
     local latency  = CastUtil.GetLatency()
     local K        = 100
     local totalDur = duration * K
+    local latFrac  = latency / duration
+    local offset   = isChannel and latFrac or (1 - latFrac)
     gui.latencyCD:SetReverse(isChannel)
-    gui.latencyCD:SetCooldown(startTime - totalDur * (1 - latency / duration), totalDur)
+    gui.latencyCD:SetCooldown(startTime - totalDur * offset, totalDur)
 
     gui.ringTex:SetVertexColor(CastUtil.ResolveColor(cfg(), isChannel))
 

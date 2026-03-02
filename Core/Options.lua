@@ -13,7 +13,7 @@ local options = addon:NewModule('Options')
 
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
-local MODULES = { 'CastRing', 'PlayerCastBar', 'AttachToTarget', 'PlayerHealthBar' }
+local MODULES = { 'CastRing', 'PlayerCastBar', 'AttachToTarget', 'PlayerHealthBar', 'Generic' }
 
 function options:OnInitialize()
     -- Collect defaults from each module.
