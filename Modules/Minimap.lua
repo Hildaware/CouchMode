@@ -6,6 +6,8 @@ local addon               = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@class MinimapModule: AceModule
 local minimod             = addon:NewModule('Minimap')
 
+local cpInputHandler      = _G['ConsolePortInputHandler']
+
 local wrapper ---@type Frame
 local borderFrame ---@type Frame
 local borderTexT, borderTexB, borderTexL, borderTexR ---@type Texture
@@ -150,16 +152,6 @@ local function applySettings()
     applyBorder()
 end
 
-local function applyGrowKey(key)
-    if minimod.currentGrowKey then
-        SetBinding(minimod.currentGrowKey)
-        minimod.currentGrowKey = nil
-    end
-    if key and key ~= "" then
-        SetBindingClick(key, "CTMinimapGrowToggle", "LeftButton")
-        minimod.currentGrowKey = key
-    end
-end
 
 local function createFrame()
     local db = addon.db.profile.minimap
@@ -276,7 +268,12 @@ local function createFrame()
 
     wrapper:RegisterEvent("PLAYER_STARTED_MOVING")
     wrapper:RegisterEvent("PLAYER_STOPPED_MOVING")
+    wrapper:RegisterEvent("PLAYER_REGEN_DISABLED")
     wrapper:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_REGEN_DISABLED" then
+            if cpInputHandler then cpInputHandler:Release(wrapper) end
+            return
+        end
         if not db.moveAlphaEnabled then return end
         if event == "PLAYER_STARTED_MOVING" then
             startFade(db.moveAlpha)
@@ -317,6 +314,7 @@ local function createFrame()
     local growBtn = CreateFrame("Button", "CTMinimapGrowToggle", wrapper)
     growBtn:RegisterForClicks("AnyDown")
     growBtn:SetScript("OnClick", function()
+        local cp = _G['ConsolePort']
         if minimod.grown then
             -- Shrinking: close world map first if open
             minimod.grown = false
@@ -325,6 +323,11 @@ local function createFrame()
             wrapper:SetSize(w2, h2)
             Minimap:SetSize(w2, w2)
             applyMinimapShape(db.shape, w2, h2)
+            if cp then
+                cp:RemoveInterfaceCursorFrame(wrapper)
+                if cpInputHandler then cpInputHandler:Release(wrapper) end
+                _G['ConsolePortCursor']:SetEnabled(false)
+            end
         else
             -- Growing
             minimod.grown = true
@@ -332,6 +335,14 @@ local function createFrame()
             wrapper:SetSize(w2, h2)
             Minimap:SetSize(w2, w2)
             applyMinimapShape(db.shape, w2, h2)
+            if cp then
+                cp:AddInterfaceCursorFrame(wrapper)
+
+                if cpInputHandler and not InCombatLockdown() then
+                    cpInputHandler:SetCommand('PADRSHOULDER', wrapper, false, 'LeftButton', 'ZoomIn', nil)
+                    cpInputHandler:SetCommand('PADLSHOULDER', wrapper, false, 'LeftButton', 'ZoomOut', nil)
+                end
+            end
         end
         -- Zoom click cycle forces the HybridMinimap render layer to update for the
         -- new frame size (same technique used by BasicMinimap after SetSize).
@@ -345,6 +356,40 @@ local function createFrame()
             end
         end
     end)
+
+    if _G['ConsolePort'] then
+        wrapper:SetPropagateKeyboardInput(true)
+
+        wrapper:SetScript('OnGamePadButtonDown', function(_, key)
+            if not minimod.grown or InCombatLockdown() then return end
+            if key ~= 'PADRSHOULDER' and key ~= 'PADLSHOULDER' then return end
+
+            local function doZoom()
+                if minimod.worldMapOpen and minimod.worldMap then
+                    local sc = minimod.worldMap.ScrollContainer
+                    sc:SetZoomTarget(sc:GetZoom() * (key == 'PADRSHOULDER' and 1.1 or 0.9))
+                elseif key == 'PADRSHOULDER' then
+                    if Minimap.ZoomIn then Minimap.ZoomIn:Click() end
+                else
+                    if Minimap:GetZoom() == 0 then
+                        openWorldMap()
+                    elseif Minimap.ZoomOut then
+                        Minimap.ZoomOut:Click()
+                    end
+                end
+            end
+            doZoom()
+        end)
+    end
+
+    -- Expose as a global so Bindings.xml can invoke it by name.
+    function ConsoleTools_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-global
+        if wrapper and wrapper:IsShown() then growBtn:Click() end
+    end
+
+    -- Blizzard Key Bindings panel display strings.
+    BINDING_HEADER_CONSOLETOOLS = "Console Tools" ---@diagnostic disable-line: lowercase-global
+    BINDING_NAME_CONSOLETOOLS_MINIMAP_GROWTOGGLE = "Toggle Minimap Expand" ---@diagnostic disable-line: lowercase-global
 end
 
 --#endregion
@@ -684,13 +729,13 @@ end
 
 function minimod:OnEnable()
     if not wrapper then createFrame() end
-    applyGrowKey(addon.db.profile.minimap.growKey)
     wrapper:Show()
 end
 
 function minimod:OnDisable()
     if minimod.worldMapOpen then closeWorldMap() end
     if wrapper then wrapper:Hide() end
+    if cpInputHandler then cpInputHandler:Release(wrapper) end
 
     -- Restore Minimap to original Blizzard state
     if minimod.origParent then
@@ -720,8 +765,6 @@ function minimod:OnDisable()
         minimod.grown      = false
         minimod.fadeTo     = nil
     end
-
-    applyGrowKey("") -- clear binding
 end
 
 function minimod:GetDefaults()
@@ -732,7 +775,6 @@ function minimod:GetDefaults()
             size             = 200,
             alpha            = 0.85,
             growSize         = 420,
-            growKey          = "",
             point            = "TOPRIGHT",
             x                = -20,
             y                = -20,
@@ -820,17 +862,6 @@ function minimod:GetOptions()
                 step  = 10,
                 get   = function() return addon.db.profile.minimap.growSize end,
                 set   = function(_, value) addon.db.profile.minimap.growSize = value end,
-            },
-            growKey = {
-                name  = 'Grow Key',
-                desc  = 'Key to hold for the larger view (e.g. ALT-M, CTRL-SPACE). Leave blank to disable.',
-                type  = 'input',
-                order = 7,
-                get   = function() return addon.db.profile.minimap.growKey end,
-                set   = function(_, value)
-                    addon.db.profile.minimap.growKey = value
-                    applyGrowKey(value)
-                end,
             },
             moveAlphaEnabled = {
                 name  = 'Fade on Move',

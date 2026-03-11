@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="CONSOLETOOLS_MINIMAP_GROWTOGGLE" category="Console Tools">
+        ConsoleTools_MinimapGrowToggle()
+    </Binding>
+</Bindings>
