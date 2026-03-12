@@ -7,6 +7,5 @@
     <Include file = 'PlayerHealthBar.lua' />
     <Include file = 'GenericTools.lua' />
     <Include file = 'Nameplates.lua' />
-    <!-- <Include file = 'Compass.lua' /> -->
-    <Include file = 'Minimap.lua' />
+    <Include file = 'Minimap/Minimap.xml' />
 </UI>
