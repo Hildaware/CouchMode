@@ -11,6 +11,7 @@ local MinimapCluster      = MinimapCluster ---@type Frame
 
 local FADE_DURATION       = 0.5
 local TRANSITION_DURATION = 0.25
+local GROW_DURATION       = 0.5
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 
@@ -199,6 +200,45 @@ function minimod.createFrame()
                 if minimod.minimapFade.to == 0 then Minimap:Hide() end
             end
         end
+        -- Grow/shrink transition
+        if minimod.growTransition.active then
+            minimod.growTransition.elapsed = minimod.growTransition.elapsed + elapsed
+            local t                        = math.min(1, minimod.growTransition.elapsed / GROW_DURATION)
+            local ts                       = t * t * (3 - 2 * t) -- smoothstep easing
+            local gt                       = minimod.growTransition
+            local cw                       = gt.fromW + (gt.toW - gt.fromW) * ts
+            local ch                       = gt.fromH + (gt.toH - gt.fromH) * ts
+            local off                      = math.ceil((cw - ch) / 2)
+            minimod.wrapper:SetSize(cw, ch)
+            minimod.wrapper:SetClampRectInsets(0, 0, off, off)
+            Minimap:ClearAllPoints()
+            Minimap:SetPoint('TOPRIGHT', minimod.wrapper, 'TOPRIGHT', 0, off)
+            Minimap:SetSize(cw, cw)
+            if (minimod.growTransition.elapsed - gt.lastZoomAt) >= 0.005 then
+                gt.lastZoomAt = minimod.growTransition.elapsed
+                local cz = Minimap:GetZoom()
+                local mz = Minimap:GetZoomLevels() - 1
+                if cz < mz then
+                    Minimap:SetZoom(cz + 1); Minimap:SetZoom(cz)
+                else
+                    Minimap:SetZoom(cz - 1); Minimap:SetZoom(cz)
+                end
+            end
+            if t >= 1 then
+                minimod.growTransition.active = false
+                -- Force tile recalculation at final size
+                local curZoom = Minimap:GetZoom()
+                local maxZoom = Minimap:GetZoomLevels() - 1
+                if curZoom < maxZoom then
+                    Minimap:SetZoom(curZoom + 1)
+                    Minimap:SetZoom(curZoom)
+                else
+                    Minimap:SetZoom(curZoom - 1)
+                    Minimap:SetZoom(curZoom)
+                end
+                minimod.applySettings()
+            end
+        end
         -- World map cross-fade
         if minimod.worldMapFade.active and minimod.worldMap then
             minimod.worldMapFade.elapsed = minimod.worldMapFade.elapsed + elapsed
@@ -287,28 +327,20 @@ function minimod.createFrame()
                 end
             end
         end
-        -- Pre-size to target dimensions BEFORE zoom so the tile renderer
-        -- recalculates scale against the correct frame size.
-        local size   = minimod.grown and db.growSize or db.size
-        local w2, h2 = sizeForShape({ shape = db.shape, size = size })
-        minimod.wrapper:SetSize(w2, h2)
-        Minimap:ClearAllPoints()
-        Minimap:SetPoint('TOPRIGHT', minimod.wrapper, 'TOPRIGHT', 0, math.ceil((w2 - h2) / 2))
-        Minimap:SetSize(w2, w2)
+        -- Guard: ignore re-toggle while animation is already running
+        if minimod.growTransition.active then return end
 
-        -- Zoom: tile recalculation now uses the correct w2×w2 frame size
-        local curZoom = Minimap:GetZoom()
-        local maxZoom = Minimap:GetZoomLevels() - 1
-        if curZoom < maxZoom then
-            Minimap:SetZoom(curZoom + 1)
-            Minimap:SetZoom(curZoom)
-        else
-            Minimap:SetZoom(curZoom - 1)
-            Minimap:SetZoom(curZoom)
-        end
+        local fromW, fromH                = minimod.wrapper:GetSize()
+        local size                        = minimod.grown and db.growSize or db.size
+        local toW, toH                    = sizeForShape({ shape = db.shape, size = size })
 
-        -- Apply mask + border after zoom (overwrites any state zoom may have reset)
-        minimod.applySettings()
+        minimod.growTransition.active     = true
+        minimod.growTransition.elapsed    = 0
+        minimod.growTransition.fromW      = fromW
+        minimod.growTransition.fromH      = fromH
+        minimod.growTransition.toW        = toW
+        minimod.growTransition.toH        = toH
+        minimod.growTransition.lastZoomAt = 0
     end
 
     if _G['ConsolePort'] then

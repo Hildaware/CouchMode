@@ -25,6 +25,7 @@ local addon          = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@field hybridMinimap          Frame|nil
 ---@field origCircleMaskTexture  string|nil
 ---@field rectMask               MaskTexture|nil
+---@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
 ---@field wrapper                Frame
 ---@field borderFrame            Frame
 ---@field borderTexT             Texture
@@ -42,8 +43,9 @@ local addon          = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@field closeWorldMap          fun()
 local minimod        = addon:NewModule('Minimap')
 
-minimod.minimapFade  = { from = 1, to = 1, elapsed = 0, active = false }
-minimod.worldMapFade = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.minimapFade    = { from = 1, to = 1, elapsed = 0, active = false }
+minimod.worldMapFade   = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
 
 function minimod.startFrameFade(frame, state, toAlpha)
     state.from    = frame:GetAlpha()
