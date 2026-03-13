@@ -1,13 +1,49 @@
-local addonName           = ...
+local addonName      = ...
 
 ---@class ConsoleTools: AceAddon
-local addon               = LibStub('AceAddon-3.0'):GetAddon(addonName)
+local addon          = LibStub('AceAddon-3.0'):GetAddon(addonName)
+
+---@class FadeState
+---@field from    number
+---@field to      number
+---@field elapsed number
+---@field active  boolean
 
 ---@class MinimapModule: AceModule
-local minimod             = addon:NewModule('Minimap')
+---@field minimapFade            FadeState
+---@field worldMapFade           FadeState
+---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
+---@field fadeTo                 number|nil
+---@field fadeFrom               number
+---@field fadeElapsed            number
+---@field grown                  boolean
+---@field worldMapOpen           boolean
+---@field origParent             Frame|nil
+---@field origW                  number
+---@field origH                  number
+---@field origPoints             table
+---@field hybridMinimap          Frame|nil
+---@field origCircleMaskTexture  string|nil
+---@field rectMask               MaskTexture|nil
+---@field wrapper                Frame
+---@field borderFrame            Frame
+---@field borderTexT             Texture
+---@field borderTexB             Texture
+---@field borderTexL             Texture
+---@field borderTexR             Texture
+---@field applyBorder            fun()
+---@field applySettings          fun()
+---@field createFrame            fun()
+---@field worldMap               Frame|nil
+---@field worldMapArtW           number
+---@field worldMapArtH           number
+---@field resetWorldMapZoom      fun()
+---@field openWorldMap           fun()
+---@field closeWorldMap          fun()
+local minimod        = addon:NewModule('Minimap')
 
-minimod.minimapFade       = { from = 1, to = 1, elapsed = 0, active = false }
-minimod.worldMapFade      = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.minimapFade  = { from = 1, to = 1, elapsed = 0, active = false }
+minimod.worldMapFade = { from = 0, to = 0, elapsed = 0, active = false }
 
 function minimod.startFrameFade(frame, state, toAlpha)
     state.from    = frame:GetAlpha()
@@ -36,12 +72,14 @@ function minimod:OnDisable()
         local pt, relFrame, relPt, ox, oy = unpack(minimod.origPoints)
         Minimap:SetPoint(pt, relFrame, relPt, ox, oy) ---@diagnostic disable-line: param-type-mismatch
         Minimap:SetSize(minimod.origW, minimod.origH)
+        Minimap:SetClampedToScreen(true)
         Minimap:SetMaskTexture("Textures\\MinimapMask")
 
-        ---@diagnostic disable-next-line: undefined-global
-        local hybridMinimap = HybridMinimap
+        local hybridMinimap = minimod.hybridMinimap ---@type any
         if hybridMinimap and hybridMinimap.MapCanvas and hybridMinimap.CircleMask then
-            if minimod.rectMask then hybridMinimap.MapCanvas:RemoveMaskTexture(minimod.rectMask) end ---@diagnostic disable-line: undefined-field
+            hybridMinimap:ClearAllPoints()
+            hybridMinimap:SetAllPoints(Minimap)
+            hybridMinimap.MapCanvas:SetMaskTexture(hybridMinimap.CircleMask)
             hybridMinimap.MapCanvas:SetUseMaskTexture(false)
             hybridMinimap.CircleMask:ClearAllPoints()
             hybridMinimap.CircleMask:SetAllPoints(hybridMinimap.MapCanvas)
@@ -69,7 +107,7 @@ function minimod:GetDefaults()
     return {
         minimap = {
             enabled          = true,
-            shape            = "square",
+            shape            = "rectangle",
             size             = 200,
             alpha            = 0.85,
             growSize         = 420,

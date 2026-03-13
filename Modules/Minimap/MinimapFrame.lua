@@ -16,63 +16,31 @@ local TRANSITION_DURATION = 0.25
 
 local function sizeForShape(db)
     if db.shape == "rectangle" then
-        return db.size, math.floor(db.size * 0.5)
+        return db.size, math.floor(db.size * (2 / 3))
     end
     return db.size, db.size
 end
 
+local RECT_MASK = "Interface\\AddOns\\ConsoleTools\\Media\\3-2.blp"
+
 local function maskForShape(shape)
-    if shape == "square" or shape == "rectangle" then
+    if shape == "square" then
         return "Interface\\BUTTONS\\WHITE8X8"
+    elseif shape == "rectangle" then
+        return RECT_MASK
     end
     return nil -- circle: pass nil to restore Blizzard's native circular mask
 end
 
--- Applies shape masking to both the Minimap frame mask and HybridMinimap.MapCanvas.
--- IMPORTANT: Do NOT resize CircleMask — HybridMinimap uses it as a render-viewport hint,
--- so SetSize(w,h) squashes map tiles rather than cropping them.  Instead we keep CircleMask
--- at SetAllPoints (full square, non-restrictive white texture) and add a *second* MaskTexture
--- for rectangle via AddMaskTexture.  The two masks are ANDed: full-square AND w×h rect = rect.
 local function applyMinimapShape(shape, w, h)
     Minimap:SetMaskTexture(maskForShape(shape))
 
-    ---@diagnostic disable-next-line: undefined-global
-    local hybridMinimap = HybridMinimap
-    if not (hybridMinimap and hybridMinimap.MapCanvas and hybridMinimap.CircleMask) then return end
-
-    if not minimod.origCircleMaskTexture then
-        minimod.origCircleMaskTexture = hybridMinimap.CircleMask:GetTexture()
-    end
-
-    hybridMinimap.MapCanvas:SetUseMaskTexture(false)
-    hybridMinimap.CircleMask:ClearAllPoints()
-
     if shape == "rectangle" then
-        hybridMinimap.CircleMask:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-        hybridMinimap.CircleMask:SetAllPoints(hybridMinimap.MapCanvas)
-
-        if not minimod.rectMask then
-            minimod.rectMask = hybridMinimap.MapCanvas:CreateMaskTexture()
-            minimod.rectMask:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-            hybridMinimap.MapCanvas:AddMaskTexture(minimod.rectMask) ---@diagnostic disable-line: undefined-field
-        end
-        minimod.rectMask:ClearAllPoints()
-        minimod.rectMask:SetSize(w, h)
-        minimod.rectMask:SetPoint("CENTER", hybridMinimap.MapCanvas, "CENTER")
+        local halfDiff = math.ceil((w - h) / 2)
+        Minimap:SetHitRectInsets(0, 0, halfDiff, halfDiff)
     else
-        if minimod.rectMask then hybridMinimap.MapCanvas:RemoveMaskTexture(minimod.rectMask) end ---@diagnostic disable-line: undefined-field
-        if shape == "square" then
-            hybridMinimap.CircleMask:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-            hybridMinimap.CircleMask:SetAllPoints(hybridMinimap.MapCanvas)
-        else -- circle
-            if minimod.origCircleMaskTexture then
-                hybridMinimap.CircleMask:SetTexture(minimod.origCircleMaskTexture)
-            end
-            hybridMinimap.CircleMask:SetAllPoints(hybridMinimap.MapCanvas)
-        end
+        Minimap:SetHitRectInsets(0, 0, 0, 0)
     end
-
-    hybridMinimap.MapCanvas:SetUseMaskTexture(true)
 end
 
 --#endregion
@@ -103,11 +71,11 @@ function minimod.applyBorder()
 
     -- Side textures inset by `size` on corners so they don't overlap top/bottom strips
     minimod.borderTexL:ClearAllPoints()
-    minimod.borderTexL:SetPoint("TOPLEFT",     minimod.wrapper, "TOPLEFT",     0, -size)
-    minimod.borderTexL:SetPoint("BOTTOMLEFT",  minimod.wrapper, "BOTTOMLEFT",  0,  size)
+    minimod.borderTexL:SetPoint("TOPLEFT", minimod.wrapper, "TOPLEFT", 0, -size)
+    minimod.borderTexL:SetPoint("BOTTOMLEFT", minimod.wrapper, "BOTTOMLEFT", 0, size)
     minimod.borderTexR:ClearAllPoints()
-    minimod.borderTexR:SetPoint("TOPRIGHT",    minimod.wrapper, "TOPRIGHT",    0, -size)
-    minimod.borderTexR:SetPoint("BOTTOMRIGHT", minimod.wrapper, "BOTTOMRIGHT", 0,  size)
+    minimod.borderTexR:SetPoint("TOPRIGHT", minimod.wrapper, "TOPRIGHT", 0, -size)
+    minimod.borderTexR:SetPoint("BOTTOMRIGHT", minimod.wrapper, "BOTTOMRIGHT", 0, size)
 end
 
 function minimod.applySettings()
@@ -115,9 +83,14 @@ function minimod.applySettings()
     local db   = addon.db.profile.minimap
     local size = minimod.grown and db.growSize or db.size
     local w, h = sizeForShape({ shape = db.shape, size = size })
+
     minimod.wrapper:SetSize(w, h)
     minimod.wrapper:SetAlpha(db.alpha)
-    Minimap:SetSize(w, w) -- always square; HybridMinimap expects square frame
+    local offset = math.ceil((w - h) / 2)
+    minimod.wrapper:SetClampedToScreen(true)
+    minimod.wrapper:SetClampRectInsets(0, 0, offset, offset)
+    Minimap:ClearAllPoints()
+    Minimap:SetPoint('TOPRIGHT', minimod.wrapper, 'TOPRIGHT', 0, offset)
     applyMinimapShape(db.shape, w, h)
     minimod.applyBorder()
 end
@@ -152,7 +125,7 @@ function minimod.createFrame()
     Minimap:SetParent(minimod.wrapper)
     Minimap:ClearAllPoints()
     Minimap:SetPoint("CENTER", minimod.wrapper, "CENTER")
-    Minimap:SetSize(w, w) -- always square; HybridMinimap expects square frame
+    Minimap:SetSize(w, w)
     applyMinimapShape(db.shape, w, h)
     Minimap:Show()
 
@@ -160,9 +133,7 @@ function minimod.createFrame()
     MinimapCluster:Hide()
     if MinimapBackdrop then MinimapBackdrop:Hide() end ---@diagnostic disable-line: undefined-global
     if Minimap.ZoomHitArea then Minimap.ZoomHitArea:Hide() end ---@diagnostic disable-line: undefined-field
-    -- Keep buttons shown so Click() still fires their full OnClick logic
-    -- (hiding them breaks the click dispatch). SetAlpha(0) hides them visually.
-    -- IsMouseOver override prevents MinimapMixin:OnLeave() from auto-hiding them.
+
     if Minimap.ZoomIn then ---@diagnostic disable-line: undefined-field
         Minimap.ZoomIn:SetAlpha(0)
         Minimap.ZoomIn.IsMouseOver = function() return true end
@@ -178,11 +149,11 @@ function minimod.createFrame()
     minimod.borderFrame:SetFrameLevel(minimod.wrapper:GetFrameLevel() + 100)
 
     minimod.borderTexT = minimod.borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-    minimod.borderTexT:SetPoint("TOPLEFT",  minimod.wrapper, "TOPLEFT")
+    minimod.borderTexT:SetPoint("TOPLEFT", minimod.wrapper, "TOPLEFT")
     minimod.borderTexT:SetPoint("TOPRIGHT", minimod.wrapper, "TOPRIGHT")
 
     minimod.borderTexB = minimod.borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-    minimod.borderTexB:SetPoint("BOTTOMLEFT",  minimod.wrapper, "BOTTOMLEFT")
+    minimod.borderTexB:SetPoint("BOTTOMLEFT", minimod.wrapper, "BOTTOMLEFT")
     minimod.borderTexB:SetPoint("BOTTOMRIGHT", minimod.wrapper, "BOTTOMRIGHT")
 
     minimod.borderTexL = minimod.borderFrame:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -190,14 +161,21 @@ function minimod.createFrame()
 
     minimod.applyBorder()
 
-    -- Drag-to-move
+    -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
     minimod.wrapper:SetMovable(true)
-    minimod.wrapper:EnableMouse(true)
-    minimod.wrapper:RegisterForDrag("LeftButton")
-    minimod.wrapper:SetScript("OnDragStart", minimod.wrapper.StartMoving)
-    minimod.wrapper:SetScript("OnDragStop", function(f)
-        f:StopMovingOrSizing()
-        local pt, _, _, ox, oy = f:GetPoint()
+    minimod.wrapper:SetClampedToScreen(true)
+    minimod.wrapper:SetClampRectInsets(0, 0, math.ceil((w - h) / 2), math.ceil((w - h) / 2))
+    minimod.dragBar = CreateFrame("Frame", nil, minimod.wrapper)
+    minimod.dragBar:SetHeight(10)
+    minimod.dragBar:SetPoint("TOPLEFT", minimod.wrapper, "TOPLEFT")
+    minimod.dragBar:SetPoint("TOPRIGHT", minimod.wrapper, "TOPRIGHT")
+    minimod.dragBar:SetFrameLevel(minimod.wrapper:GetFrameLevel() + 200)
+    minimod.dragBar:EnableMouse(true)
+    minimod.dragBar:RegisterForDrag("LeftButton")
+    minimod.dragBar:SetScript("OnDragStart", function() minimod.wrapper:StartMoving() end)
+    minimod.dragBar:SetScript("OnDragStop", function()
+        minimod.wrapper:StopMovingOrSizing()
+        local pt, _, _, ox, oy = minimod.wrapper:GetPoint()
         db.point               = pt
         db.x                   = ox
         db.y                   = oy
@@ -225,7 +203,8 @@ function minimod.createFrame()
         if minimod.worldMapFade.active and minimod.worldMap then
             minimod.worldMapFade.elapsed = minimod.worldMapFade.elapsed + elapsed
             local t = math.min(1, minimod.worldMapFade.elapsed / TRANSITION_DURATION)
-            minimod.worldMap:SetAlpha(minimod.worldMapFade.from + (minimod.worldMapFade.to - minimod.worldMapFade.from) * t)
+            minimod.worldMap:SetAlpha(minimod.worldMapFade.from +
+                (minimod.worldMapFade.to - minimod.worldMapFade.from) * t)
             if t >= 1 then
                 minimod.worldMapFade.active = false
                 if minimod.worldMapFade.to == 0 then minimod.worldMap:Hide() end
@@ -266,9 +245,7 @@ function minimod.createFrame()
             minimod.openWorldMap()
             return
         end
-        -- Delegate to Blizzard's own zoom buttons so their OnClick handlers run
-        -- (which handle player-pin recentering). Direct SetZoom() skips that logic,
-        -- causing the player arrow to drift during zoom.
+
         if delta > 0 then
             if Minimap.ZoomIn then
                 Minimap.ZoomIn:Click("LeftButton")
@@ -285,20 +262,15 @@ function minimod.createFrame()
     end)
 
     -- Toggle grow: press to grow, press again to shrink
-    local growBtn = CreateFrame("Button", "CTMinimapGrowToggle", minimod.wrapper)
-    growBtn:RegisterForClicks("AnyDown")
-    growBtn:SetScript("OnClick", function()
+    local function toggleGrow()
         local cp = _G['ConsolePort']
+
+        -- Shrinking
         if minimod.grown then
-            -- Shrinking: close world map first if open
             minimod.grown = false
             if minimod.worldMapOpen then minimod.closeWorldMap() end
-            local w2, h2 = sizeForShape({ shape = db.shape, size = db.size })
-            minimod.wrapper:SetSize(w2, h2)
-            Minimap:SetSize(w2, w2)
-            applyMinimapShape(db.shape, w2, h2)
-            if cp then
-                cp:RemoveInterfaceCursorFrame(minimod.wrapper)
+            if cp and cp:RemoveInterfaceCursorFrame(minimod.wrapper) then
+                -- cp:RemoveInterfaceCursorFrame(minimod.wrapper)
                 local ih = _G['ConsolePortInputHandler']
                 if ih then ih:Release(minimod.wrapper) end
                 _G['ConsolePortCursor']:SetEnabled(false)
@@ -306,12 +278,8 @@ function minimod.createFrame()
         else
             -- Growing
             minimod.grown = true
-            local w2, h2 = sizeForShape({ shape = db.shape, size = db.growSize })
-            minimod.wrapper:SetSize(w2, h2)
-            Minimap:SetSize(w2, w2)
-            applyMinimapShape(db.shape, w2, h2)
-            if cp then
-                cp:AddInterfaceCursorFrame(minimod.wrapper)
+            if cp and cp:AddInterfaceCursorFrame(minimod.wrapper) then
+                -- cp:AddInterfaceCursorFrame(minimod.wrapper)
                 local ih = _G['ConsolePortInputHandler']
                 if ih and not InCombatLockdown() then
                     ih:SetCommand('PADRSHOULDER', minimod.wrapper, false, 'LeftButton', 'ZoomIn', nil)
@@ -319,18 +287,29 @@ function minimod.createFrame()
                 end
             end
         end
-        -- Zoom click cycle forces the HybridMinimap render layer to update for the
-        -- new frame size (same technique used by BasicMinimap after SetSize).
+        -- Pre-size to target dimensions BEFORE zoom so the tile renderer
+        -- recalculates scale against the correct frame size.
+        local size   = minimod.grown and db.growSize or db.size
+        local w2, h2 = sizeForShape({ shape = db.shape, size = size })
+        minimod.wrapper:SetSize(w2, h2)
+        Minimap:ClearAllPoints()
+        Minimap:SetPoint('TOPRIGHT', minimod.wrapper, 'TOPRIGHT', 0, math.ceil((w2 - h2) / 2))
+        Minimap:SetSize(w2, w2)
+
+        -- Zoom: tile recalculation now uses the correct w2×w2 frame size
         local curZoom = Minimap:GetZoom()
         local maxZoom = Minimap:GetZoomLevels() - 1
-        if Minimap.ZoomIn and Minimap.ZoomOut then
-            if curZoom < maxZoom then
-                Minimap.ZoomIn:Click(); Minimap.ZoomOut:Click()
-            else
-                Minimap.ZoomOut:Click(); Minimap.ZoomIn:Click()
-            end
+        if curZoom < maxZoom then
+            Minimap:SetZoom(curZoom + 1)
+            Minimap:SetZoom(curZoom)
+        else
+            Minimap:SetZoom(curZoom - 1)
+            Minimap:SetZoom(curZoom)
         end
-    end)
+
+        -- Apply mask + border after zoom (overwrites any state zoom may have reset)
+        minimod.applySettings()
+    end
 
     if _G['ConsolePort'] then
         minimod.wrapper:SetPropagateKeyboardInput(true)
@@ -359,11 +338,11 @@ function minimod.createFrame()
 
     -- Expose as a global so Bindings.xml can invoke it by name.
     function ConsoleTools_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-global
-        if minimod.wrapper and minimod.wrapper:IsShown() then growBtn:Click() end
+        if minimod.wrapper and minimod.wrapper:IsShown() then toggleGrow() end
     end
 
     -- Blizzard Key Bindings panel display strings.
-    BINDING_HEADER_CONSOLETOOLS = "Console Tools"                          ---@diagnostic disable-line: lowercase-global
+    BINDING_HEADER_CONSOLETOOLS = "Console Tools" ---@diagnostic disable-line: lowercase-global
     BINDING_NAME_CONSOLETOOLS_MINIMAP_GROWTOGGLE = "Toggle Minimap Expand" ---@diagnostic disable-line: lowercase-global
 end
 

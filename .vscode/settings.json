@@ -1,5 +1,6 @@
 {
     "Lua.runtime.version": "Lua 5.1",
+    "Lua.workspace.ignoreDir": [ "**/Libs/**"],
     "Lua.runtime.builtin": {
         "basic": "disable",
         "debug": "disable",

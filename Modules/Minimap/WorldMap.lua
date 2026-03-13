@@ -29,9 +29,9 @@ local function createWorldMap()
     mapFrame.ScrollContainer = scrollContainer
 
     local scrollChild = CreateFrame("Frame", nil, scrollContainer)
-    scrollChild:SetSize(2048, 2048)     -- placeholder; resized to real art dimensions in openWorldMap
+    scrollChild:SetSize(2048, 2048)
     scrollContainer:SetScrollChild(scrollChild)
-    scrollContainer.Child = scrollChild -- MapCanvasMixin accesses via .Child
+    scrollContainer.Child = scrollChild
 
     scrollChild.TiledBackground = scrollChild:CreateTexture(nil, "BACKGROUND")
     scrollChild.TiledBackground:SetAllPoints()
@@ -48,8 +48,6 @@ local function createWorldMap()
     local MAX_ZOOM                   = .30
     local zoom                       = ZOOM_ENTRY
 
-    -- Cache scroll child and wrapper dimensions to avoid GetSize() calls every OnUpdate frame.
-    -- Updated via OnSizeChanged so the values stay accurate without per-frame reads.
     local cachedChildW, cachedChildH = scrollChild:GetSize()
     local cachedWrapW, cachedWrapH   = minimod.wrapper:GetSize()
 
@@ -82,14 +80,15 @@ local function createWorldMap()
         end
     end
 
-    -- Minimal interface MapCanvasMixin expects on ScrollContainer
+
+    --#region Stubs
     function scrollContainer:GetZoom() return zoom end
 
     function scrollContainer:SetZoomTarget(z) applyZoom(z) end
 
-    function scrollContainer:SetMapID() end     -- MapCanvasMixin:SetMapID forwards here
+    function scrollContainer:SetMapID() end
 
-    function scrollContainer:SetPanTarget() end -- centering handled in OnUpdate
+    function scrollContainer:SetPanTarget() end
 
     function scrollContainer:OnCanvasSizeChanged() end
 
@@ -99,14 +98,8 @@ local function createWorldMap()
 
     function scrollContainer:OnHide() end
 
-    -- Pin providers call GetCanvasScale() to size their pins.
-    -- We scale via mapFrame:SetScale(zoom) so from the scroll container's
-    -- perspective the canvas scale is always 1.
     function scrollContainer:GetCanvasScale() return zoom end
 
-    -- DenormalizeSize converts normalized [0,1] map coords to pixel sizes.
-    -- Uses GetWidth/Height() directly (not cached values) so callers always see
-    -- the current logical canvas size, even before OnSizeChanged has fired.
     function scrollContainer:DenormalizeHorizontalSize(size) return size * scrollChild:GetWidth() end
 
     function scrollContainer:DenormalizeVerticalSize(size) return size * scrollChild:GetHeight() end
@@ -121,21 +114,19 @@ local function createWorldMap()
 
     function scrollContainer:GetCanvasZoomPercent() return 0 end
 
-    -- Called by AcquirePin (before OnAcquired) and by pin pool operations.
-    -- Blizzard's version nils cached scroll/scale to force a redraw on their
-    -- OnUpdate; our scroll is driven manually so a no-op is correct.
+    function scrollContainer:GetCurrentLayerIndex() return 1 end
+
     function scrollContainer:MarkCanvasDirty() end
 
-    -- Called during area-trigger processing; no-op since we don't use that system.
     function scrollContainer:MarkAreaTriggersDirty() end
 
-    -- Cursor-position fix for SetScale: divide raw screen coords by effective scale
-    -- so map hit-testing stays accurate after mapFrame:SetScale(zoom).
     function scrollContainer:GetCursorPosition()
         local x, y = GetCursorPosition()
         local s    = self:GetEffectiveScale()
         return x / s, y / s
     end
+
+    --#endregion
 
     scrollContainer:SetScript("OnMouseWheel", function(_, delta)
         if delta > 0 and zoom >= MAX_ZOOM then
@@ -145,9 +136,6 @@ local function createWorldMap()
         applyZoom(zoom * (delta > 0 and 1.25 or 0.8))
     end)
 
-    -- Keep map centered on the player every frame using cached dimensions.
-    -- (wrapper:GetSize() can return 0 before the scroll frame is first shown,
-    -- which would corrupt the centering formula.)
     scrollContainer:SetScript("OnUpdate", function()
         local mapID = mapFrame.GetMapID and mapFrame:GetMapID()
         if not mapID then return end
@@ -164,14 +152,9 @@ local function createWorldMap()
     mapFrame:SetScript("OnShow", mapFrame.OnShow)
     mapFrame:SetScript("OnHide", mapFrame.OnHide)
     mapFrame:SetScript("OnEvent", mapFrame.OnEvent)
-    -- Intentionally NOT hooking MapCanvasMixin:OnUpdate — it drives smooth
-    -- pan/zoom animations that fight our manual scrollContainer centering.
+
     if mapFrame.OnLoad then mapFrame:OnLoad() end
 
-    -- RefreshDetailLayers drives tile visibility but also calls AdjustDetailLayerAlpha
-    -- on internally-created layer objects that reference template textures we don't
-    -- have. We can't intercept those objects before they're used, so pcall the whole
-    -- call — tiles render, the alpha-fading error is silently swallowed.
     local _origRefresh = mapFrame.RefreshDetailLayers
     if _origRefresh then
         mapFrame.RefreshDetailLayers = function(self)
@@ -179,15 +162,12 @@ local function createWorldMap()
         end
     end
 
-    -- Exposes zoom reset to openWorldMap without needing direct access to the
-    -- `zoom` upvalue. Scale must always match zoom so the OnUpdate centering
-    -- formula (cachedWrapW / (2 * zoom)) stays consistent.
     -- Zoom constants are derived from the current wrapper width so visual quality
     -- (art pixels per viewport pixel) stays constant regardless of db.growSize.
     -- Reference: 500px growSize → ZOOM_ENTRY 0.25 → 500/0.25 = 2000 art px visible.
     minimod.resetWorldMapZoom = function()
         ZOOM_ENTRY = cachedWrapW / 2000
-        MIN_ZOOM   = ZOOM_ENTRY * 0.48
+        MIN_ZOOM   = ZOOM_ENTRY * 0.53
         MAX_ZOOM   = ZOOM_ENTRY * 1.24
         zoom       = ZOOM_ENTRY
         scrollChild:SetScale(ZOOM_ENTRY)
@@ -199,10 +179,6 @@ local function createWorldMap()
     if BaseMapCanvasDetailLayerMixin then ---@diagnostic disable-line: undefined-global
         local detailDP = CreateFromMixins(BaseMapCanvasDetailLayerMixin) ---@diagnostic disable-line: undefined-global
         mapFrame:AddDataProvider(detailDP)
-        -- AdjustDetailLayerAlpha errors on template-created sub-textures our custom canvas
-        -- doesn't have. Without this stub it runs partially, leaving some tiles at wrong
-        -- alpha (creating visible "grid" seams). The no-op stub lets RefreshDetailLayers
-        -- complete cleanly so all tiles render at full opacity.
         detailDP.AdjustDetailLayerAlpha = function() end
     end
     if MapCanvasCursorDataProviderMixin then ---@diagnostic disable-line: undefined-global
@@ -210,9 +186,8 @@ local function createWorldMap()
     end
 
     -- Register pin frame levels needed by the providers below.
-    -- Unknown levels fall back to PIN_FRAME_LEVEL_DEFAULT (no crash), but explicit
-    -- registration gives correct Z-ordering between quest, world quest, and player pins.
     local plm = mapFrame:GetPinFrameLevelsManager()
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_EXPLORATION_TEXTURE") -- MapExplorationDataProvider
     plm:AddFrameLevel("PIN_FRAME_LEVEL_QUEST_PING")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_VIGNETTE", 200)
     plm:AddFrameLevel("PIN_FRAME_LEVEL_WORLD_QUEST", 500)
@@ -220,10 +195,6 @@ local function createWorldMap()
     plm:AddFrameLevel("PIN_FRAME_LEVEL_SUPER_TRACKED_QUEST")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_GROUP_MEMBER")
 
-    -- Blizzard's pin pool calls resetFunc (Hide) before OnAcquired sets dataProvider,
-    -- causing GroupMembersPinMixin:OnHide to crash on a nil dataProvider.
-    -- Patch it once with a nil guard; safe for WorldMapFrame too since its pins
-    -- always have dataProvider set by the time they're actively used.
     if GroupMembersPinMixin and not GroupMembersPinMixin._ctPatched then ---@diagnostic disable-line: undefined-global
         local _orig = GroupMembersPinMixin.OnHide ---@diagnostic disable-line: undefined-global
         GroupMembersPinMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
@@ -232,15 +203,18 @@ local function createWorldMap()
         GroupMembersPinMixin._ctPatched = true ---@diagnostic disable-line: undefined-global
     end
 
-    -- WorldQuestDataProvider:OnHide crashes if OnShow never fired (ticker is nil).
-    -- This happens when the map frame is hidden before it was shown (e.g. World Map
-    -- closed immediately after opening, or shown then quickly transitioned to minimap).
+    -- World Quests
     if WorldQuestDataProviderMixin and not WorldQuestDataProviderMixin._ctPatched then ---@diagnostic disable-line: undefined-global
         local _orig = WorldQuestDataProviderMixin.OnHide ---@diagnostic disable-line: undefined-global
         WorldQuestDataProviderMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
             if self.ticker then _orig(self) end
         end
         WorldQuestDataProviderMixin._ctPatched = true ---@diagnostic disable-line: undefined-global
+    end
+
+    -- Fog of War removal
+    if MapExplorationDataProviderMixin then ---@diagnostic disable-line: undefined-global
+        mapFrame:AddDataProvider(CreateFromMixins(MapExplorationDataProviderMixin)) ---@diagnostic disable-line: undefined-global
     end
 
     -- Player arrow + party/raid members
@@ -285,12 +259,6 @@ minimod.openWorldMap = function()
             minimod.worldMap.ScrollContainer.Child:SetSize(layer.layerWidth, layer.layerHeight)
         end
 
-        -- Notify all pins of the correct canvas dimensions and re-apply their anchors.
-        -- MapCanvasMixin:ExecuteOnAllPins uses pool:GetPool() which is NOT exposed on
-        -- the proxy returned by CreateFramePool, so we iterate directly instead.
-        -- We must call both OnCanvasSizeChanged (sets pin frame size = canvas size)
-        -- AND ApplyCurrentPosition (re-anchors pin to correct canvas center), because
-        -- both were set during createWorldMap when canvas was still 2048×2048 placeholder.
         for _, pool in pairs(minimod.worldMap.pinPools or {}) do
             for pin in pool:EnumerateActive() do
                 if pin.OnCanvasSizeChanged then pin:OnCanvasSizeChanged() end
@@ -319,13 +287,12 @@ end
 
 minimod.closeWorldMap = function()
     minimod.worldMapOpen = false
-    minimod.applySettings() -- restores wrapper to minimap size, shape, alpha immediately (before fades)
+    minimod.applySettings()
 
     Minimap:SetAlpha(0)
     Minimap:Show()
-    Minimap:SetZoom(0) -- Set to Zero is perfect for transition
-    -- ZoomIn then ZoomOut forces HybridMinimap to refresh at zoom 0.
-    -- (ZoomOut first would try SetZoom(-1) which is out of range.)
+    Minimap:SetZoom(0)
+
     if Minimap.ZoomIn and Minimap.ZoomOut then
         Minimap.ZoomIn:Click()
         Minimap.ZoomOut:Click()
