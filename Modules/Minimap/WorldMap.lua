@@ -67,6 +67,11 @@ local function create_world_map()
     local cached_child_w, cached_child_h = scroll_child:GetSize()
     local cached_wrap_w, cached_wrap_h = minimod.wrapper:GetSize()
 
+    local is_panning = false
+    local has_panned = false
+    local drag_start_x, drag_start_y = 0, 0
+    local drag_start_scroll_h, drag_start_scroll_v = 0, 0
+
     scroll_child:SetScript("OnSizeChanged", function(_, sw, sh)
         cached_child_w, cached_child_h = sw, sh
     end)
@@ -77,12 +82,17 @@ local function create_world_map()
     local function apply_zoom(z)
         zoom = math_max(min_zoom, math_min(z, max_zoom))
         scroll_child:SetScale(zoom)
-        local map_id = map_frame.GetMapID and map_frame:GetMapID()
-        if map_id then
-            local pos = C_Map.GetPlayerMapPosition(map_id, "player")
-            if pos then
-                scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - (cached_wrap_w / (2 * zoom)))
-                scroll_container:SetVerticalScroll((pos.y * cached_child_h) - (cached_wrap_h / (2 * zoom)))
+        if addon.db.profile.minimap.worldMapCentered then
+            scroll_container:SetHorizontalScroll(cached_child_w / 2 - cached_wrap_w / (2 * zoom))
+            scroll_container:SetVerticalScroll(cached_child_h / 2 - cached_wrap_h / (2 * zoom))
+        else
+            local map_id = map_frame.GetMapID and map_frame:GetMapID()
+            if map_id then
+                local pos = C_Map.GetPlayerMapPosition(map_id, "player")
+                if pos then
+                    scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - (cached_wrap_w / (2 * zoom)))
+                    scroll_container:SetVerticalScroll((pos.y * cached_child_h) - (cached_wrap_h / (2 * zoom)))
+                end
             end
         end
 
@@ -145,6 +155,23 @@ local function create_world_map()
 
     --#endregion
 
+    scroll_container:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" then return end
+        is_panning = true
+        has_panned = true
+        local s = scroll_container:GetEffectiveScale()
+        local cx, cy = GetCursorPosition()
+        drag_start_x = cx / s
+        drag_start_y = cy / s
+        drag_start_scroll_h = scroll_container:GetHorizontalScroll()
+        drag_start_scroll_v = scroll_container:GetVerticalScroll()
+    end)
+
+    scroll_container:SetScript("OnMouseUp", function(_, button)
+        if button ~= "LeftButton" then return end
+        is_panning = false
+    end)
+
     scroll_container:SetScript("OnMouseWheel", function(_, delta)
         if delta > 0 and zoom >= max_zoom then
             minimod.closeWorldMap()
@@ -154,6 +181,17 @@ local function create_world_map()
     end)
 
     scroll_container:SetScript("OnUpdate", function()
+        if is_panning then
+            local s = scroll_container:GetEffectiveScale()
+            local cx, cy = GetCursorPosition()
+            local dx = cx / s - drag_start_x
+            local dy = cy / s - drag_start_y
+            scroll_container:SetHorizontalScroll(drag_start_scroll_h - dx / zoom)
+            scroll_container:SetVerticalScroll(drag_start_scroll_v + dy / zoom)
+            return
+        end
+        if has_panned then return end
+        if addon.db.profile.minimap.worldMapCentered then return end
         local map_id = map_frame.GetMapID and map_frame:GetMapID()
         if not map_id then return end
         local pos = C_Map.GetPlayerMapPosition(map_id, "player")
@@ -183,8 +221,9 @@ local function create_world_map()
     -- (art pixels per viewport pixel) stays constant regardless of db.growSize.
     -- Reference: 500px growSize → ZOOM_ENTRY 0.25 → 500/0.25 = 2000 art px visible.
     minimod.resetWorldMapZoom = function()
+        has_panned = false
         zoom_entry = cached_wrap_w / 2000
-        min_zoom = zoom_entry * 0.53
+        min_zoom = zoom_entry * 0.52
         max_zoom = zoom_entry * 1.24
         zoom = zoom_entry
         scroll_child:SetScale(zoom_entry)
@@ -285,14 +324,19 @@ minimod.openWorldMap = function()
 
         minimod.worldMap:SetMapID(map_id)
 
-        local pos = C_Map.GetPlayerMapPosition(map_id, "player")
-        if pos then
-            local sc = minimod.worldMap.ScrollContainer
-            local cw, ch = sc.Child:GetSize()
-            local vw, vh = minimod.wrapper:GetSize()
-            local entry_zoom = sc:GetZoom()
-            sc:SetHorizontalScroll(pos.x * cw - vw / (2 * entry_zoom))
-            sc:SetVerticalScroll(pos.y * ch - vh / (2 * entry_zoom))
+        local sc = minimod.worldMap.ScrollContainer
+        local cw, ch = sc.Child:GetSize()
+        local vw, vh = minimod.wrapper:GetSize()
+        local entry_zoom = sc:GetZoom()
+        if addon.db.profile.minimap.worldMapCentered then
+            sc:SetHorizontalScroll(cw / 2 - vw / (2 * entry_zoom))
+            sc:SetVerticalScroll(ch / 2 - vh / (2 * entry_zoom))
+        else
+            local pos = C_Map.GetPlayerMapPosition(map_id, "player")
+            if pos then
+                sc:SetHorizontalScroll(pos.x * cw - vw / (2 * entry_zoom))
+                sc:SetVerticalScroll(pos.y * ch - vh / (2 * entry_zoom))
+            end
         end
     end
 

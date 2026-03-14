@@ -130,6 +130,7 @@ function minimod:GetDefaults()
             y = -20,
             moveAlphaEnabled = true,
             moveAlpha = 0.3,
+            worldMapCentered = false,
             borderEnabled = false,
             borderSize = 2,
             borderR = 1,
@@ -212,6 +213,14 @@ function minimod:GetOptions()
                 step = 10,
                 get = function() return addon.db.profile.minimap.growSize end,
                 set = function(_, value) addon.db.profile.minimap.growSize = value end,
+            },
+            worldMapCentered = {
+                name = 'Map Centered World Map',
+                desc = 'Center the world map on the map origin instead of the player.',
+                type = 'toggle',
+                order = 7,
+                get = function() return addon.db.profile.minimap.worldMapCentered end,
+                set = function(_, value) addon.db.profile.minimap.worldMapCentered = value end,
             },
             moveAlphaEnabled = {
                 name = 'Fade on Move',
