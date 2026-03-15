@@ -25,7 +25,16 @@
         "CANCEL",
         "ColorPickerFrame",
         "CastingBarFrame",
-        "BuffFrame"
+        "BuffFrame",
+        "SELECTED_CHAT_FRAME",
+        "DEFAULT_CHAT_FRAME",
+        "SlashCmdList",
+        "hash_SlashCmdList",
+        "NORMAL_FONT_COLOR_CODE",
+        "FONT_COLOR_CODE_CLOSE",
+        "SetDesaturation",
+        "OKAY",
+        "NOT_BOUND"
     ],
     "Lua.type.weakUnionCheck": true
 }
