@@ -22,6 +22,8 @@ local CreateFromMixins = _G.CreateFromMixins
 local GetCursorPosition = _G.GetCursorPosition
 local Minimap = _G.Minimap
 
+local ConsolePort = _G['ConsolePort'] ---@type any
+
 local TRANSITION_DURATION = 0.25
 
 -- Maps each world-map toolbar button field to its db toggle key.
@@ -194,6 +196,8 @@ local function create_world_map()
         return h > 0 and size / h or 0
     end
 
+    function scroll_container:IsAtMaxZoom() return zoom >= max_zoom end
+
     function scroll_container:GetCanvasZoomPercent() return 0 end
 
     function scroll_container:GetCurrentLayerIndex() return 1 end
@@ -358,6 +362,10 @@ local function create_world_map()
 end
 
 minimod.openWorldMap = function()
+    if ConsolePort then
+        ConsolePort:AddInterfaceCursorFrame(minimod.wrapper)
+    end
+
     minimod.worldMapOpen = true
     create_world_map()
     if minimod.resetWorldMapZoom then minimod.resetWorldMapZoom() end

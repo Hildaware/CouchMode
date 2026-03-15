@@ -21,6 +21,8 @@ local InCombatLockdown = _G.InCombatLockdown
 local AnchorUtil = _G.AnchorUtil
 local MinimapCluster = _G.MinimapCluster ---@type Frame
 
+local ConsolePort = _G['ConsolePort'] ---@type any
+
 local FADE_DURATION = 0.5
 local TRANSITION_DURATION = 0.25
 local GROW_DURATION = 0.5
@@ -159,10 +161,12 @@ function minimod.createFrame()
 
     if Minimap.ZoomIn then ---@diagnostic disable-line: undefined-field
         Minimap.ZoomIn:SetAlpha(0)
+        Minimap.ZoomIn:Hide()
         Minimap.ZoomIn.IsMouseOver = function() return true end
     end
     if Minimap.ZoomOut then ---@diagnostic disable-line: undefined-field
         Minimap.ZoomOut:SetAlpha(0)
+        Minimap.ZoomOut:Hide()
         Minimap.ZoomOut.IsMouseOver = function() return true end
     end
 
@@ -421,15 +425,22 @@ function minimod.createFrame()
         end
     end)
 
+    Minimap:HookScript("OnEnter", function()
+        if Minimap.ZoomOut then
+            Minimap.ZoomOut:Hide()
+        end
+        if Minimap.ZoomIn then
+            Minimap.ZoomIn:Hide()
+        end
+    end)
+
     -- Toggle grow: press to grow, press again to shrink
     local function toggle_grow()
-        local cp = _G['ConsolePort']
-
         -- Shrinking
         if minimod.grown then
             minimod.grown = false
             if minimod.worldMapOpen then minimod.closeWorldMap() end
-            if cp and cp:RemoveInterfaceCursorFrame(minimod.wrapper) then
+            if ConsolePort and ConsolePort:RemoveInterfaceCursorFrame(minimod.wrapper) then
                 local ih = _G['ConsolePortInputHandler']
                 if ih then ih:Release(minimod.wrapper) end
                 _G['ConsolePortCursor']:SetEnabled(false)
@@ -437,7 +448,8 @@ function minimod.createFrame()
         else
             -- Growing
             minimod.grown = true
-            if cp and cp:AddInterfaceCursorFrame(minimod.wrapper) then
+            if ConsolePort and ConsolePort:RemoveInterfaceCursorFrame(minimod.wrapper) then
+                ConsolePort:AddInterfaceCursorFrame(minimod.toolbar)
                 local ih = _G['ConsolePortInputHandler']
                 if ih and not InCombatLockdown() then
                     ih:SetCommand('PADRSHOULDER', minimod.wrapper, false, 'LeftButton', 'ZoomIn', nil)
@@ -461,7 +473,7 @@ function minimod.createFrame()
         minimod.growTransition.lastZoomAt = 0
     end
 
-    if _G['ConsolePort'] then
+    if ConsolePort then
         minimod.wrapper:SetPropagateKeyboardInput(true)
 
         minimod.wrapper:SetScript('OnGamePadButtonDown', function(_, key)
@@ -471,7 +483,11 @@ function minimod.createFrame()
             local function do_zoom()
                 if minimod.worldMapOpen and minimod.worldMap then
                     local sc = minimod.worldMap.ScrollContainer
-                    sc:SetZoomTarget(sc:GetZoom() * (key == 'PADRSHOULDER' and 1.1 or 0.9))
+                    if key == 'PADRSHOULDER' and sc:IsAtMaxZoom() then
+                        minimod.closeWorldMap()
+                    else
+                        sc:SetZoomTarget(sc:GetZoom() * (key == 'PADRSHOULDER' and 1.1 or 0.9))
+                    end
                 elseif key == 'PADRSHOULDER' then
                     if Minimap.ZoomIn then Minimap.ZoomIn:Click() end
                 else

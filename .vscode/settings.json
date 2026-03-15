@@ -188,7 +188,8 @@
         "UNDISCOVERED_NEUTRAL_FLIGHTPOINT",
         "UNDISCOVERED_FACTION_FLIGHTPOINT",
         "FACTION_HORDE",
-        "BONUS_OBJECTIVE_TIME_LEFT"
+        "BONUS_OBJECTIVE_TIME_LEFT",
+        "HUD_EDIT_MODE_MINIMAP_LABEL"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [
