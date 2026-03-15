@@ -1,0 +1,312 @@
+local addon_name = ...
+
+---@class ConsoleTools: AceAddon
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+
+---@class FadeState
+---@field from    number
+---@field to      number
+---@field elapsed number
+---@field active  boolean
+
+---@class MinimapModule: AceModule
+---@field minimapFade            FadeState
+---@field worldMapFade           FadeState
+---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
+---@field fadeTo                 number|nil
+---@field fadeFrom               number
+---@field fadeElapsed            number
+---@field grown                  boolean
+---@field worldMapOpen           boolean
+---@field origParent             Frame|nil
+---@field mailIndicator          Frame|nil
+---@field blizzTracking          Frame|nil
+---@field origW                  number
+---@field origH                  number
+---@field origPoints             table
+---@field hybridMinimap          Frame|nil
+---@field origCircleMaskTexture  string|nil
+---@field rectMask               MaskTexture|nil
+---@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
+---@field toolbar                Frame|nil
+---@field toolbarBorders         table|nil
+---@field wrapper                Frame
+---@field borderFrame            Frame
+---@field borders                table|nil
+---@field applyBorder            fun()
+---@field applySettings          fun()
+---@field createFrame            fun()
+---@field worldMap               Frame|nil
+---@field worldMapArtW           number
+---@field worldMapArtH           number
+---@field resetWorldMapZoom      fun()
+---@field openWorldMap           fun()
+---@field closeWorldMap          fun()
+---@field trackingBtn            Button|nil
+---@field wmBtnWQ                Button|nil
+---@field wmBtnAQ                Button|nil
+---@field wmBtnLS                Button|nil
+---@field wmDpWorldQuests        table|nil
+---@field wmDpActiveQuests       table|nil
+---@field wmDpLocalStories       table|nil
+---@field wmBtnDungeons          Button|nil
+---@field wmBtnDelves            Button|nil
+---@field wmBtnEvents            Button|nil
+---@field wmBtnTravel            Button|nil
+---@field wmDpDungeons           table|nil
+---@field wmDpDelves             table|nil
+---@field wmDpEvents             table|nil
+---@field wmDpTravel             table|nil
+---@field wmDpPortals            table|nil
+---@field wmDpAreaPOI            table|nil
+local minimod = addon:NewModule('Minimap')
+
+-- Cache globals for performance and style guide compliance
+local _G = _G
+local unpack = unpack
+local Minimap = _G.Minimap
+local MinimapCluster = _G.MinimapCluster ---@type Frame
+
+minimod.minimapFade = { from = 1, to = 1, elapsed = 0, active = false }
+minimod.worldMapFade = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
+
+function minimod.startFrameFade(frame, state, to_alpha)
+    state.from = frame:GetAlpha()
+    state.to = to_alpha
+    state.elapsed = 0
+    state.active = true
+end
+
+--#region ── Module lifecycle ─────────────────────────────────────────────────
+
+function minimod:OnEnable()
+    if not minimod.wrapper then minimod.createFrame() end
+    minimod.wrapper:Show()
+end
+
+function minimod:OnDisable()
+    if minimod.worldMapOpen then minimod.closeWorldMap() end
+    if minimod.wrapper then minimod.wrapper:Hide() end
+
+    local ih = _G['ConsolePortInputHandler']
+    if ih then ih:Release(minimod.wrapper) end
+
+    if minimod.origParent then
+        Minimap:SetParent(minimod.origParent)
+        Minimap:ClearAllPoints()
+        local pt, rel_frame, rel_pt, ox, oy = unpack(minimod.origPoints)
+        Minimap:SetPoint(pt, rel_frame, rel_pt, ox, oy) ---@diagnostic disable-line: param-type-mismatch
+        Minimap:SetSize(minimod.origW, minimod.origH)
+        Minimap:SetClampedToScreen(true)
+        Minimap:SetMaskTexture("Textures\\MinimapMask")
+
+        local hybrid_minimap = minimod.hybridMinimap ---@type any
+        if hybrid_minimap and hybrid_minimap.MapCanvas and hybrid_minimap.CircleMask then
+            hybrid_minimap:ClearAllPoints()
+            hybrid_minimap:SetAllPoints(Minimap)
+            hybrid_minimap.MapCanvas:SetMaskTexture(hybrid_minimap.CircleMask)
+            hybrid_minimap.MapCanvas:SetUseMaskTexture(false)
+            hybrid_minimap.CircleMask:ClearAllPoints()
+            hybrid_minimap.CircleMask:SetAllPoints(hybrid_minimap.MapCanvas)
+            if minimod.origCircleMaskTexture then
+                hybrid_minimap.CircleMask:SetTexture(minimod.origCircleMaskTexture)
+            end
+            hybrid_minimap.MapCanvas:SetUseMaskTexture(true)
+        end
+
+        if minimod.blizzTracking then
+            minimod.blizzTracking:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            minimod.blizzTracking = nil
+        end
+
+        ---@diagnostic disable-next-line: undefined-global
+        MinimapCluster:Show()
+        if _G.MinimapBackdrop then _G.MinimapBackdrop:Show() end ---@diagnostic disable-line: undefined-global
+
+        minimod.origParent = nil
+        minimod.grown = false
+        minimod.fadeTo = nil
+    end
+end
+
+--#endregion
+
+--#region ── Defaults & Options ───────────────────────────────────────────────
+
+function minimod:GetDefaults()
+    return {
+        minimap = {
+            enabled = true,
+            shape = "rectangle",
+            size = 200,
+            alpha = 0.85,
+            growSize = 420,
+            point = "TOPRIGHT",
+            x = -20,
+            y = -20,
+            moveAlphaEnabled = true,
+            moveAlpha = 0.3,
+            worldMapCentered = false,
+            worldMapShowWorldQuests  = true,
+            worldMapShowActiveQuests = true,
+            worldMapShowLocalStories = true,
+            worldMapShowDungeons     = true,
+            worldMapShowDelves       = true,
+            worldMapShowEvents       = true,
+            worldMapShowTravel       = true,
+            borderEnabled = false,
+            borderSize = 2,
+            borderR = 1,
+            borderG = 1,
+            borderB = 1,
+            borderA = 1,
+        },
+    }
+end
+
+function minimod:GetOptions()
+    return 'minimap', {
+        name = 'Minimap',
+        type = 'group',
+        order = 8,
+        args = {
+            description = {
+                name = 'A clean, resizable minimap overlay. Drag to reposition. Scroll wheel to zoom.',
+                type = 'description',
+                order = 1,
+            },
+            enabled = {
+                name = 'Enable',
+                desc = 'Replace the default minimap chrome with the clean overlay.',
+                type = 'toggle',
+                order = 2,
+                get = function() return addon.db.profile.minimap.enabled end,
+                set = function(_, value)
+                    addon.db.profile.minimap.enabled = value
+                    if value then minimod:Enable() else minimod:Disable() end
+                end,
+            },
+            shape = {
+                name   = 'Shape',
+                desc   = 'Square: full square. Rectangle: wide letterbox.',
+                type   = 'select',
+                order  = 3,
+                values = { square = 'Square', rectangle = 'Rectangle' },
+                get    = function() return addon.db.profile.minimap.shape end,
+                set    = function(_, value)
+                    addon.db.profile.minimap.shape = value
+                    minimod.applySettings()
+                end,
+            },
+            size = {
+                name = 'Size',
+                desc = 'Normal minimap width in pixels.',
+                type = 'range',
+                order = 4,
+                min = 100,
+                max = 500,
+                step = 10,
+                get = function() return addon.db.profile.minimap.size end,
+                set = function(_, value)
+                    addon.db.profile.minimap.size = value
+                    minimod.applySettings()
+                end,
+            },
+            alpha = {
+                name = 'Opacity',
+                desc = 'Transparency of the minimap overlay.',
+                type = 'range',
+                order = 5,
+                min = 0.1,
+                max = 1.0,
+                step = 0.05,
+                get = function() return addon.db.profile.minimap.alpha end,
+                set = function(_, value)
+                    addon.db.profile.minimap.alpha = value
+                    if minimod.wrapper then minimod.wrapper:SetAlpha(value) end
+                end,
+            },
+            growSize = {
+                name = 'Grown Size',
+                desc = 'Width while the grow key is held.',
+                type = 'range',
+                order = 6,
+                min = 200,
+                max = 800,
+                step = 10,
+                get = function() return addon.db.profile.minimap.growSize end,
+                set = function(_, value) addon.db.profile.minimap.growSize = value end,
+            },
+            worldMapCentered = {
+                name = 'Map Centered World Map',
+                desc = 'Center the world map on the map origin instead of the player.',
+                type = 'toggle',
+                order = 7,
+                get = function() return addon.db.profile.minimap.worldMapCentered end,
+                set = function(_, value) addon.db.profile.minimap.worldMapCentered = value end,
+            },
+            moveAlphaEnabled = {
+                name = 'Fade on Move',
+                desc = 'Fade the minimap while the player is moving.',
+                type = 'toggle',
+                order = 8,
+                get = function() return addon.db.profile.minimap.moveAlphaEnabled end,
+                set = function(_, value) addon.db.profile.minimap.moveAlphaEnabled = value end,
+            },
+            moveAlpha = {
+                name = 'Move Alpha',
+                desc = 'Opacity while the player is moving.',
+                type = 'range',
+                order = 9,
+                min = 0.0,
+                max = 1.0,
+                step = 0.05,
+                get = function() return addon.db.profile.minimap.moveAlpha end,
+                set = function(_, value) addon.db.profile.minimap.moveAlpha = value end,
+            },
+            borderEnabled = {
+                name = 'Border',
+                desc = 'Show a colored border around the minimap and world map.',
+                type = 'toggle',
+                order = 10,
+                get = function() return addon.db.profile.minimap.borderEnabled end,
+                set = function(_, value)
+                    addon.db.profile.minimap.borderEnabled = value
+                    minimod.applyBorder()
+                end,
+            },
+            borderSize = {
+                name = 'Border Size',
+                desc = 'Border thickness in pixels.',
+                type = 'range',
+                order = 11,
+                min = 1,
+                max = 20,
+                step = 1,
+                get = function() return addon.db.profile.minimap.borderSize end,
+                set = function(_, value)
+                    addon.db.profile.minimap.borderSize = value
+                    minimod.applyBorder()
+                end,
+            },
+            borderColor = {
+                name = 'Border Color',
+                type = 'color',
+                hasAlpha = true,
+                order = 12,
+                get = function()
+                    local db = addon.db.profile.minimap
+                    return db.borderR, db.borderG, db.borderB, db.borderA
+                end,
+                set = function(_, r, g, b, a)
+                    local db = addon.db.profile.minimap
+                    db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
+                    minimod.applyBorder()
+                end,
+            },
+        },
+    }
+end
+
+--#endregion

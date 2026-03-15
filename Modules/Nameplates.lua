@@ -209,20 +209,18 @@ function nameplates:ApplySoftTargetCVars()
 end
 
 function nameplates:SetFriendlyNameplatesCVars(value)
-    SetCVar("nameplateShowFriendlyPlayers", value and 1 or 0)
+    -- SetCVar("nameplateShowFriendlyPlayers", value and 1 or 0) -- TODO: Re-enable?
     SetCVar("nameplateShowFriendlyNpcs", value and 1 or 0)
 end
 
 function nameplates:ApplyCombatCVars()
     local c = cfg()
-    SetCVar("UnitNameEnemyPlayerName", c.showEnemyNamesInCombat and 1 or 0)
     if c.softTargetFriend then SetCVar("SoftTargetFriend", 0) end
     if not c.friendlyInCombat then self:SetFriendlyNameplatesCVars(false) end
 end
 
 function nameplates:RestoreCombatCVars()
     local c = cfg()
-    SetCVar("UnitNameEnemyPlayerName", 1)
     if c.softTargetFriend then
         SetCVar("SoftTargetFriend", 1)
         self:ApplySoftTargetCVars()
@@ -313,6 +311,7 @@ function nameplates:OnEnable()
     self:RegisterEvent("PLAYER_SOFT_FRIEND_CHANGED", "OnTargetChanged")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnLeaveCombat")
+    self:RegisterEvent("PLAYER_SOFT_INTERACT_CHANGED", "OnTargetChanged")
 end
 
 function nameplates:OnDisable()
@@ -391,21 +390,20 @@ end
 function nameplates:GetDefaults()
     return {
         nameplates = {
-            enabled                = true,
-            softTargetFriend       = false,
-            softTargetFriendRange  = 45,
-            softTargetFriendArc    = 1,
-            softTargetEnemy        = true,
-            softTargetEnemyRange   = 45,
-            softTargetEnemyArc     = 1,
-            partyFilter            = true,
-            filterOpenWorld        = true,
-            filterCityInn          = false,
-            filterInstances        = false,
-            allowedNames           = {},
-            showEnemyNamesInCombat = true,
-            showEnemyNpcNames      = false,
-            friendlyInCombat       = true,
+            enabled               = true,
+            softTargetFriend      = false,
+            softTargetFriendRange = 45,
+            softTargetFriendArc   = 1,
+            softTargetEnemy       = true,
+            softTargetEnemyRange  = 45,
+            softTargetEnemyArc    = 1,
+            partyFilter           = true,
+            filterOpenWorld       = true,
+            filterCityInn         = false,
+            filterInstances       = false,
+            allowedNames          = {},
+            showEnemyNpcNames     = false,
+            friendlyInCombat      = true,
         },
     }
 end
