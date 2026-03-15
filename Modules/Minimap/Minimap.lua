@@ -42,6 +42,23 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@field resetWorldMapZoom      fun()
 ---@field openWorldMap           fun()
 ---@field closeWorldMap          fun()
+---@field trackingBtn            Button|nil
+---@field wmBtnWQ                Button|nil
+---@field wmBtnAQ                Button|nil
+---@field wmBtnLS                Button|nil
+---@field wmDpWorldQuests        table|nil
+---@field wmDpActiveQuests       table|nil
+---@field wmDpLocalStories       table|nil
+---@field wmBtnDungeons          Button|nil
+---@field wmBtnDelves            Button|nil
+---@field wmBtnEvents            Button|nil
+---@field wmBtnTravel            Button|nil
+---@field wmDpDungeons           table|nil
+---@field wmDpDelves             table|nil
+---@field wmDpEvents             table|nil
+---@field wmDpTravel             table|nil
+---@field wmDpPortals            table|nil
+---@field wmDpAreaPOI            table|nil
 local minimod = addon:NewModule('Minimap')
 
 -- Cache globals for performance and style guide compliance
@@ -131,6 +148,13 @@ function minimod:GetDefaults()
             moveAlphaEnabled = true,
             moveAlpha = 0.3,
             worldMapCentered = false,
+            worldMapShowWorldQuests  = true,
+            worldMapShowActiveQuests = true,
+            worldMapShowLocalStories = true,
+            worldMapShowDungeons     = true,
+            worldMapShowDelves       = true,
+            worldMapShowEvents       = true,
+            worldMapShowTravel       = true,
             borderEnabled = false,
             borderSize = 2,
             borderR = 1,

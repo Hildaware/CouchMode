@@ -24,6 +24,54 @@ local Minimap = _G.Minimap
 
 local TRANSITION_DURATION = 0.25
 
+-- Maps each world-map toolbar button field to its db toggle key.
+-- Used by openWorldMap/closeWorldMap to sync all buttons in one loop.
+local WM_BUTTON_DEFS = {
+    { btn = "wmBtnWQ",       db = "worldMapShowWorldQuests" },
+    { btn = "wmBtnAQ",       db = "worldMapShowActiveQuests" },
+    { btn = "wmBtnLS",       db = "worldMapShowLocalStories" },
+    { btn = "wmBtnDungeons", db = "worldMapShowDungeons" },
+    { btn = "wmBtnDelves",   db = "worldMapShowDelves" },
+    { btn = "wmBtnEvents",   db = "worldMapShowEvents" },
+    { btn = "wmBtnTravel",   db = "worldMapShowTravel" },
+}
+
+-- Patches global pin/provider mixins once to fix crashes and add tooltip support.
+local function setup_mixin_patches()
+    if _G.GroupMembersPinMixin and not _G.GroupMembersPinMixin._ct_patched then ---@diagnostic disable-line: undefined-global
+        local _orig = _G.GroupMembersPinMixin.OnHide ---@diagnostic disable-line: undefined-global
+        _G.GroupMembersPinMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
+            if self.dataProvider then _orig(self) end
+        end
+        _G.GroupMembersPinMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
+    end
+
+    if _G.WorldQuestDataProviderMixin and not _G.WorldQuestDataProviderMixin._ct_patched then ---@diagnostic disable-line: undefined-global
+        local _orig = _G.WorldQuestDataProviderMixin.OnHide ---@diagnostic disable-line: undefined-global
+        _G.WorldQuestDataProviderMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
+            if self.ticker then _orig(self) end
+        end
+        _G.WorldQuestDataProviderMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
+    end
+
+    if _G.AreaPOIPinMixin and not _G.AreaPOIPinMixin._ct_patched then ---@diagnostic disable-line: undefined-global
+        _G.AreaPOIPinMixin.OnMouseEnter = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
+            local info = self.poiInfo ---@type any
+            if not info or not info.name or info.name == "" then return end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT") ---@diagnostic disable-line: undefined-global
+            GameTooltip:SetText(info.name, 1, 1, 1) ---@diagnostic disable-line: undefined-global
+            if info.description and info.description ~= "" then
+                GameTooltip:AddLine(info.description, nil, nil, nil, true) ---@diagnostic disable-line: undefined-global
+            end
+            GameTooltip:Show() ---@diagnostic disable-line: undefined-global
+        end
+        _G.AreaPOIPinMixin.OnMouseLeave = function() ---@diagnostic disable-line: undefined-global, duplicate-set-field
+            GameTooltip:Hide() ---@diagnostic disable-line: undefined-global
+        end
+        _G.AreaPOIPinMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
+    end
+end
+
 --#region ── World Map ───────────────────────────────────────────────────────
 
 local function create_world_map()
@@ -80,9 +128,16 @@ local function create_world_map()
     end)
 
     local function apply_zoom(z)
+        local old_zoom = zoom
         zoom = math_max(min_zoom, math_min(z, max_zoom))
         scroll_child:SetScale(zoom)
-        if addon.db.profile.minimap.worldMapCentered then
+        if has_panned then
+            -- Keep the same canvas point at the viewport center after the scale change
+            local sh = scroll_container:GetHorizontalScroll()
+            local sv = scroll_container:GetVerticalScroll()
+            scroll_container:SetHorizontalScroll(sh + cached_wrap_w * (1 / (2 * old_zoom) - 1 / (2 * zoom)))
+            scroll_container:SetVerticalScroll(sv + cached_wrap_h * (1 / (2 * old_zoom) - 1 / (2 * zoom)))
+        elseif addon.db.profile.minimap.worldMapCentered then
             scroll_container:SetHorizontalScroll(cached_child_w / 2 - cached_wrap_w / (2 * zoom))
             scroll_container:SetVerticalScroll(cached_child_h / 2 - cached_wrap_h / (2 * zoom))
         else
@@ -232,70 +287,72 @@ local function create_world_map()
     map_frame:EnableMouse(true)
     map_frame:EnableMouseWheel(true)
 
-    if _G.BaseMapCanvasDetailLayerMixin then ---@diagnostic disable-line: undefined-global
-        local detail_dp = CreateFromMixins(_G.BaseMapCanvasDetailLayerMixin) ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(detail_dp)
-        detail_dp.AdjustDetailLayerAlpha = function() end
-    end
-    if _G.MapCanvasCursorDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(CreateFromMixins(_G.MapCanvasCursorDataProviderMixin)) ---@diagnostic disable-line: undefined-global
-    end
-
     -- Register pin frame levels needed by the providers below.
     local plm = map_frame:GetPinFrameLevelsManager()
-    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_EXPLORATION_TEXTURE") -- MapExplorationDataProvider
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_EXPLORATION_TEXTURE")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_QUEST_PING")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_VIGNETTE", 200)
     plm:AddFrameLevel("PIN_FRAME_LEVEL_WORLD_QUEST", 500)
     plm:AddFrameLevel("PIN_FRAME_LEVEL_ACTIVE_QUEST", C_QuestLog.GetMaxNumQuests())
     plm:AddFrameLevel("PIN_FRAME_LEVEL_SUPER_TRACKED_QUEST")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_GROUP_MEMBER")
+    if _G.QuestOfferDataProviderMixin then ---@diagnostic disable-line: undefined-global
+        plm:AddFrameLevel("PIN_FRAME_LEVEL_QUEST_OFFER", _G.QuestOfferDataProviderMixin.PIN_LEVEL_RANGE) ---@diagnostic disable-line: undefined-global, undefined-field
+    end
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_DUNGEON_ENTRANCE")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_DELVE_ENTRANCE")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_AREA_POI_EVENT")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_FLIGHT_POINT")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_LINK")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_AREA_POI")
 
-    if _G.GroupMembersPinMixin and not _G.GroupMembersPinMixin._ct_patched then ---@diagnostic disable-line: undefined-global
-        local _orig = _G.GroupMembersPinMixin.OnHide ---@diagnostic disable-line: undefined-global
-        _G.GroupMembersPinMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
-            if self.dataProvider then _orig(self) end
+    setup_mixin_patches()
+
+    -- Wraps RefreshAllData to gate on a db toggle; clears pins instead of redrawing when off.
+    local function make_toggleable_dp(mixin, db_key)
+        local dp = CreateFromMixins(mixin)
+        local orig_refresh = dp.RefreshAllData
+        if orig_refresh then
+            dp.RefreshAllData = function(self, ...)
+                if addon.db.profile.minimap[db_key] then
+                    return orig_refresh(self, ...)
+                end
+                self:RemoveAllData()
+            end
         end
-        _G.GroupMembersPinMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
+        return dp
     end
 
-    -- World Quests
-    if _G.WorldQuestDataProviderMixin and not _G.WorldQuestDataProviderMixin._ct_patched then ---@diagnostic disable-line: undefined-global
-        local _orig = _G.WorldQuestDataProviderMixin.OnHide ---@diagnostic disable-line: undefined-global
-        _G.WorldQuestDataProviderMixin.OnHide = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
-            if self.ticker then _orig(self) end
-        end
-        _G.WorldQuestDataProviderMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
+    -- Adds a data provider to map_frame. Passing db_key makes it toggleable and
+    -- store_field saves the ref on minimod. setup_fn(dp) runs after creation.
+    local function add_provider(mixin_name, store_field, db_key, setup_fn)
+        local mixin = _G[mixin_name] ---@diagnostic disable-line: undefined-global
+        if not mixin then return end
+        local dp = db_key and make_toggleable_dp(mixin, db_key) or CreateFromMixins(mixin)
+        if setup_fn then setup_fn(dp) end
+        if store_field then minimod[store_field] = dp end
+        map_frame:AddDataProvider(dp)
     end
 
-    -- Fog of War removal
-    if _G.MapExplorationDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(CreateFromMixins(_G.MapExplorationDataProviderMixin)) ---@diagnostic disable-line: undefined-global
-    end
-
-    -- Player arrow + party/raid members
-    if _G.GroupMembersDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(CreateFromMixins(_G.GroupMembersDataProviderMixin)) ---@diagnostic disable-line: undefined-global
-    end
-
-    -- Active quest pins
-    if _G.QuestDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(CreateFromMixins(_G.QuestDataProviderMixin)) ---@diagnostic disable-line: undefined-global
-    end
-
-    -- World quests + bounties (same config as WorldMapFrame)
-    if _G.WorldQuestDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        local wq_dp = CreateFromMixins(_G.WorldQuestDataProviderMixin) ---@diagnostic disable-line: undefined-global
-        wq_dp:SetMatchWorldMapFilters(true)
-        wq_dp:SetUsesSpellEffect(true)
-        wq_dp:SetCheckBounties(true)
-        map_frame:AddDataProvider(wq_dp)
-    end
-
-    -- Rare/treasure vignettes
-    if _G.VignetteDataProviderMixin then ---@diagnostic disable-line: undefined-global
-        map_frame:AddDataProvider(CreateFromMixins(_G.VignetteDataProviderMixin)) ---@diagnostic disable-line: undefined-global
-    end
+    add_provider("BaseMapCanvasDetailLayerMixin", nil, nil,
+        function(dp) dp.AdjustDetailLayerAlpha = function() end end)
+    add_provider("MapCanvasCursorDataProviderMixin")
+    add_provider("MapExplorationDataProviderMixin")
+    add_provider("GroupMembersDataProviderMixin")
+    add_provider("VignetteDataProviderMixin")
+    add_provider("QuestDataProviderMixin", "wmDpActiveQuests", "worldMapShowActiveQuests")
+    add_provider("WorldQuestDataProviderMixin", "wmDpWorldQuests", "worldMapShowWorldQuests", function(dp)
+        dp:SetMatchWorldMapFilters(true)
+        dp:SetUsesSpellEffect(true)
+        dp:SetCheckBounties(true)
+    end)
+    add_provider("QuestOfferDataProviderMixin", "wmDpLocalStories", "worldMapShowLocalStories")
+    add_provider("DungeonEntranceDataProviderMixin", "wmDpDungeons", "worldMapShowDungeons")
+    add_provider("DelveEntranceDataProviderMixin", "wmDpDelves", "worldMapShowDelves")
+    add_provider("AreaPOIEventDataProviderMixin", "wmDpEvents", "worldMapShowEvents")
+    add_provider("FlightPointDataProviderMixin", "wmDpTravel", "worldMapShowTravel")
+    add_provider("MapLinkDataProviderMixin", "wmDpPortals", "worldMapShowTravel")
+    add_provider("AreaPOIDataProviderMixin", "wmDpAreaPOI", "worldMapShowTravel")
 
     minimod.worldMap = map_frame
 end
@@ -340,6 +397,16 @@ minimod.openWorldMap = function()
         end
     end
 
+    -- Swap toolbar buttons: hide minimap-only, show + sync world map filters
+    if minimod.trackingBtn then minimod.trackingBtn:Hide() end
+    local wm_db = addon.db.profile.minimap
+    for _, def in ipairs(WM_BUTTON_DEFS) do
+        local btn = minimod[def.btn]
+        if btn then
+            btn:SetAlpha(wm_db[def.db] and 1 or 0.4); btn:Show()
+        end
+    end
+
     minimod.worldMap:SetAlpha(0)
     minimod.worldMap:Show()
     minimod.startFrameFade(minimod.worldMap, minimod.worldMapFade, 1)
@@ -349,6 +416,13 @@ end
 minimod.closeWorldMap = function()
     minimod.worldMapOpen = false
     minimod.applySettings()
+
+    -- Swap toolbar buttons back: hide world map filters, restore minimap-only buttons
+    if minimod.trackingBtn then minimod.trackingBtn:Show() end
+    for _, def in ipairs(WM_BUTTON_DEFS) do
+        local btn = minimod[def.btn]
+        if btn then btn:Hide() end
+    end
 
     Minimap:SetAlpha(0)
     Minimap:Show()

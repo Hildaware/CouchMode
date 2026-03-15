@@ -193,15 +193,16 @@ function minimod.createFrame()
     create_mail_indicator()
 
     -- Settings button
-    local settings_btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "GM-icon-settings-hover", function()
+    local settings_btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "echoes-icon", function()
         LibStub("AceConfigDialog-3.0"):Open(addon_name)
-    end)
+    end, "Settings")
     settings_btn:SetPoint("RIGHT", minimod.toolbar, "RIGHT", -2, 0)
 
     -- Tracking button: open native DropdownButton menu anchored to our button
     local tracking_btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "UI-HUD-Minimap-Tracking-Up",
-        function() end)
-    tracking_btn:SetPoint("RIGHT", settings_btn, "LEFT", -2, 0)
+        function() end, "Tracking")
+    tracking_btn:SetPoint("RIGHT", settings_btn, "LEFT", -10, 0)
+    minimod.trackingBtn = tracking_btn
     if blizz_tracking_btn then
         blizz_tracking_btn:SetParent(tracking_btn)
         blizz_tracking_btn:ClearAllPoints()
@@ -213,6 +214,63 @@ function minimod.createFrame()
             blizz_tracking_btn:OpenMenu()
         end)
     end
+
+    -- World Map filter toggle buttons (hidden until world map is open)
+    local function make_wm_toggle(atlas, dp_field, db_field, tooltip)
+        local btn ---@type Button
+        btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, atlas, function()
+            if not minimod.worldMap then return end
+            db[db_field] = not db[db_field]
+            local dp = minimod[dp_field] ---@type any
+            if dp then
+                if db[db_field] then
+                    dp:RefreshAllData()
+                else
+                    dp:RemoveAllData()
+                end
+            end
+            btn:SetAlpha(db[db_field] and 1 or 0.4)
+        end, tooltip)
+        btn:Hide()
+        return btn
+    end
+
+    minimod.wmBtnWQ = make_wm_toggle("worldquest-tracker-questmarker", "wmDpWorldQuests", "worldMapShowWorldQuests",
+        "World Quests")
+    minimod.wmBtnWQ:SetPoint("RIGHT", settings_btn, "LEFT", -10, 0)
+
+    minimod.wmBtnAQ = make_wm_toggle("QuestNormal", "wmDpActiveQuests", "worldMapShowActiveQuests", "Active Quests")
+    minimod.wmBtnAQ:SetPoint("RIGHT", minimod.wmBtnWQ, "LEFT", -2, 0)
+
+    minimod.wmBtnLS = make_wm_toggle("questlog-storylineicon", "wmDpLocalStories", "worldMapShowLocalStories",
+        "Local Stories")
+    minimod.wmBtnLS:SetPoint("RIGHT", minimod.wmBtnAQ, "LEFT", -2, 0)
+
+    minimod.wmBtnDungeons = make_wm_toggle("questlog-questtypeicon-heroic", "wmDpDungeons", "worldMapShowDungeons",
+        "Dungeons/Raids")
+    minimod.wmBtnDungeons:SetPoint("RIGHT", minimod.wmBtnLS, "LEFT", -2, 0)
+
+    minimod.wmBtnDelves = make_wm_toggle("questlog-questtypeicon-Delves", "wmDpDelves", "worldMapShowDelves", "Delves")
+    minimod.wmBtnDelves:SetPoint("RIGHT", minimod.wmBtnDungeons, "LEFT", -2, 0)
+
+    minimod.wmBtnEvents = make_wm_toggle("questlog-questtypeicon-story", "wmDpEvents", "worldMapShowEvents", "Events")
+    minimod.wmBtnEvents:SetPoint("RIGHT", minimod.wmBtnDelves, "LEFT", -2, 0)
+
+    local travelBtn ---@type Button
+    travelBtn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "MagePortalAlliance", function()
+        if not minimod.worldMap then return end
+        db.worldMapShowTravel = not db.worldMapShowTravel
+        for _, dpField in ipairs({ "wmDpTravel", "wmDpPortals", "wmDpAreaPOI" }) do
+            local dp = minimod[dpField] ---@type any
+            if dp then
+                if db.worldMapShowTravel then dp:RefreshAllData() else dp:RemoveAllData() end
+            end
+        end
+        travelBtn:SetAlpha(db.worldMapShowTravel and 1 or 0.4)
+    end, "Travel")
+    travelBtn:Hide()
+    minimod.wmBtnTravel = travelBtn
+    minimod.wmBtnTravel:SetPoint("RIGHT", minimod.wmBtnEvents, "LEFT", -2, 0)
 
     -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
     minimod.wrapper:SetMovable(true)

@@ -60,8 +60,13 @@ function minimod.MapUtils.apply_border_textures(anchor, borders, show, size, r, 
     R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end
 
--- Toolbar button helper: 20x20 button with atlas icon and 1px white outline
-function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click)
+--- Toolbar button helper: 20x20 button with atlas icon and 1px white outline.
+--- If tooltip is provided, shows a GameTooltip with that text on hover.
+---@param parent Frame
+---@param atlas string
+---@param on_click fun()
+---@param tooltip string|nil
+function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click, tooltip)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(20, 20)
 
@@ -74,5 +79,17 @@ function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click)
     minimod.MapUtils.apply_border_textures(btn, borders, true, 1, 1, 1, 1, 0.5)
 
     btn:SetScript("OnClick", on_click)
+
+    if tooltip then
+        btn:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(btn, "ANCHOR_TOP") ---@diagnostic disable-line: undefined-global
+            GameTooltip:SetText(tooltip, 1, 1, 1) ---@diagnostic disable-line: undefined-global
+            GameTooltip:Show() ---@diagnostic disable-line: undefined-global
+        end)
+        btn:SetScript("OnLeave", function()
+            GameTooltip:Hide() ---@diagnostic disable-line: undefined-global
+        end)
+    end
+
     return btn
 end
