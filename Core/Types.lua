@@ -1,0 +1,56 @@
+---@class FadeState
+---@field from    number
+---@field to      number
+---@field elapsed number
+---@field active  boolean
+
+---@class MinimapModule: AceModule
+---@field minimapFade            FadeState
+---@field worldMapFade           FadeState
+---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
+---@field fadeTo                 number|nil
+---@field fadeFrom               number
+---@field fadeElapsed            number
+---@field grown                  boolean
+---@field worldMapOpen           boolean
+---@field origParent             Frame|nil
+---@field mailIndicator          Frame|nil
+---@field blizzTracking          Frame|nil
+---@field origW                  number
+---@field origH                  number
+---@field origPoints             table
+---@field hybridMinimap          Frame|nil
+---@field origCircleMaskTexture  string|nil
+---@field rectMask               MaskTexture|nil
+---@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
+---@field toolbar                Frame|nil
+---@field toolbarBorders         table|nil
+---@field wrapper                Frame
+---@field borderFrame            Frame
+---@field borders                table|nil
+---@field applyBorder            fun()
+---@field applySettings          fun()
+---@field createFrame            fun()
+---@field worldMap               Frame|nil
+---@field worldMapArtW           number
+---@field worldMapArtH           number
+---@field resetWorldMapZoom      fun()
+---@field openWorldMap           fun()
+---@field closeWorldMap          fun()
+---@field trackingBtn            Button|nil
+---@field wmBtnWQ                Button|nil
+---@field wmBtnAQ                Button|nil
+---@field wmBtnLS                Button|nil
+---@field wmDpWorldQuests        table|nil
+---@field wmDpActiveQuests       table|nil
+---@field wmDpLocalStories       table|nil
+---@field wmBtnDungeons          Button|nil
+---@field wmBtnDelves            Button|nil
+---@field wmBtnEvents            Button|nil
+---@field wmBtnTravel            Button|nil
+---@field wmDpDungeons           table|nil
+---@field wmDpDelves             table|nil
+---@field wmDpEvents             table|nil
+---@field wmDpTravel             table|nil
+---@field wmDpPortals            table|nil
+---@field wmDpAreaPOI            table|nil

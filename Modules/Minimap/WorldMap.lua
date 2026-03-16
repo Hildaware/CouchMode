@@ -24,8 +24,6 @@ local Minimap = _G.Minimap
 
 local ConsolePort = _G['ConsolePort'] ---@type any
 
-local TRANSITION_DURATION = 0.25
-
 -- Maps each world-map toolbar button field to its db toggle key.
 -- Used by openWorldMap/closeWorldMap to sync all buttons in one loop.
 local WM_BUTTON_DEFS = {
@@ -60,15 +58,15 @@ local function setup_mixin_patches()
         _G.AreaPOIPinMixin.OnMouseEnter = function(self) ---@diagnostic disable-line: undefined-global, duplicate-set-field
             local info = self.poiInfo ---@type any
             if not info or not info.name or info.name == "" then return end
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT") ---@diagnostic disable-line: undefined-global
-            GameTooltip:SetText(info.name, 1, 1, 1) ---@diagnostic disable-line: undefined-global
+            _G.GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            _G.GameTooltip:SetText(info.name, 1, 1, 1)
             if info.description and info.description ~= "" then
-                GameTooltip:AddLine(info.description, nil, nil, nil, true) ---@diagnostic disable-line: undefined-global
+                _G.GameTooltip:AddLine(info.description, nil, nil, nil, true)
             end
-            GameTooltip:Show() ---@diagnostic disable-line: undefined-global
+            _G.GameTooltip:Show()
         end
         _G.AreaPOIPinMixin.OnMouseLeave = function() ---@diagnostic disable-line: undefined-global, duplicate-set-field
-            GameTooltip:Hide() ---@diagnostic disable-line: undefined-global
+            _G.GameTooltip:Hide()
         end
         _G.AreaPOIPinMixin._ct_patched = true ---@diagnostic disable-line: undefined-global
     end
@@ -133,22 +131,25 @@ local function create_world_map()
         local old_zoom = zoom
         zoom = math_max(min_zoom, math_min(z, max_zoom))
         scroll_child:SetScale(zoom)
+
+        local half_w_zoom = cached_wrap_w / (2 * zoom)
+        local half_h_zoom = cached_wrap_h / (2 * zoom)
+
         if has_panned then
             -- Keep the same canvas point at the viewport center after the scale change
-            local sh = scroll_container:GetHorizontalScroll()
-            local sv = scroll_container:GetVerticalScroll()
-            scroll_container:SetHorizontalScroll(sh + cached_wrap_w * (1 / (2 * old_zoom) - 1 / (2 * zoom)))
-            scroll_container:SetVerticalScroll(sv + cached_wrap_h * (1 / (2 * old_zoom) - 1 / (2 * zoom)))
+            local zoom_diff = (1 / (2 * old_zoom)) - (1 / (2 * zoom))
+            scroll_container:SetHorizontalScroll(scroll_container:GetHorizontalScroll() + cached_wrap_w * zoom_diff)
+            scroll_container:SetVerticalScroll(scroll_container:GetVerticalScroll() + cached_wrap_h * zoom_diff)
         elseif addon.db.profile.minimap.worldMapCentered then
-            scroll_container:SetHorizontalScroll(cached_child_w / 2 - cached_wrap_w / (2 * zoom))
-            scroll_container:SetVerticalScroll(cached_child_h / 2 - cached_wrap_h / (2 * zoom))
+            scroll_container:SetHorizontalScroll(cached_child_w / 2 - half_w_zoom)
+            scroll_container:SetVerticalScroll(cached_child_h / 2 - half_h_zoom)
         else
             local map_id = map_frame.GetMapID and map_frame:GetMapID()
             if map_id then
                 local pos = C_Map.GetPlayerMapPosition(map_id, "player")
                 if pos then
-                    scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - (cached_wrap_w / (2 * zoom)))
-                    scroll_container:SetVerticalScroll((pos.y * cached_child_h) - (cached_wrap_h / (2 * zoom)))
+                    scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - half_w_zoom)
+                    scroll_container:SetVerticalScroll((pos.y * cached_child_h) - half_h_zoom)
                 end
             end
         end
@@ -255,8 +256,12 @@ local function create_world_map()
         if not map_id then return end
         local pos = C_Map.GetPlayerMapPosition(map_id, "player")
         if not pos then return end
-        scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - (cached_wrap_w / (2 * zoom)))
-        scroll_container:SetVerticalScroll((pos.y * cached_child_h) - (cached_wrap_h / (2 * zoom)))
+
+        local half_w_zoom = cached_wrap_w / (2 * zoom)
+        local half_h_zoom = cached_wrap_h / (2 * zoom)
+
+        scroll_container:SetHorizontalScroll((pos.x * cached_child_w) - half_w_zoom)
+        scroll_container:SetVerticalScroll((pos.y * cached_child_h) - half_h_zoom)
     end)
 
     scroll_container:EnableMouse(true)
@@ -393,14 +398,16 @@ minimod.openWorldMap = function()
         local cw, ch = sc.Child:GetSize()
         local vw, vh = minimod.wrapper:GetSize()
         local entry_zoom = sc:GetZoom()
+        local half_w_zoom = vw / (2 * entry_zoom)
+        local half_h_zoom = vh / (2 * entry_zoom)
         if addon.db.profile.minimap.worldMapCentered then
-            sc:SetHorizontalScroll(cw / 2 - vw / (2 * entry_zoom))
-            sc:SetVerticalScroll(ch / 2 - vh / (2 * entry_zoom))
+            sc:SetHorizontalScroll(cw / 2 - half_w_zoom)
+            sc:SetVerticalScroll(ch / 2 - half_h_zoom)
         else
             local pos = C_Map.GetPlayerMapPosition(map_id, "player")
             if pos then
-                sc:SetHorizontalScroll(pos.x * cw - vw / (2 * entry_zoom))
-                sc:SetVerticalScroll(pos.y * ch - vh / (2 * entry_zoom))
+                sc:SetHorizontalScroll(pos.x * cw - half_w_zoom)
+                sc:SetVerticalScroll(pos.y * ch - half_h_zoom)
             end
         end
     end

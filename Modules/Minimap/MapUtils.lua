@@ -18,14 +18,13 @@ minimod.MapUtils = {}
 ---@return table @A table containing the T, B, L, and R textures.
 function minimod.MapUtils.create_border_textures(parent, anchor)
     local borders = {}
-    borders.T = parent:CreateTexture(nil, "OVERLAY", nil, 7)
+    for _, pos in ipairs({ "T", "B", "L", "R" }) do
+        borders[pos] = parent:CreateTexture(nil, "OVERLAY", nil, 7)
+    end
     borders.T:SetPoint("TOPLEFT", anchor, "TOPLEFT")
     borders.T:SetPoint("TOPRIGHT", anchor, "TOPRIGHT")
-    borders.B = parent:CreateTexture(nil, "OVERLAY", nil, 7)
     borders.B:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT")
     borders.B:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT")
-    borders.L = parent:CreateTexture(nil, "OVERLAY", nil, 7)
-    borders.R = parent:CreateTexture(nil, "OVERLAY", nil, 7)
     return borders
 end
 
@@ -35,29 +34,25 @@ end
 ---@param borders table The table containing the T, B, L, and R textures
 ---@param show boolean  @param size number  @param r number  @param g number  @param b number  @param a number
 function minimod.MapUtils.apply_border_textures(anchor, borders, show, size, r, g, b, a)
-    local T, B, L, R = borders.T, borders.B, borders.L, borders.R
-    T:SetShown(show)
-    B:SetShown(show)
-    L:SetShown(show)
-    R:SetShown(show)
+    for _, pos in ipairs({ "T", "B", "L", "R" }) do
+        local tex = borders[pos]
+        tex:SetShown(show)
+        if show then tex:SetColorTexture(r, g, b, a) end
+    end
 
     if not show then return end
 
-    T:SetColorTexture(r, g, b, a)
-    B:SetColorTexture(r, g, b, a)
-    L:SetColorTexture(r, g, b, a)
-    R:SetColorTexture(r, g, b, a)
-    T:SetHeight(size)
-    B:SetHeight(size)
-    L:SetWidth(size)
-    R:SetWidth(size)
+    borders.T:SetHeight(size)
+    borders.B:SetHeight(size)
+    borders.L:SetWidth(size)
+    borders.R:SetWidth(size)
 
-    L:ClearAllPoints()
-    L:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -size)
-    L:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, size)
-    R:ClearAllPoints()
-    R:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, -size)
-    R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
+    borders.L:ClearAllPoints()
+    borders.L:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -size)
+    borders.L:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, size)
+    borders.R:ClearAllPoints()
+    borders.R:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, -size)
+    borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end
 
 --- Toolbar button helper: 20x20 button with atlas icon and 1px white outline.
@@ -82,12 +77,12 @@ function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click, tooltip
 
     if tooltip then
         btn:SetScript("OnEnter", function()
-            GameTooltip:SetOwner(btn, "ANCHOR_TOP") ---@diagnostic disable-line: undefined-global
-            GameTooltip:SetText(tooltip, 1, 1, 1) ---@diagnostic disable-line: undefined-global
-            GameTooltip:Show() ---@diagnostic disable-line: undefined-global
+            _G.GameTooltip:SetOwner(btn, "ANCHOR_TOP")
+            _G.GameTooltip:SetText(tooltip, 1, 1, 1)
+            _G.GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function()
-            GameTooltip:Hide() ---@diagnostic disable-line: undefined-global
+            _G.GameTooltip:Hide()
         end)
     end
 

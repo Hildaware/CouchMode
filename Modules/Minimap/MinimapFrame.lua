@@ -29,11 +29,11 @@ local GROW_DURATION = 0.5
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 
-local function size_for_shape(db)
-    if db.shape == "rectangle" then
-        return db.size, math_floor(db.size * (2 / 3))
+local function size_for_shape(shape, size)
+    if shape == "rectangle" then
+        return size, math_floor(size * (2 / 3))
     end
-    return db.size, db.size
+    return size, size
 end
 
 local RECT_MASK = "Interface\\AddOns\\ConsoleTools\\Media\\3-2.blp"
@@ -75,11 +75,19 @@ function minimod.applyBorder()
     end
 end
 
+function minimod.applyZoom()
+    if not minimod.wrapper then return end
+    local db = addon.db.profile.minimap
+    local target = minimod.grown and db.growZoom or db.zoom
+    local max_zoom = Minimap:GetZoomLevels() - 1
+    Minimap:SetZoom(math_min(target, max_zoom))
+end
+
 function minimod.applySettings()
     if not minimod.wrapper then return end
     local db = addon.db.profile.minimap
     local size = minimod.grown and db.growSize or db.size
-    local w, h = size_for_shape({ shape = db.shape, size = size })
+    local w, h = size_for_shape(db.shape, size)
 
     minimod.wrapper:SetSize(w, h)
     minimod.wrapper:SetAlpha(db.alpha)
@@ -133,7 +141,7 @@ function minimod.createFrame()
     Minimap:SetQuestBlobRingAlpha(0)
 
     -- Wrapper: clips rectangle shapes, drag target, alpha host
-    local w, h = size_for_shape(db)
+    local w, h = size_for_shape(db.shape, db.size)
     minimod.wrapper = CreateFrame("Frame", "CTMinimapWrapper", UIParent)
     minimod.wrapper:SetSize(w, h)
     minimod.wrapper:SetPoint(db.point, UIParent, db.point, db.x, db.y)
@@ -214,67 +222,40 @@ function minimod.createFrame()
         blizz_tracking_btn:SetAlpha(0)
         blizz_tracking_btn.Button:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", tracking_btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
         tracking_btn:SetScript("OnClick", function()
-            print("Opening Blizzard tracking menu")
             blizz_tracking_btn:OpenMenu()
         end)
     end
 
     -- World Map filter toggle buttons (hidden until world map is open)
-    local function make_wm_toggle(atlas, dp_field, db_field, tooltip)
-        local btn ---@type Button
-        btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, atlas, function()
+    local wm_toggles = {
+        { btn = "wmBtnWQ",       atlas = "worldquest-tracker-questmarker", tooltip = "World Quests",   dps = { "wmDpWorldQuests" },                        db = "worldMapShowWorldQuests" },
+        { btn = "wmBtnAQ",       atlas = "QuestNormal",                    tooltip = "Active Quests",  dps = { "wmDpActiveQuests" },                       db = "worldMapShowActiveQuests" },
+        { btn = "wmBtnLS",       atlas = "questlog-storylineicon",         tooltip = "Local Stories",  dps = { "wmDpLocalStories" },                       db = "worldMapShowLocalStories" },
+        { btn = "wmBtnDungeons", atlas = "questlog-questtypeicon-heroic",  tooltip = "Dungeons/Raids", dps = { "wmDpDungeons" },                           db = "worldMapShowDungeons" },
+        { btn = "wmBtnDelves",   atlas = "questlog-questtypeicon-Delves",  tooltip = "Delves",         dps = { "wmDpDelves" },                             db = "worldMapShowDelves" },
+        { btn = "wmBtnEvents",   atlas = "questlog-questtypeicon-story",   tooltip = "Events",         dps = { "wmDpEvents" },                             db = "worldMapShowEvents" },
+        { btn = "wmBtnTravel",   atlas = "MagePortalAlliance",             tooltip = "Travel",         dps = { "wmDpTravel", "wmDpPortals", "wmDpAreaPOI" }, db = "worldMapShowTravel" },
+    }
+
+    local prev_btn = settings_btn
+    for i, config in ipairs(wm_toggles) do
+        local btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, config.atlas, function()
             if not minimod.worldMap then return end
-            db[db_field] = not db[db_field]
-            local dp = minimod[dp_field] ---@type any
-            if dp then
-                if db[db_field] then
-                    dp:RefreshAllData()
-                else
-                    dp:RemoveAllData()
+            db[config.db] = not db[config.db]
+            for _, dpField in ipairs(config.dps) do
+                local dp = minimod[dpField] ---@type any
+                if dp then
+                    if db[config.db] then dp:RefreshAllData() else dp:RemoveAllData() end
                 end
             end
-            btn:SetAlpha(db[db_field] and 1 or 0.4)
-        end, tooltip)
+            minimod[config.btn]:SetAlpha(db[config.db] and 1 or 0.4)
+        end, config.tooltip)
+
         btn:Hide()
-        return btn
+        btn:SetPoint("RIGHT", prev_btn, "LEFT", i == 1 and -10 or -2, 0)
+        minimod[config.btn] = btn
+        prev_btn = btn
     end
-
-    minimod.wmBtnWQ = make_wm_toggle("worldquest-tracker-questmarker", "wmDpWorldQuests", "worldMapShowWorldQuests",
-        "World Quests")
-    minimod.wmBtnWQ:SetPoint("RIGHT", settings_btn, "LEFT", -10, 0)
-
-    minimod.wmBtnAQ = make_wm_toggle("QuestNormal", "wmDpActiveQuests", "worldMapShowActiveQuests", "Active Quests")
-    minimod.wmBtnAQ:SetPoint("RIGHT", minimod.wmBtnWQ, "LEFT", -2, 0)
-
-    minimod.wmBtnLS = make_wm_toggle("questlog-storylineicon", "wmDpLocalStories", "worldMapShowLocalStories",
-        "Local Stories")
-    minimod.wmBtnLS:SetPoint("RIGHT", minimod.wmBtnAQ, "LEFT", -2, 0)
-
-    minimod.wmBtnDungeons = make_wm_toggle("questlog-questtypeicon-heroic", "wmDpDungeons", "worldMapShowDungeons",
-        "Dungeons/Raids")
-    minimod.wmBtnDungeons:SetPoint("RIGHT", minimod.wmBtnLS, "LEFT", -2, 0)
-
-    minimod.wmBtnDelves = make_wm_toggle("questlog-questtypeicon-Delves", "wmDpDelves", "worldMapShowDelves", "Delves")
-    minimod.wmBtnDelves:SetPoint("RIGHT", minimod.wmBtnDungeons, "LEFT", -2, 0)
-
-    minimod.wmBtnEvents = make_wm_toggle("questlog-questtypeicon-story", "wmDpEvents", "worldMapShowEvents", "Events")
-    minimod.wmBtnEvents:SetPoint("RIGHT", minimod.wmBtnDelves, "LEFT", -2, 0)
-
-    local travelBtn ---@type Button
-    travelBtn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "MagePortalAlliance", function()
-        if not minimod.worldMap then return end
-        db.worldMapShowTravel = not db.worldMapShowTravel
-        for _, dpField in ipairs({ "wmDpTravel", "wmDpPortals", "wmDpAreaPOI" }) do
-            local dp = minimod[dpField] ---@type any
-            if dp then
-                if db.worldMapShowTravel then dp:RefreshAllData() else dp:RemoveAllData() end
-            end
-        end
-        travelBtn:SetAlpha(db.worldMapShowTravel and 1 or 0.4)
-    end, "Travel")
-    travelBtn:Hide()
-    minimod.wmBtnTravel = travelBtn
-    minimod.wmBtnTravel:SetPoint("RIGHT", minimod.wmBtnEvents, "LEFT", -2, 0)
 
     -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
     minimod.wrapper:SetMovable(true)
@@ -304,22 +285,27 @@ function minimod.createFrame()
             minimod.wrapper:SetAlpha(minimod.fadeFrom + (minimod.fadeTo - minimod.fadeFrom) * t)
             if t >= 1 then minimod.fadeTo = nil end
         end
-        -- Minimap cross-fade
-        if minimod.minimapFade.active then
-            minimod.minimapFade.elapsed = minimod.minimapFade.elapsed + elapsed
-            local t = math_min(1, minimod.minimapFade.elapsed / TRANSITION_DURATION)
-            Minimap:SetAlpha(minimod.minimapFade.from + (minimod.minimapFade.to - minimod.minimapFade.from) * t)
+        -- Frame cross-fade helper
+        local function update_fade(state, frame)
+            if not state.active or not frame then return end
+            state.elapsed = state.elapsed + elapsed
+            local t = math_min(1, state.elapsed / TRANSITION_DURATION)
+            frame:SetAlpha(state.from + (state.to - state.from) * t)
             if t >= 1 then
-                minimod.minimapFade.active = false
-                if minimod.minimapFade.to == 0 then Minimap:Hide() end
+                state.active = false
+                if state.to == 0 then frame:Hide() end
             end
         end
+
+        update_fade(minimod.minimapFade, Minimap)
+        update_fade(minimod.worldMapFade, minimod.worldMap)
+
         -- Grow/shrink transition
-        if minimod.growTransition.active then
-            minimod.growTransition.elapsed = minimod.growTransition.elapsed + elapsed
-            local t = math_min(1, minimod.growTransition.elapsed / GROW_DURATION)
+        local gt = minimod.growTransition
+        if gt.active then
+            gt.elapsed = gt.elapsed + elapsed
+            local t = math_min(1, gt.elapsed / GROW_DURATION)
             local ts = t * t * (3 - 2 * t) -- smoothstep easing
-            local gt = minimod.growTransition
             local cw = gt.fromW + (gt.toW - gt.fromW) * ts
             local ch = gt.fromH + (gt.toH - gt.fromH) * ts
             local off = math_ceil((cw - ch) / 2)
@@ -353,6 +339,7 @@ function minimod.createFrame()
                     Minimap:SetZoom(cur_zoom)
                 end
                 minimod.applySettings()
+                minimod.applyZoom()
             end
         end
         -- Toolbar visibility
@@ -362,17 +349,6 @@ function minimod.createFrame()
                 minimod.wrapper:IsMouseOver() or
                 minimod.toolbar:IsMouseOver()
             )
-        end
-        -- World map cross-fade
-        if minimod.worldMapFade.active and minimod.worldMap then
-            minimod.worldMapFade.elapsed = minimod.worldMapFade.elapsed + elapsed
-            local t = math_min(1, minimod.worldMapFade.elapsed / TRANSITION_DURATION)
-            minimod.worldMap:SetAlpha(minimod.worldMapFade.from +
-                (minimod.worldMapFade.to - minimod.worldMapFade.from) * t)
-            if t >= 1 then
-                minimod.worldMapFade.active = false
-                if minimod.worldMapFade.to == 0 then minimod.worldMap:Hide() end
-            end
         end
     end)
 
@@ -462,15 +438,16 @@ function minimod.createFrame()
 
         local from_w, from_h = minimod.wrapper:GetSize()
         local size = minimod.grown and db.growSize or db.size
-        local to_w, to_h = size_for_shape({ shape = db.shape, size = size })
+        local to_w, to_h = size_for_shape(db.shape, size)
 
-        minimod.growTransition.active = true
-        minimod.growTransition.elapsed = 0
-        minimod.growTransition.fromW = from_w
-        minimod.growTransition.fromH = from_h
-        minimod.growTransition.toW = to_w
-        minimod.growTransition.toH = to_h
-        minimod.growTransition.lastZoomAt = 0
+        local gt = minimod.growTransition
+        gt.active = true
+        gt.elapsed = 0
+        gt.fromW = from_w
+        gt.fromH = from_h
+        gt.toW = to_w
+        gt.toH = to_h
+        gt.lastZoomAt = 0
     end
 
     if ConsolePort then
@@ -510,6 +487,8 @@ function minimod.createFrame()
     -- Blizzard Key Bindings panel display strings.
     BINDING_HEADER_CONSOLETOOLS = "Console Tools" ---@diagnostic disable-line: lowercase-global
     BINDING_NAME_CONSOLETOOLS_MINIMAP_GROWTOGGLE = "Toggle Minimap Expand" ---@diagnostic disable-line: lowercase-global
+
+    minimod.applyZoom()
 end
 
 --#endregion

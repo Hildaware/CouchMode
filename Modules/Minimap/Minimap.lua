@@ -3,62 +3,7 @@ local addon_name = ...
 ---@class ConsoleTools: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
----@class FadeState
----@field from    number
----@field to      number
----@field elapsed number
----@field active  boolean
-
----@class MinimapModule: AceModule
----@field minimapFade            FadeState
----@field worldMapFade           FadeState
----@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
----@field fadeTo                 number|nil
----@field fadeFrom               number
----@field fadeElapsed            number
----@field grown                  boolean
----@field worldMapOpen           boolean
----@field origParent             Frame|nil
----@field mailIndicator          Frame|nil
----@field blizzTracking          Frame|nil
----@field origW                  number
----@field origH                  number
----@field origPoints             table
----@field hybridMinimap          Frame|nil
----@field origCircleMaskTexture  string|nil
----@field rectMask               MaskTexture|nil
----@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
----@field toolbar                Frame|nil
----@field toolbarBorders         table|nil
----@field wrapper                Frame
----@field borderFrame            Frame
----@field borders                table|nil
----@field applyBorder            fun()
----@field applySettings          fun()
----@field createFrame            fun()
----@field worldMap               Frame|nil
----@field worldMapArtW           number
----@field worldMapArtH           number
----@field resetWorldMapZoom      fun()
----@field openWorldMap           fun()
----@field closeWorldMap          fun()
----@field trackingBtn            Button|nil
----@field wmBtnWQ                Button|nil
----@field wmBtnAQ                Button|nil
----@field wmBtnLS                Button|nil
----@field wmDpWorldQuests        table|nil
----@field wmDpActiveQuests       table|nil
----@field wmDpLocalStories       table|nil
----@field wmBtnDungeons          Button|nil
----@field wmBtnDelves            Button|nil
----@field wmBtnEvents            Button|nil
----@field wmBtnTravel            Button|nil
----@field wmDpDungeons           table|nil
----@field wmDpDelves             table|nil
----@field wmDpEvents             table|nil
----@field wmDpTravel             table|nil
----@field wmDpPortals            table|nil
----@field wmDpAreaPOI            table|nil
+---@class MinimapModule
 local minimod = addon:NewModule('Minimap')
 
 -- Cache globals for performance and style guide compliance
@@ -95,8 +40,7 @@ function minimod:OnDisable()
     if minimod.origParent then
         Minimap:SetParent(minimod.origParent)
         Minimap:ClearAllPoints()
-        local pt, rel_frame, rel_pt, ox, oy = unpack(minimod.origPoints)
-        Minimap:SetPoint(pt, rel_frame, rel_pt, ox, oy) ---@diagnostic disable-line: param-type-mismatch
+        Minimap:SetPoint(unpack(minimod.origPoints)) ---@diagnostic disable-line: param-type-mismatch
         Minimap:SetSize(minimod.origW, minimod.origH)
         Minimap:SetClampedToScreen(true)
         Minimap:SetMaskTexture("Textures\\MinimapMask")
@@ -137,17 +81,19 @@ end
 function minimod:GetDefaults()
     return {
         minimap = {
-            enabled = true,
-            shape = "rectangle",
-            size = 200,
-            alpha = 0.85,
-            growSize = 420,
-            point = "TOPRIGHT",
-            x = -20,
-            y = -20,
-            moveAlphaEnabled = true,
-            moveAlpha = 0.3,
-            worldMapCentered = false,
+            enabled                  = true,
+            shape                    = "rectangle",
+            size                     = 200,
+            alpha                    = 0.85,
+            growSize                 = 420,
+            zoom                     = 2,
+            growZoom                 = 3,
+            point                    = "TOPRIGHT",
+            x                        = -20,
+            y                        = -20,
+            moveAlphaEnabled         = true,
+            moveAlpha                = 0.3,
+            worldMapCentered         = false,
             worldMapShowWorldQuests  = true,
             worldMapShowActiveQuests = true,
             worldMapShowLocalStories = true,
@@ -155,12 +101,12 @@ function minimod:GetDefaults()
             worldMapShowDelves       = true,
             worldMapShowEvents       = true,
             worldMapShowTravel       = true,
-            borderEnabled = false,
-            borderSize = 2,
-            borderR = 1,
-            borderG = 1,
-            borderB = 1,
-            borderA = 1,
+            borderEnabled            = false,
+            borderSize               = 2,
+            borderR                  = 1,
+            borderG                  = 1,
+            borderB                  = 1,
+            borderA                  = 1,
         },
     }
 end
@@ -238,11 +184,39 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.growSize end,
                 set = function(_, value) addon.db.profile.minimap.growSize = value end,
             },
+            zoom = {
+                name  = 'Default Zoom',
+                desc  = 'Zoom level when the minimap is at normal size.',
+                type  = 'range',
+                order = 7,
+                min   = 0,
+                max   = 5,
+                step  = 1,
+                get   = function() return addon.db.profile.minimap.zoom end,
+                set   = function(_, value)
+                    addon.db.profile.minimap.zoom = value
+                    minimod.applyZoom()
+                end,
+            },
+            growZoom = {
+                name  = 'Grown Zoom',
+                desc  = 'Zoom level when the minimap is grown.',
+                type  = 'range',
+                order = 8,
+                min   = 0,
+                max   = 5,
+                step  = 1,
+                get   = function() return addon.db.profile.minimap.growZoom end,
+                set   = function(_, value)
+                    addon.db.profile.minimap.growZoom = value
+                    minimod.applyZoom()
+                end,
+            },
             worldMapCentered = {
                 name = 'Map Centered World Map',
                 desc = 'Center the world map on the map origin instead of the player.',
                 type = 'toggle',
-                order = 7,
+                order = 9,
                 get = function() return addon.db.profile.minimap.worldMapCentered end,
                 set = function(_, value) addon.db.profile.minimap.worldMapCentered = value end,
             },
@@ -250,7 +224,7 @@ function minimod:GetOptions()
                 name = 'Fade on Move',
                 desc = 'Fade the minimap while the player is moving.',
                 type = 'toggle',
-                order = 8,
+                order = 10,
                 get = function() return addon.db.profile.minimap.moveAlphaEnabled end,
                 set = function(_, value) addon.db.profile.minimap.moveAlphaEnabled = value end,
             },
@@ -258,7 +232,7 @@ function minimod:GetOptions()
                 name = 'Move Alpha',
                 desc = 'Opacity while the player is moving.',
                 type = 'range',
-                order = 9,
+                order = 11,
                 min = 0.0,
                 max = 1.0,
                 step = 0.05,
@@ -269,7 +243,7 @@ function minimod:GetOptions()
                 name = 'Border',
                 desc = 'Show a colored border around the minimap and world map.',
                 type = 'toggle',
-                order = 10,
+                order = 12,
                 get = function() return addon.db.profile.minimap.borderEnabled end,
                 set = function(_, value)
                     addon.db.profile.minimap.borderEnabled = value
@@ -280,7 +254,7 @@ function minimod:GetOptions()
                 name = 'Border Size',
                 desc = 'Border thickness in pixels.',
                 type = 'range',
-                order = 11,
+                order = 13,
                 min = 1,
                 max = 20,
                 step = 1,
@@ -294,7 +268,7 @@ function minimod:GetOptions()
                 name = 'Border Color',
                 type = 'color',
                 hasAlpha = true,
-                order = 12,
+                order = 14,
                 get = function()
                     local db = addon.db.profile.minimap
                     return db.borderR, db.borderG, db.borderB, db.borderA
