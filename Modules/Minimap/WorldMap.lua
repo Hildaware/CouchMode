@@ -6,7 +6,6 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class MinimapModule: AceModule
 local minimod = addon:GetModule('Minimap')
 
--- Cache globals for performance and style guide compliance
 local _G = _G
 local math_min = math.min
 local math_max = math.max
@@ -26,7 +25,8 @@ local ConsolePort = _G['ConsolePort'] ---@type any
 
 -- Maps each world-map toolbar button field to its db toggle key.
 -- Used by openWorldMap/closeWorldMap to sync all buttons in one loop.
-local WM_BUTTON_DEFS = {
+-- Also exposed on minimod so MinimapFrame.lua can build the D-pad button list.
+minimod.WM_BUTTON_DEFS = {
     { btn = "wmBtnWQ",       db = "worldMapShowWorldQuests" },
     { btn = "wmBtnAQ",       db = "worldMapShowActiveQuests" },
     { btn = "wmBtnLS",       db = "worldMapShowLocalStories" },
@@ -415,7 +415,7 @@ minimod.openWorldMap = function()
     -- Swap toolbar buttons: hide minimap-only, show + sync world map filters
     if minimod.trackingBtn then minimod.trackingBtn:Hide() end
     local wm_db = addon.db.profile.minimap
-    for _, def in ipairs(WM_BUTTON_DEFS) do
+    for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
         local btn = minimod[def.btn]
         if btn then
             btn:SetAlpha(wm_db[def.db] and 1 or 0.4); btn:Show()
@@ -434,7 +434,7 @@ minimod.closeWorldMap = function()
 
     -- Swap toolbar buttons back: hide world map filters, restore minimap-only buttons
     if minimod.trackingBtn then minimod.trackingBtn:Show() end
-    for _, def in ipairs(WM_BUTTON_DEFS) do
+    for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
         local btn = minimod[def.btn]
         if btn then btn:Hide() end
     end

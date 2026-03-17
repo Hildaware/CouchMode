@@ -189,7 +189,19 @@
         "UNDISCOVERED_FACTION_FLIGHTPOINT",
         "FACTION_HORDE",
         "BONUS_OBJECTIVE_TIME_LEFT",
-        "HUD_EDIT_MODE_MINIMAP_LABEL"
+        "HUD_EDIT_MODE_MINIMAP_LABEL",
+        "ActionButton1",
+        "LE_SCRIPT_BINDING_TYPE_INTRINSIC_PRECALL",
+        "LE_SCRIPT_BINDING_TYPE_EXTRINSIC",
+        "LE_SCRIPT_BINDING_TYPE_INTRINSIC_POSTCALL",
+        "SPELLBOOK_SPELL_NOT_ON_ACTION_BAR",
+        "INSPECT_TALENTS_BUTTON",
+        "REWARD_CHOOSE",
+        "REWARD_CHOICES",
+        "NO",
+        "YES",
+        "COLOR_PICKER",
+        "NOT_APPLICABLE"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

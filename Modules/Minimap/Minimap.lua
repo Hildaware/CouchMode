@@ -6,7 +6,6 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class MinimapModule
 local minimod = addon:NewModule('Minimap')
 
--- Cache globals for performance and style guide compliance
 local _G = _G
 local unpack = unpack
 local Minimap = _G.Minimap
@@ -33,9 +32,6 @@ end
 function minimod:OnDisable()
     if minimod.worldMapOpen then minimod.closeWorldMap() end
     if minimod.wrapper then minimod.wrapper:Hide() end
-
-    local ih = _G['ConsolePortInputHandler']
-    if ih then ih:Release(minimod.wrapper) end
 
     if minimod.origParent then
         Minimap:SetParent(minimod.origParent)
