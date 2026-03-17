@@ -35,11 +35,11 @@ end
 
 local function set_focus(btn)
     if focused_btn and focused_btn ~= btn then
-        focused_btn:UnlockHighlight()
+        focused_btn.selected_bg:Hide()
     end
     focused_btn = btn
     minimod.focused_btn = btn
-    if focused_btn then focused_btn:LockHighlight() end
+    if focused_btn then focused_btn.selected_bg:Show() end
 end
 
 -- TODO: Not working
@@ -60,13 +60,26 @@ end
 
 --#region ── Toolbar creation ─────────────────────────────────────────────────
 
+function minimod.applyToolbarPosition()
+    if not minimod.toolbar then return end
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    minimod.toolbar:ClearAllPoints()
+    if db.toolbarDock == "bottom" then
+        minimod.toolbar:SetPoint("TOPLEFT", minimod.wrapper, "BOTTOMLEFT", 0, db.borderSize)
+        minimod.toolbar:SetPoint("TOPRIGHT", minimod.wrapper, "BOTTOMRIGHT", 0, 0)
+    else
+        minimod.toolbar:SetPoint("BOTTOMLEFT", minimod.wrapper, "TOPLEFT", 0, -db.borderSize)
+        minimod.toolbar:SetPoint("BOTTOMRIGHT", minimod.wrapper, "TOPRIGHT", 0, 0)
+    end
+    minimod.applyBorder()
+end
+
 function minimod.createToolbar(blizz_tracking_btn)
-    local db = addon.db.profile.minimap
+    local db = addon.db.profile.minimap ---@type MinimapDB
 
     minimod.toolbar = CreateFrame("Frame", nil, UIParent)
     minimod.toolbar:SetHeight(24)
-    minimod.toolbar:SetPoint("BOTTOMLEFT", minimod.wrapper, "TOPLEFT", 0, 0)
-    minimod.toolbar:SetPoint("BOTTOMRIGHT", minimod.wrapper, "TOPRIGHT", 0, 0)
+    minimod.applyToolbarPosition()
     minimod.toolbar:SetFrameStrata("DIALOG")
     minimod.toolbar:SetFrameLevel(minimod.wrapper:GetFrameLevel() + 50)
     minimod.toolbar:Hide()
@@ -122,11 +135,12 @@ function minimod.createToolbar(blizz_tracking_btn)
                     if db[config.db] then dp:RefreshAllData() else dp:RemoveAllData() end
                 end
             end
-            minimod[config.btn]:SetAlpha(db[config.db] and 1 or 0.4)
+            minimod[config.btn].selected_bg:SetShown(db[config.db])
         end, config.tooltip)
 
         btn:Hide()
         btn:SetPoint("RIGHT", prev_btn, "LEFT", i == 1 and -10 or -2, 0)
+        btn.selected_bg:SetShown(db[config.db])
         minimod[config.btn] = btn
         prev_btn = btn
     end

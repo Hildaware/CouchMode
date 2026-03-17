@@ -55,7 +55,11 @@ function minimod.MapUtils.apply_border_textures(anchor, borders, show, size, r, 
     borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end
 
---- Toolbar button helper: 20x20 button with atlas icon and 1px white outline.
+local BUTTON_GOLD   = "Interface\\AddOns\\ConsoleTools\\Media\\button_gold.blp"
+local BUTTON_SILVER = "Interface\\AddOns\\ConsoleTools\\Media\\button_silver.blp"
+
+--- Toolbar button helper: 20x20 button with atlas icon.
+--- btn.selected_bg (button_silver.blp) can be shown/hidden to indicate selected state.
 --- If tooltip is provided, shows a GameTooltip with that text on hover.
 ---@param parent Frame
 ---@param atlas string
@@ -65,13 +69,22 @@ function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click, tooltip
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(20, 20)
 
+    local bg = btn:CreateTexture(nil, "BACKGROUND", nil, 0)
+    bg:SetAllPoints(btn)
+    bg:SetTexture(BUTTON_GOLD)
+
+    local selected_bg = btn:CreateTexture(nil, "BACKGROUND", nil, 1)
+    selected_bg:SetAllPoints(btn)
+    selected_bg:SetTexture(BUTTON_SILVER)
+    selected_bg:Hide()
+    btn.selected_bg = selected_bg
+
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetAtlas(atlas, false)
-    icon:SetSize(18, 18)
+    icon:SetSize(14, 14)
     icon:SetPoint("CENTER", btn, "CENTER")
 
-    local borders = minimod.MapUtils.create_border_textures(btn, btn)
-    minimod.MapUtils.apply_border_textures(btn, borders, true, 1, 1, 1, 1, 0.5)
+    btn:SetHighlightTexture(BUTTON_SILVER)
 
     btn:SetScript("OnClick", on_click)
 

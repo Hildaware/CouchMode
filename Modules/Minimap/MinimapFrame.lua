@@ -1,29 +1,32 @@
-local addon_name = ...
+local addon_name          = ...
 
 ---@class ConsoleTools: AceAddon
-local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon               = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MinimapModule: AceModule
-local minimod = addon:GetModule('Minimap')
+local minimod             = addon:GetModule('Minimap')
 
-local _G = _G
-local math_min = math.min
-local math_max = math.max
-local math_floor = math.floor
-local math_ceil = math.ceil
+local _G                  = _G
+local math_min            = math.min
+local math_max            = math.max
+local math_floor          = math.floor
+local math_ceil           = math.ceil
 
-local Minimap = _G.Minimap
-local UIParent = _G.UIParent
-local CreateFrame = _G.CreateFrame
-local HasNewMail = _G.HasNewMail
-local InCombatLockdown = _G.InCombatLockdown
-local MinimapCluster = _G.MinimapCluster ---@type Frame
+local Minimap             = _G.Minimap
+local UIParent            = _G.UIParent
+local CreateFrame         = _G.CreateFrame
+local HasNewMail          = _G.HasNewMail
+local InCombatLockdown    = _G.InCombatLockdown
+local MinimapCluster      = _G.MinimapCluster ---@type Frame
 
-local ConsolePort = _G['ConsolePort'] ---@type any
+local ConsolePort         = _G['ConsolePort'] ---@type any
 
-local FADE_DURATION = 0.5
+local FADE_DURATION       = 0.5
 local TRANSITION_DURATION = 0.25
-local GROW_DURATION = 0.5
+local GROW_DURATION       = 0.5
+local ZOOM_BAR_W          = 80
+local ZOOM_BAR_H          = 10
+local WM_ZOOM_LEVELS      = 5
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 
@@ -62,7 +65,7 @@ end
 
 function minimod.applyBorder()
     if not minimod.borders then return end
-    local db = addon.db.profile.minimap
+    local db = addon.db.profile.minimap ---@type MinimapDB
     local show = db.borderEnabled
     local size = db.borderSize
     local r, g, b, a = db.borderR, db.borderG, db.borderB, db.borderA
@@ -70,20 +73,24 @@ function minimod.applyBorder()
     minimod.MapUtils.apply_border_textures(minimod.wrapper, minimod.borders, show, size, r, g, b, a)
     if minimod.toolbarBorders then
         minimod.MapUtils.apply_border_textures(minimod.toolbar, minimod.toolbarBorders, show, size, r, g, b, a)
+        if show then
+            -- Hide the edge shared with the minimap wrapper
+            minimod.toolbarBorders[db.toolbarDock == "bottom" and "T" or "B"]:Hide()
+        end
     end
 end
 
 function minimod.applyZoom()
     if not minimod.wrapper then return end
-    local db = addon.db.profile.minimap
+    local db = addon.db.profile.minimap ---@type MinimapDB
     local target = minimod.grown and db.growZoom or db.zoom
     local max_zoom = Minimap:GetZoomLevels() - 1
-    Minimap:SetZoom(math_min(target, max_zoom))
+    -- Minimap:SetZoom(math_min(target, max_zoom))
 end
 
 function minimod.applySettings()
     if not minimod.wrapper then return end
-    local db = addon.db.profile.minimap
+    local db = addon.db.profile.minimap ---@type MinimapDB
     local size = minimod.grown and db.growSize or db.size
     local w, h = size_for_shape(db.shape, size)
 
@@ -125,8 +132,42 @@ local function create_mail_indicator()
     update_mail()
 end
 
+local function create_zoom_indicator()
+    local zi = CreateFrame("Frame", nil, minimod.wrapper)
+    zi:SetSize(ZOOM_BAR_W, ZOOM_BAR_H)
+    zi:SetPoint("BOTTOMRIGHT", minimod.wrapper, "BOTTOMRIGHT", -4, 4)
+    zi:SetFrameLevel(minimod.wrapper:GetFrameLevel() + 150)
+    minimod.zoomIndicator = zi
+
+    local bg = zi:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(zi)
+    bg:SetColorTexture(0, 0, 0, 0.5)
+
+    local fill = zi:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", zi, "TOPLEFT", 0, 0)
+    fill:SetPoint("BOTTOMLEFT", zi, "BOTTOMLEFT", 0, 0)
+    fill:SetColorTexture(0, 0.82, 0.9, 0.9)
+    fill:SetWidth(1)
+    zi.fill = fill
+
+    local borders = minimod.MapUtils.create_border_textures(zi, zi)
+    minimod.MapUtils.apply_border_textures(zi, borders, true, 0, 0, 0, 0, 1)
+
+    zi.ticks = {}
+    for i = 1, 10 do
+        local t = zi:CreateTexture(nil, "OVERLAY")
+        t:SetSize(1, ZOOM_BAR_H)
+        t:SetColorTexture(0, 0, 0, 0.8)
+        t:Hide()
+        zi.ticks[i] = t
+    end
+
+    zi.numLevels = 0  -- cached; ticks only repositioned when this changes
+    zi.lastZoom  = -1 -- sentinel → first frame always redraws fill
+end
+
 function minimod.createFrame()
-    local db = addon.db.profile.minimap
+    local db = addon.db.profile.minimap ---@type MinimapDB
 
     -- Save Blizzard state so we can restore on disable
     minimod.origParent = Minimap:GetParent()
@@ -188,6 +229,7 @@ function minimod.createFrame()
     -- Toolbar: docked above wrapper, shown on mouseover or when grown
     minimod.createToolbar(blizz_tracking_btn)
     create_mail_indicator()
+    create_zoom_indicator()
 
     -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
     minimod.wrapper:SetMovable(true)
@@ -218,10 +260,10 @@ function minimod.createFrame()
             if t >= 1 then minimod.fadeTo = nil end
         end
         -- Frame cross-fade helper
-        local function update_fade(state, frame)
+        local function update_fade(state, frame, duration)
             if not state.active or not frame then return end
             state.elapsed = state.elapsed + elapsed
-            local t = math_min(1, state.elapsed / TRANSITION_DURATION)
+            local t = math_min(1, state.elapsed / (duration or TRANSITION_DURATION))
             frame:SetAlpha(state.from + (state.to - state.from) * t)
             if t >= 1 then
                 state.active = false
@@ -231,6 +273,7 @@ function minimod.createFrame()
 
         update_fade(minimod.minimapFade, Minimap)
         update_fade(minimod.worldMapFade, minimod.worldMap)
+        update_fade(minimod.toolbarFade, minimod.toolbar, FADE_DURATION)
 
         -- Grow/shrink transition
         local gt = minimod.growTransition
@@ -274,13 +317,76 @@ function minimod.createFrame()
                 minimod.applyZoom()
             end
         end
-        -- Toolbar visibility
+        -- Toolbar visibility: fade in/out
         if minimod.toolbar then
-            minimod.toolbar:SetShown(
-                minimod.grown or
-                minimod.wrapper:IsMouseOver() or
-                minimod.toolbar:IsMouseOver()
-            )
+            local should_show = minimod.grown or minimod.wrapper:IsMouseOver() or minimod.toolbar:IsMouseOver()
+            local tf = minimod.toolbarFade
+            if should_show and tf.to ~= 1 then
+                minimod.toolbar:Show()
+                minimod.startFrameFade(minimod.toolbar, tf, 1)
+            elseif not should_show and tf.to ~= 0 then
+                minimod.startFrameFade(minimod.toolbar, tf, 0)
+            end
+        end
+        -- Zoom indicator bar (only while expanded)
+        local zi = minimod.zoomIndicator
+        if zi then
+            zi:SetShown(minimod.grown)
+            if minimod.grown then
+                if minimod.worldMapOpen and minimod.worldMap then
+                    -- World map mode: discrete levels (WM_ZOOM_LEVELS), same chunk logic as minimap
+                    local n         = WM_ZOOM_LEVELS
+                    local sc        = minimod.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+                    local cur       = sc:GetZoom()
+                    local wmin      = minimod.worldMapMinZoom or 0.12
+                    local wmax      = minimod.worldMapMaxZoom or 0.30
+                    local range     = wmax - wmin
+                    local frac      = range > 0 and math_min(1, math_max(0, (cur - wmin) / range)) or 0
+                    local cur_level = math_floor(frac * (n - 1) + 0.5)
+                    if n ~= zi.numLevels then
+                        zi.numLevels = n
+                        zi.lastZoom = -1
+                        for i, tick in ipairs(zi.ticks) do
+                            if n > 1 and i <= (n - 2) then
+                                local x = (i / (n - 1)) * ZOOM_BAR_W
+                                tick:ClearAllPoints()
+                                tick:SetPoint("TOPLEFT", zi, "TOPLEFT", x, 0)
+                                tick:Show()
+                            else
+                                tick:Hide()
+                            end
+                        end
+                    end
+                    if cur_level ~= zi.lastZoom then
+                        zi.lastZoom = cur_level
+                        zi.fill:SetWidth(math_max(1, (cur_level / (n - 1)) * ZOOM_BAR_W))
+                    end
+                else
+                    -- Minimap mode: discrete levels with tick marks
+                    local n = Minimap:GetZoomLevels()
+                    if n ~= zi.numLevels then
+                        zi.numLevels = n
+                        zi.lastZoom = -1  -- force fill redraw when level count changes
+                        for i, tick in ipairs(zi.ticks) do
+                            local lvl = i -- interior tick at zoom level i (1..n-2)
+                            if n > 1 and lvl <= (n - 2) then
+                                local x = (lvl / (n - 1)) * ZOOM_BAR_W
+                                tick:ClearAllPoints()
+                                tick:SetPoint("TOPLEFT", zi, "TOPLEFT", x, 0)
+                                tick:Show()
+                            else
+                                tick:Hide()
+                            end
+                        end
+                    end
+                    local cur_zoom = Minimap:GetZoom()
+                    if cur_zoom ~= zi.lastZoom then
+                        zi.lastZoom = cur_zoom
+                        local frac = (n > 1) and (cur_zoom / (n - 1)) or 0
+                        zi.fill:SetWidth(math_max(1, frac * ZOOM_BAR_W))
+                    end
+                end -- minimod.grown
+            end
         end
     end)
 

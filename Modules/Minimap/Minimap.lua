@@ -1,18 +1,19 @@
-local addon_name = ...
+local addon_name       = ...
 
 ---@class ConsoleTools: AceAddon
-local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon            = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MinimapModule
-local minimod = addon:NewModule('Minimap')
+local minimod          = addon:NewModule('Minimap')
 
-local _G = _G
-local unpack = unpack
-local Minimap = _G.Minimap
-local MinimapCluster = _G.MinimapCluster ---@type Frame
+local _G               = _G
+local unpack           = unpack
+local Minimap          = _G.Minimap
+local MinimapCluster   = _G.MinimapCluster ---@type Frame
 
-minimod.minimapFade = { from = 1, to = 1, elapsed = 0, active = false }
-minimod.worldMapFade = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.minimapFade    = { from = 1, to = 1, elapsed = 0, active = false }
+minimod.worldMapFade   = { from = 0, to = 0, elapsed = 0, active = false }
+minimod.toolbarFade    = { from = 0, to = 0, elapsed = 0, active = false }
 minimod.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
 
 function minimod.startFrameFade(frame, state, to_alpha)
@@ -76,6 +77,7 @@ end
 
 function minimod:GetDefaults()
     return {
+        ---@type MinimapDB
         minimap = {
             enabled                  = true,
             shape                    = "rectangle",
@@ -97,6 +99,7 @@ function minimod:GetDefaults()
             worldMapShowDelves       = true,
             worldMapShowEvents       = true,
             worldMapShowTravel       = true,
+            toolbarDock              = "top",
             borderEnabled            = false,
             borderSize               = 2,
             borderR                  = 1,
@@ -180,34 +183,34 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.growSize end,
                 set = function(_, value) addon.db.profile.minimap.growSize = value end,
             },
-            zoom = {
-                name  = 'Default Zoom',
-                desc  = 'Zoom level when the minimap is at normal size.',
-                type  = 'range',
-                order = 7,
-                min   = 0,
-                max   = 5,
-                step  = 1,
-                get   = function() return addon.db.profile.minimap.zoom end,
-                set   = function(_, value)
-                    addon.db.profile.minimap.zoom = value
-                    minimod.applyZoom()
-                end,
-            },
-            growZoom = {
-                name  = 'Grown Zoom',
-                desc  = 'Zoom level when the minimap is grown.',
-                type  = 'range',
-                order = 8,
-                min   = 0,
-                max   = 5,
-                step  = 1,
-                get   = function() return addon.db.profile.minimap.growZoom end,
-                set   = function(_, value)
-                    addon.db.profile.minimap.growZoom = value
-                    minimod.applyZoom()
-                end,
-            },
+            -- zoom = {
+            --     name  = 'Default Zoom',
+            --     desc  = 'Zoom level when the minimap is at normal size.',
+            --     type  = 'range',
+            --     order = 7,
+            --     min   = 0,
+            --     max   = 5,
+            --     step  = 1,
+            --     get   = function() return addon.db.profile.minimap.zoom end,
+            --     set   = function(_, value)
+            --         addon.db.profile.minimap.zoom = value
+            --         minimod.applyZoom()
+            --     end,
+            -- },
+            -- growZoom = {
+            --     name  = 'Grown Zoom',
+            --     desc  = 'Zoom level when the minimap is grown.',
+            --     type  = 'range',
+            --     order = 8,
+            --     min   = 0,
+            --     max   = 5,
+            --     step  = 1,
+            --     get   = function() return addon.db.profile.minimap.growZoom end,
+            --     set   = function(_, value)
+            --         addon.db.profile.minimap.growZoom = value
+            --         minimod.applyZoom()
+            --     end,
+            -- },
             worldMapCentered = {
                 name = 'Map Centered World Map',
                 desc = 'Center the world map on the map origin instead of the player.',
@@ -235,11 +238,23 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.moveAlpha end,
                 set = function(_, value) addon.db.profile.minimap.moveAlpha = value end,
             },
+            toolbarDock = {
+                name   = 'Toolbar Position',
+                desc   = 'Dock the toolbar above or below the minimap.',
+                type   = 'select',
+                order  = 12,
+                values = { top = 'Top', bottom = 'Bottom' },
+                get    = function() return addon.db.profile.minimap.toolbarDock end,
+                set    = function(_, value)
+                    addon.db.profile.minimap.toolbarDock = value
+                    minimod.applyToolbarPosition()
+                end,
+            },
             borderEnabled = {
                 name = 'Border',
                 desc = 'Show a colored border around the minimap and world map.',
                 type = 'toggle',
-                order = 12,
+                order = 13,
                 get = function() return addon.db.profile.minimap.borderEnabled end,
                 set = function(_, value)
                     addon.db.profile.minimap.borderEnabled = value
@@ -250,7 +265,7 @@ function minimod:GetOptions()
                 name = 'Border Size',
                 desc = 'Border thickness in pixels.',
                 type = 'range',
-                order = 13,
+                order = 14,
                 min = 1,
                 max = 20,
                 step = 1,
@@ -264,13 +279,13 @@ function minimod:GetOptions()
                 name = 'Border Color',
                 type = 'color',
                 hasAlpha = true,
-                order = 14,
+                order = 15,
                 get = function()
-                    local db = addon.db.profile.minimap
+                    local db = addon.db.profile.minimap ---@type MinimapDB
                     return db.borderR, db.borderG, db.borderB, db.borderA
                 end,
                 set = function(_, r, g, b, a)
-                    local db = addon.db.profile.minimap
+                    local db = addon.db.profile.minimap ---@type MinimapDB
                     db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
                     minimod.applyBorder()
                 end,

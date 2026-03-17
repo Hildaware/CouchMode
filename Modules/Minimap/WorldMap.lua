@@ -291,6 +291,8 @@ local function create_world_map()
         max_zoom = zoom_entry * 1.24
         zoom = zoom_entry
         scroll_child:SetScale(zoom_entry)
+        minimod.worldMapMinZoom = min_zoom
+        minimod.worldMapMaxZoom = max_zoom
     end
 
     map_frame:EnableMouse(true)

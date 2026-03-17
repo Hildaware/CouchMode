@@ -4,6 +4,35 @@
 ---@field elapsed number
 ---@field active  boolean
 
+---@class MinimapDB
+---@field enabled                  boolean
+---@field shape                    "square"|"rectangle"
+---@field size                     number
+---@field alpha                    number
+---@field growSize                 number
+---@field zoom                     number
+---@field growZoom                 number
+---@field point                    string
+---@field x                        number
+---@field y                        number
+---@field moveAlphaEnabled         boolean
+---@field moveAlpha                number
+---@field worldMapCentered         boolean
+---@field worldMapShowWorldQuests  boolean
+---@field worldMapShowActiveQuests boolean
+---@field worldMapShowLocalStories boolean
+---@field worldMapShowDungeons     boolean
+---@field worldMapShowDelves       boolean
+---@field worldMapShowEvents       boolean
+---@field worldMapShowTravel       boolean
+---@field toolbarDock              "top"|"bottom"
+---@field borderEnabled            boolean
+---@field borderSize               number
+---@field borderR                  number
+---@field borderG                  number
+---@field borderB                  number
+---@field borderA                  number
+
 ---@class MinimapModule: AceModule
 ---@field minimapFade            FadeState
 ---@field worldMapFade           FadeState
