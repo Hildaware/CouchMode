@@ -415,7 +415,9 @@ minimod.openWorldMap = function()
     end
 
     -- Swap toolbar buttons: hide minimap-only, show + sync world map filters
-    if minimod.trackingBtn then minimod.trackingBtn:Hide() end
+    if minimod.trackingBtn    then minimod.trackingBtn:Hide()    end
+    if minimod.compartmentBtn then minimod.compartmentBtn:Hide() end
+    if minimod.calendarBtn    then minimod.calendarBtn:Hide()    end
     local wm_db = addon.db.profile.minimap
     for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
         local btn = minimod[def.btn]
@@ -435,7 +437,9 @@ minimod.closeWorldMap = function()
     minimod.applySettings()
 
     -- Swap toolbar buttons back: hide world map filters, restore minimap-only buttons
-    if minimod.trackingBtn then minimod.trackingBtn:Show() end
+    if minimod.trackingBtn    then minimod.trackingBtn:Show()    end
+    if minimod.compartmentBtn then minimod.compartmentBtn:Show() end
+    if minimod.calendarBtn    then minimod.calendarBtn:Show()    end
     for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
         local btn = minimod[def.btn]
         if btn then btn:Hide() end

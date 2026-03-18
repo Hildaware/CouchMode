@@ -74,7 +74,7 @@ function minimod.applyToolbarPosition()
     minimod.applyBorder()
 end
 
-function minimod.createToolbar(blizz_tracking_btn)
+function minimod.createToolbar(blizz_tracking_btn, blizz_compartment, blizz_calendar)
     local db = addon.db.profile.minimap ---@type MinimapDB
 
     minimod.toolbar = CreateFrame("Frame", nil, UIParent)
@@ -110,6 +110,38 @@ function minimod.createToolbar(blizz_tracking_btn)
         blizz_tracking_btn.Button:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", tracking_btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
         tracking_btn:SetScript("OnClick", function()
             blizz_tracking_btn:OpenMenu()
+        end)
+    end
+
+    -- Addon Compartment button
+    local compartment_btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar, "PetJournal-FavoritesIcon",
+        function() end, "Addons")
+    compartment_btn:SetPoint("RIGHT", tracking_btn, "LEFT", -2, 0)
+    minimod.compartmentBtn = compartment_btn
+    if blizz_compartment then
+        blizz_compartment:SetParent(compartment_btn)
+        blizz_compartment:ClearAllPoints()
+        blizz_compartment:SetPoint("CENTER", compartment_btn, "CENTER")
+        blizz_compartment:SetAlpha(0)
+        blizz_compartment:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", compartment_btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
+        compartment_btn:SetScript("OnClick", function()
+            blizz_compartment:OpenMenu()
+        end)
+    end
+
+    -- Calendar button
+    local day = _G.C_DateAndTime and _G.C_DateAndTime.GetCurrentCalendarTime().monthDay or 1
+    local calendar_btn = minimod.MapUtils.create_toolbar_button(minimod.toolbar,
+        ("ui-hud-calendar-%d-up"):format(day), function() end, "Calendar")
+    calendar_btn:SetPoint("RIGHT", compartment_btn, "LEFT", -2, 0)
+    minimod.calendarBtn = calendar_btn
+    if blizz_calendar then
+        blizz_calendar:SetParent(calendar_btn)
+        blizz_calendar:ClearAllPoints()
+        blizz_calendar:SetPoint("CENTER", calendar_btn, "CENTER")
+        blizz_calendar:SetAlpha(0)
+        calendar_btn:SetScript("OnClick", function()
+            _G.GameTimeFrame_OnClick(blizz_calendar) ---@diagnostic disable-line: undefined-global
         end)
     end
 

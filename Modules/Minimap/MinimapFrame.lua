@@ -201,6 +201,20 @@ function minimod.createFrame()
     minimod.blizzTracking:SetParent(UIParent)
     local blizz_tracking_btn = minimod.blizzTracking ---@diagnostic disable-line: undefined-field
 
+    -- Rescue addon compartment button before hiding MinimapCluster
+    local blizz_compartment = _G.AddonCompartmentFrame ---@diagnostic disable-line: undefined-global
+    if blizz_compartment then
+        minimod.blizzCompartment = blizz_compartment
+        blizz_compartment:SetParent(UIParent)
+    end
+
+    -- Rescue calendar button before hiding MinimapCluster
+    local blizz_calendar = _G.GameTimeFrame ---@diagnostic disable-line: undefined-global
+    if blizz_calendar then
+        minimod.blizzCalendar = blizz_calendar
+        blizz_calendar:SetParent(UIParent)
+    end
+
     -- Hide all Blizzard chrome
     MinimapCluster:Hide()
     if _G.MinimapBackdrop then _G.MinimapBackdrop:Hide() end ---@diagnostic disable-line: undefined-global
@@ -227,7 +241,7 @@ function minimod.createFrame()
     minimod.applyBorder()
 
     -- Toolbar: docked above wrapper, shown on mouseover or when grown
-    minimod.createToolbar(blizz_tracking_btn)
+    minimod.createToolbar(blizz_tracking_btn, blizz_compartment, blizz_calendar)
     create_mail_indicator()
     create_zoom_indicator()
 

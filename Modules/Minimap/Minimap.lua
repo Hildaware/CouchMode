@@ -61,6 +61,16 @@ function minimod:OnDisable()
             minimod.blizzTracking = nil
         end
 
+        if minimod.blizzCompartment then
+            minimod.blizzCompartment:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            minimod.blizzCompartment = nil
+        end
+
+        if minimod.blizzCalendar then
+            minimod.blizzCalendar:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            minimod.blizzCalendar = nil
+        end
+
         ---@diagnostic disable-next-line: undefined-global
         MinimapCluster:Show()
         if _G.MinimapBackdrop then _G.MinimapBackdrop:Show() end ---@diagnostic disable-line: undefined-global
