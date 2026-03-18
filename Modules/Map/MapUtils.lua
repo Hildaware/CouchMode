@@ -6,10 +6,21 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class MapModule: AceModule
 local map = addon:GetModule('Minimap')
 
-local _G = _G
+local _G          = _G
+local math_floor  = math.floor
 local CreateFrame = _G.CreateFrame
 
 map.MapUtils = {}
+
+---@param shape "square"|"rectangle"
+---@param size number
+---@return number w, number h
+function map.MapUtils.size_for_shape(shape, size)
+    if shape == "rectangle" then
+        return size, math_floor(size * (2 / 3))
+    end
+    return size, size
+end
 
 --- Creates four border textures (T, B, L, R) parented to `parent` and initially
 --- anchored to `anchor` on the top/bottom edges. L/R anchors are set by apply_border_textures.

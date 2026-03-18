@@ -1,26 +1,27 @@
-local addon_name = ...
+local addon_name        = ...
 
 ---@class ConsoleTools: AceAddon
-local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon             = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map = addon:GetModule('Minimap')
+local map               = addon:GetModule('Minimap')
 
-local _G = _G
-local math_min = math.min
-local math_max = math.max
-local pairs = pairs
-local pcall = pcall
+local _G                = _G
+local math_min          = math.min
+local math_max          = math.max
+local math_floor        = math.floor
+local pairs             = pairs
+local pcall             = pcall
 
-local CreateFrame = _G.CreateFrame
-local C_AddOns = _G.C_AddOns
-local C_Map = _G.C_Map
-local C_QuestLog = _G.C_QuestLog
-local Mixin = _G.Mixin
-local CreateFromMixins = _G.CreateFromMixins
+local CreateFrame       = _G.CreateFrame
+local C_AddOns          = _G.C_AddOns
+local C_Map             = _G.C_Map
+local C_QuestLog        = _G.C_QuestLog
+local Mixin             = _G.Mixin
+local CreateFromMixins  = _G.CreateFromMixins
 local GetCursorPosition = _G.GetCursorPosition
 
-local ConsolePort = _G['ConsolePort'] ---@type any
+local ConsolePort       = _G['ConsolePort'] ---@type any
 
 -- Patches global pin/provider mixins once to fix crashes and add tooltip support.
 local function setup_mixin_patches()
@@ -401,6 +402,28 @@ map.openWorldMap = function()
     end
 
     map.onShowWorldMap()
+end
+
+-- Opens the world map at maximum zoom, centered on the map art.
+function map.openWorldMapFresh()
+    if map.growTransition and map.growTransition.active then
+        map.pendingWorldMapOpen = true
+        return
+    end
+    map.openWorldMap()
+    if not map.worldMap then return end
+    local sc = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+    local min = map.worldMapMinZoom
+    if min then sc:SetZoomTarget(min) end
+    local cw, ch = sc.Child:GetSize()
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    local vw = db.growSize
+    local vh = db.shape == "rectangle" and math_floor(db.growSize * (2 / 3)) or db.growSize
+    local z = sc:GetZoom()
+    if z > 0 and cw > 0 then
+        sc:SetHorizontalScroll(cw / 2 - vw / (2 * z))
+        sc:SetVerticalScroll(ch / 2 - vh / (2 * z))
+    end
 end
 
 function map.zoomWorldMap(delta)

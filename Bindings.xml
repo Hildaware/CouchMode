@@ -2,4 +2,7 @@
     <Binding name="CONSOLETOOLS_MINIMAP_GROWTOGGLE" category="Console Tools">
         ConsoleTools_MinimapGrowToggle()
     </Binding>
+    <Binding name="CONSOLETOOLS_MINIMAP_TOGGLE" category="Console Tools">
+        ConsoleTools_MinimapToggle()
+    </Binding>
 </Bindings>

@@ -1,26 +1,29 @@
-local addon_name  = ...
+local addon_name          = ...
 
 ---@class ConsoleTools: AceAddon
-local addon       = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon               = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map         = addon:GetModule('Minimap')
+local map                 = addon:GetModule('Minimap')
 
-local _G          = _G
-local math_min    = math.min
-local math_max    = math.max
-local math_floor  = math.floor
-local math_ceil   = math.ceil
-local CreateFrame = _G.CreateFrame
-local UIParent    = _G.UIParent
-local Minimap     = _G.Minimap
-local HasNewMail  = _G.HasNewMail
+local _G                  = _G
+local math_min            = math.min
+local math_max            = math.max
+local math_floor          = math.floor
+local math_ceil           = math.ceil
+local CreateFrame         = _G.CreateFrame
+local UIParent            = _G.UIParent
+local Minimap             = _G.Minimap
+local HasNewMail          = _G.HasNewMail
+local GetTime             = _G.GetTime
 
-local ZOOM_BAR_W      = 80
-local ZOOM_BAR_H      = 10
-local WM_ZOOM_LEVELS  = 5
-local FADE_DURATION   = 0.5
+local ZOOM_BAR_W          = 80
+local ZOOM_BAR_H          = 10
+local WM_ZOOM_LEVELS      = 5
+local FADE_DURATION       = 0.5
 local TRANSITION_DURATION = 0.25
+
+local ConsolePort         = _G['ConsolePort'] ---@type any
 
 --#region ── Container ────────────────────────────────────────────────────────
 
@@ -128,13 +131,13 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
 
     if map.worldMapOpen and map.worldMap then
         -- World map mode: discrete levels (WM_ZOOM_LEVELS)
-        local n     = WM_ZOOM_LEVELS
-        local sc    = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
-        local cur   = sc:GetZoom()
-        local wmin  = map.worldMapMinZoom or 0.12
-        local wmax  = map.worldMapMaxZoom or 0.30
-        local range = wmax - wmin
-        local frac  = range > 0 and math_min(1, math_max(0, (cur - wmin) / range)) or 0
+        local n         = WM_ZOOM_LEVELS
+        local sc        = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+        local cur       = sc:GetZoom()
+        local wmin      = map.worldMapMinZoom or 0.12
+        local wmax      = map.worldMapMaxZoom or 0.30
+        local range     = wmax - wmin
+        local frac      = range > 0 and math_min(1, math_max(0, (cur - wmin) / range)) or 0
         local cur_level = math_floor(frac * (n - 1) + 0.5)
 
         if n ~= zi.numLevels then
@@ -202,7 +205,13 @@ function map.setupContainerScripts()
             map.fadeElapsed = map.fadeElapsed + elapsed
             local t = math_min(1, map.fadeElapsed / FADE_DURATION)
             map.container:SetAlpha(map.fadeFrom + (map.fadeTo - map.fadeFrom) * t)
-            if t >= 1 then map.fadeTo = nil end
+            if t >= 1 then
+                if map.fadeHideOnComplete then
+                    map.container:Hide()
+                    map.fadeHideOnComplete = false
+                end
+                map.fadeTo = nil
+            end
         end
         -- Frame cross-fade helper
         local function update_fade(state, frame, duration)
@@ -261,3 +270,80 @@ function map.setupContainerScripts()
 end
 
 --#endregion
+
+-- Toggle grow: press to grow, press again to shrink
+local function toggle_grow()
+    -- Shrinking
+    if map.grown then
+        map.grown = false
+        if map.worldMapOpen then map.onHideWorldMap() end
+        if ConsolePort and ConsolePort:RemoveInterfaceCursorFrame(map.container) then
+            local ih = _G['ConsolePortInputHandler']
+            if ih then ih:Release(map.container) end
+            _G['ConsolePortCursor']:SetEnabled(false)
+        end
+    else
+        -- Growing
+        map.grown = true
+        if ConsolePort and ConsolePort:RemoveInterfaceCursorFrame(map.container) then
+            ConsolePort:AddInterfaceCursorFrame(map.toolbar)
+            local ih = _G['ConsolePortInputHandler']
+            if ih and not InCombatLockdown() then
+                ih:SetCommand('PADRSHOULDER', map.container, false, 'LeftButton', 'ZoomIn', nil)
+                ih:SetCommand('PADLSHOULDER', map.container, false, 'LeftButton', 'ZoomOut', nil)
+            end
+        end
+    end
+    -- Guard: ignore re-toggle while animation is already running
+    if map.growTransition.active then return end
+
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    local from_w, from_h = map.container:GetSize()
+    local size = map.grown and db.growSize or db.size
+    local to_w, to_h = map.MapUtils.size_for_shape(db.shape, size)
+
+    local gt = map.growTransition
+    gt.active = true
+    gt.elapsed = 0
+    gt.fromW = from_w
+    gt.fromH = from_h
+    gt.toW = to_w
+    gt.toH = to_h
+    gt.lastZoomAt = 0
+end
+
+-- Expose as a global so Bindings.xml can invoke it by name
+local grow_last_press = 0
+local DOUBLE_PRESS_THRESHOLD = 0.4
+function ConsoleTools_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-global
+    if not map.container then return end
+    if not map.container:IsShown() then map.container:Show() end
+    local now = GetTime()
+    if (now - grow_last_press) < DOUBLE_PRESS_THRESHOLD and map.grown and not map.worldMapOpen then
+        map.openWorldMapFresh()
+        grow_last_press = 0
+    else
+        toggle_grow()
+        grow_last_press = now
+    end
+end
+
+function ConsoleTools_MinimapToggle() ---@diagnostic disable-line: lowercase-global
+    if not map.container then return end
+    local db     = addon.db.profile.minimap ---@type MinimapDB
+    local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
+    if target > 0 then
+        map.container:Show()
+        map.fadeHideOnComplete = false
+    else
+        map.fadeHideOnComplete = true
+    end
+    map.fadeFrom    = map.container:GetAlpha()
+    map.fadeTo      = target
+    map.fadeElapsed = 0
+end
+
+-- Blizzard Key Bindings panel display strings
+BINDING_HEADER_CONSOLETOOLS = "Console Tools" ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_CONSOLETOOLS_MINIMAP_GROWTOGGLE = "Toggle Expand Minimap" ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_CONSOLETOOLS_MINIMAP_TOGGLE = "Toggle Minimap" ---@diagnostic disable-line: lowercase-global

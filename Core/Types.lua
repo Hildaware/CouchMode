@@ -68,6 +68,8 @@
 ---@field worldMapArtH           number
 ---@field resetWorldMapZoom      fun()
 ---@field openWorldMap           fun()
+---@field openWorldMapFresh      fun()
+---@field pendingWorldMapOpen   boolean|nil
 ---@field onHideWorldMap          fun()
 ---@field trackingBtn            Button|nil
 ---@field wmBtnWQ                Button|nil
