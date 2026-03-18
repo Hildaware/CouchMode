@@ -23,6 +23,13 @@ function map.startFrameFade(frame, state, to_alpha)
     state.active = true
 end
 
+--[[
+    TODO
+    - Double-click to toggle world map (including gamepad double press)
+    - New 'pre-built' option to directly on grow > min zoom minimap > press zoom > min zoom world Map
+    -
+]]
+
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
 function map:OnEnable()
