@@ -36,6 +36,32 @@
 ---@field borderB                  number
 ---@field borderA                  number
 
+
+---@class CTScrollContainer: ScrollFrame
+---@field Child                      Frame
+---@field GetZoom                    fun(self: CTScrollContainer): number
+---@field SetZoomTarget              fun(self: CTScrollContainer, z: number)
+---@field GetCanvasScale             fun(self: CTScrollContainer): number
+---@field IsAtMaxZoom                fun(self: CTScrollContainer): boolean
+---@field GetCanvasZoomPercent       fun(self: CTScrollContainer): number
+---@field GetCurrentLayerIndex       fun(self: CTScrollContainer): number
+---@field DenormalizeHorizontalSize  fun(self: CTScrollContainer, size: number): number
+---@field DenormalizeVerticalSize    fun(self: CTScrollContainer, size: number): number
+---@field NormalizeHorizontalSize    fun(self: CTScrollContainer, size: number): number
+---@field NormalizeVerticalSize      fun(self: CTScrollContainer, size: number): number
+---@field GetCursorPosition          fun(self: CTScrollContainer): number, number
+---@field SetMapID                   fun(self: CTScrollContainer)
+---@field SetPanTarget               fun(self: CTScrollContainer)
+---@field OnCanvasSizeChanged        fun(self: CTScrollContainer)
+---@field MarkCanvasDirty            fun(self: CTScrollContainer)
+---@field MarkAreaTriggersDirty      fun(self: CTScrollContainer)
+---@field OnLoad                     fun(self: CTScrollContainer)
+---@field OnShow                     fun(self: CTScrollContainer)
+---@field OnHide                     fun(self: CTScrollContainer)
+
+---@class CTWorldMap: MapCanvasFrameTemplate
+---@field ScrollContainer CTScrollContainer
+
 ---@class MapModule: AceModule
 ---@field minimapFade            FadeState
 ---@field worldMapFade           FadeState
@@ -63,7 +89,7 @@
 ---@field applyBorder            fun()
 ---@field applySettings          fun()
 ---@field createFrame            fun()
----@field worldMap               Frame|nil
+---@field worldMap               Frame|CTWorldMap
 ---@field worldMapArtW           number
 ---@field worldMapArtH           number
 ---@field resetWorldMapZoom      fun()

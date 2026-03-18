@@ -132,7 +132,7 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
     if map.worldMapOpen and map.worldMap then
         -- World map mode: discrete levels (WM_ZOOM_LEVELS)
         local n         = WM_ZOOM_LEVELS
-        local sc        = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+        local sc        = map.worldMap.ScrollContainer
         local cur       = sc:GetZoom()
         local wmin      = map.worldMapMinZoom or 0.12
         local wmax      = map.worldMapMaxZoom or 0.30

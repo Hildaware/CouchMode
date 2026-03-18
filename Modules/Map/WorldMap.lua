@@ -1,3 +1,5 @@
+---@diagnostic disable: inject-field
+
 local addon_name        = ...
 
 ---@class ConsoleTools: AceAddon
@@ -64,7 +66,7 @@ end
 local function create_world_map()
     if map.worldMap then return end
 
-    if not _G.MapCanvasMixin or not _G.BaseMapCanvasDetailLayerMixin then ---@diagnostic disable-line: undefined-global
+    if not _G.MapCanvasMixin or not _G.BaseMapCanvasDetailLayerMixin then ---@diagnostic disable-line: undefined-field
         C_AddOns.LoadAddOn("Blizzard_MapCanvas")
     end
     if not _G.GroupMembersDataProviderMixin then ---@diagnostic disable-line: undefined-global
@@ -75,7 +77,7 @@ local function create_world_map()
     map_frame:SetAllPoints(map.container)
 
     -- ScrollContainer required by MapCanvasMixin
-    local scroll_container = CreateFrame("ScrollFrame", nil, map_frame)
+    local scroll_container = CreateFrame("ScrollFrame", nil, map_frame) ---@type CTScrollContainer
     scroll_container:SetAllPoints()
     map_frame.ScrollContainer = scroll_container
 
