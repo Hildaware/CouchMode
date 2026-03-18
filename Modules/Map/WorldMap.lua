@@ -403,6 +403,20 @@ map.openWorldMap = function()
     map.onShowWorldMap()
 end
 
+function map.zoomWorldMap(delta)
+    if not map.worldMap then return end
+    local sc = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+    if delta > 0 then
+        if sc:IsAtMaxZoom() then
+            map.onHideWorldMap()
+        else
+            sc:SetZoomTarget(sc:GetZoom() * 1.1)
+        end
+    else
+        sc:SetZoomTarget(sc:GetZoom() * 0.9)
+    end
+end
+
 function map.onShowWorldMap()
     map.setToolbarType(TOOLBAR_BUTTON_TYPE.WORLD_MAP)
     map.worldMap:SetAlpha(0)
