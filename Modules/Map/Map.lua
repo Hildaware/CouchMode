@@ -1,22 +1,22 @@
-local addon_name       = ...
+local addon_name     = ...
 
 ---@class ConsoleTools: AceAddon
-local addon            = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
----@class MinimapModule
-local minimod          = addon:NewModule('Minimap')
+---@class MapModule
+local map            = addon:NewModule('Minimap')
 
-local _G               = _G
-local unpack           = unpack
-local Minimap          = _G.Minimap
-local MinimapCluster   = _G.MinimapCluster ---@type Frame
+local _G             = _G
+local unpack         = unpack
+local Minimap        = _G.Minimap
+local MinimapCluster = _G.MinimapCluster ---@type Frame
 
-minimod.minimapFade    = { from = 1, to = 1, elapsed = 0, active = false }
-minimod.worldMapFade   = { from = 0, to = 0, elapsed = 0, active = false }
-minimod.toolbarFade    = { from = 0, to = 0, elapsed = 0, active = false }
-minimod.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
+map.minimapFade      = { from = 1, to = 1, elapsed = 0, active = false }
+map.worldMapFade     = { from = 0, to = 0, elapsed = 0, active = false }
+map.toolbarFade      = { from = 0, to = 0, elapsed = 0, active = false }
+map.growTransition   = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
 
-function minimod.startFrameFade(frame, state, to_alpha)
+function map.startFrameFade(frame, state, to_alpha)
     state.from = frame:GetAlpha()
     state.to = to_alpha
     state.elapsed = 0
@@ -25,24 +25,24 @@ end
 
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
-function minimod:OnEnable()
-    if not minimod.wrapper then minimod.createFrame() end
-    minimod.wrapper:Show()
+function map:OnEnable()
+    if not map.container then map.createFrame() end
+    map.container:Show()
 end
 
-function minimod:OnDisable()
-    if minimod.worldMapOpen then minimod.closeWorldMap() end
-    if minimod.wrapper then minimod.wrapper:Hide() end
+function map:OnDisable()
+    if map.worldMapOpen then map.onHideWorldMap() end
+    if map.container then map.container:Hide() end
 
-    if minimod.origParent then
-        Minimap:SetParent(minimod.origParent)
+    if map.origParent then
+        Minimap:SetParent(map.origParent)
         Minimap:ClearAllPoints()
-        Minimap:SetPoint(unpack(minimod.origPoints)) ---@diagnostic disable-line: param-type-mismatch
-        Minimap:SetSize(minimod.origW, minimod.origH)
+        Minimap:SetPoint(unpack(map.origPoints)) ---@diagnostic disable-line: param-type-mismatch
+        Minimap:SetSize(map.origW, map.origH)
         Minimap:SetClampedToScreen(true)
         Minimap:SetMaskTexture("Textures\\MinimapMask")
 
-        local hybrid_minimap = minimod.hybridMinimap ---@type any
+        local hybrid_minimap = map.hybridMinimap ---@type any
         if hybrid_minimap and hybrid_minimap.MapCanvas and hybrid_minimap.CircleMask then
             hybrid_minimap:ClearAllPoints()
             hybrid_minimap:SetAllPoints(Minimap)
@@ -50,34 +50,34 @@ function minimod:OnDisable()
             hybrid_minimap.MapCanvas:SetUseMaskTexture(false)
             hybrid_minimap.CircleMask:ClearAllPoints()
             hybrid_minimap.CircleMask:SetAllPoints(hybrid_minimap.MapCanvas)
-            if minimod.origCircleMaskTexture then
-                hybrid_minimap.CircleMask:SetTexture(minimod.origCircleMaskTexture)
+            if map.origCircleMaskTexture then
+                hybrid_minimap.CircleMask:SetTexture(map.origCircleMaskTexture)
             end
             hybrid_minimap.MapCanvas:SetUseMaskTexture(true)
         end
 
-        if minimod.blizzTracking then
-            minimod.blizzTracking:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
-            minimod.blizzTracking = nil
+        if map.blizzTracking then
+            map.blizzTracking:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            map.blizzTracking = nil
         end
 
-        if minimod.blizzCompartment then
-            minimod.blizzCompartment:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
-            minimod.blizzCompartment = nil
+        if map.blizzCompartment then
+            map.blizzCompartment:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            map.blizzCompartment = nil
         end
 
-        if minimod.blizzCalendar then
-            minimod.blizzCalendar:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
-            minimod.blizzCalendar = nil
+        if map.blizzCalendar then
+            map.blizzCalendar:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            map.blizzCalendar = nil
         end
 
         ---@diagnostic disable-next-line: undefined-global
         MinimapCluster:Show()
         if _G.MinimapBackdrop then _G.MinimapBackdrop:Show() end ---@diagnostic disable-line: undefined-global
 
-        minimod.origParent = nil
-        minimod.grown = false
-        minimod.fadeTo = nil
+        map.origParent = nil
+        map.grown = false
+        map.fadeTo = nil
     end
 end
 
@@ -85,7 +85,7 @@ end
 
 --#region ── Defaults & Options ───────────────────────────────────────────────
 
-function minimod:GetDefaults()
+function map:GetDefaults()
     return {
         ---@type MinimapDB
         minimap = {
@@ -120,7 +120,7 @@ function minimod:GetDefaults()
     }
 end
 
-function minimod:GetOptions()
+function map:GetOptions()
     return 'minimap', {
         name = 'Minimap',
         type = 'group',
@@ -139,7 +139,7 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.enabled end,
                 set = function(_, value)
                     addon.db.profile.minimap.enabled = value
-                    if value then minimod:Enable() else minimod:Disable() end
+                    if value then map:Enable() else map:Disable() end
                 end,
             },
             shape = {
@@ -151,7 +151,7 @@ function minimod:GetOptions()
                 get    = function() return addon.db.profile.minimap.shape end,
                 set    = function(_, value)
                     addon.db.profile.minimap.shape = value
-                    minimod.applySettings()
+                    map.applySettings()
                 end,
             },
             size = {
@@ -165,7 +165,7 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.size end,
                 set = function(_, value)
                     addon.db.profile.minimap.size = value
-                    minimod.applySettings()
+                    map.applySettings()
                 end,
             },
             alpha = {
@@ -179,7 +179,7 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.alpha end,
                 set = function(_, value)
                     addon.db.profile.minimap.alpha = value
-                    if minimod.wrapper then minimod.wrapper:SetAlpha(value) end
+                    if map.container then map.container:SetAlpha(value) end
                 end,
             },
             growSize = {
@@ -204,7 +204,7 @@ function minimod:GetOptions()
             --     get   = function() return addon.db.profile.minimap.zoom end,
             --     set   = function(_, value)
             --         addon.db.profile.minimap.zoom = value
-            --         minimod.applyZoom()
+            --         map.applyZoom()
             --     end,
             -- },
             -- growZoom = {
@@ -218,7 +218,7 @@ function minimod:GetOptions()
             --     get   = function() return addon.db.profile.minimap.growZoom end,
             --     set   = function(_, value)
             --         addon.db.profile.minimap.growZoom = value
-            --         minimod.applyZoom()
+            --         map.applyZoom()
             --     end,
             -- },
             worldMapCentered = {
@@ -257,7 +257,7 @@ function minimod:GetOptions()
                 get    = function() return addon.db.profile.minimap.toolbarDock end,
                 set    = function(_, value)
                     addon.db.profile.minimap.toolbarDock = value
-                    minimod.applyToolbarPosition()
+                    map.applyToolbarPosition()
                 end,
             },
             borderEnabled = {
@@ -268,7 +268,7 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.borderEnabled end,
                 set = function(_, value)
                     addon.db.profile.minimap.borderEnabled = value
-                    minimod.applyBorder()
+                    map.applyBorder()
                 end,
             },
             borderSize = {
@@ -282,7 +282,7 @@ function minimod:GetOptions()
                 get = function() return addon.db.profile.minimap.borderSize end,
                 set = function(_, value)
                     addon.db.profile.minimap.borderSize = value
-                    minimod.applyBorder()
+                    map.applyBorder()
                 end,
             },
             borderColor = {
@@ -297,7 +297,7 @@ function minimod:GetOptions()
                 set = function(_, r, g, b, a)
                     local db = addon.db.profile.minimap ---@type MinimapDB
                     db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
-                    minimod.applyBorder()
+                    map.applyBorder()
                 end,
             },
         },

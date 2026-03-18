@@ -1,3 +1,6 @@
+---@class MapToolbar: Frame
+---@field buttons table<integer, { frame: Frame, db: string|nil }[]>
+
 ---@class FadeState
 ---@field from    number
 ---@field to      number
@@ -33,7 +36,7 @@
 ---@field borderB                  number
 ---@field borderA                  number
 
----@class MinimapModule: AceModule
+---@class MapModule: AceModule
 ---@field minimapFade            FadeState
 ---@field worldMapFade           FadeState
 ---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
@@ -52,7 +55,7 @@
 ---@field origCircleMaskTexture  string|nil
 ---@field rectMask               MaskTexture|nil
 ---@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
----@field toolbar                Frame|nil
+---@field toolbar                MapToolbar|nil
 ---@field toolbarBorders         table|nil
 ---@field wrapper                Frame
 ---@field borderFrame            Frame
@@ -65,7 +68,7 @@
 ---@field worldMapArtH           number
 ---@field resetWorldMapZoom      fun()
 ---@field openWorldMap           fun()
----@field closeWorldMap          fun()
+---@field onHideWorldMap          fun()
 ---@field trackingBtn            Button|nil
 ---@field wmBtnWQ                Button|nil
 ---@field wmBtnAQ                Button|nil
@@ -83,3 +86,10 @@
 ---@field wmDpTravel             table|nil
 ---@field wmDpPortals            table|nil
 ---@field wmDpAreaPOI            table|nil
+
+---@class MinimapToolbarBtnConfig
+---@field btn string
+---@field atlas string
+---@field tooltip string
+---@field blizz table|nil Blizzard button to wrap (optional)
+---@field setup fun(btn:table, blizz:table) Setup function for Blizzard button (optional)

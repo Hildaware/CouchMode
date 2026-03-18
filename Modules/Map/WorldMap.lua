@@ -3,8 +3,8 @@ local addon_name = ...
 ---@class ConsoleTools: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
----@class MinimapModule: AceModule
-local minimod = addon:GetModule('Minimap')
+---@class MapModule: AceModule
+local map = addon:GetModule('Minimap')
 
 local _G = _G
 local math_min = math.min
@@ -19,22 +19,8 @@ local C_QuestLog = _G.C_QuestLog
 local Mixin = _G.Mixin
 local CreateFromMixins = _G.CreateFromMixins
 local GetCursorPosition = _G.GetCursorPosition
-local Minimap = _G.Minimap
 
 local ConsolePort = _G['ConsolePort'] ---@type any
-
--- Maps each world-map toolbar button field to its db toggle key.
--- Used by openWorldMap/closeWorldMap to sync all buttons in one loop.
--- Also exposed on minimod so MinimapFrame.lua can build the D-pad button list.
-minimod.WM_BUTTON_DEFS = {
-    { btn = "wmBtnWQ",       db = "worldMapShowWorldQuests" },
-    { btn = "wmBtnAQ",       db = "worldMapShowActiveQuests" },
-    { btn = "wmBtnLS",       db = "worldMapShowLocalStories" },
-    { btn = "wmBtnDungeons", db = "worldMapShowDungeons" },
-    { btn = "wmBtnDelves",   db = "worldMapShowDelves" },
-    { btn = "wmBtnEvents",   db = "worldMapShowEvents" },
-    { btn = "wmBtnTravel",   db = "worldMapShowTravel" },
-}
 
 -- Patches global pin/provider mixins once to fix crashes and add tooltip support.
 local function setup_mixin_patches()
@@ -75,7 +61,7 @@ end
 --#region ── World Map ───────────────────────────────────────────────────────
 
 local function create_world_map()
-    if minimod.worldMap then return end
+    if map.worldMap then return end
 
     if not _G.MapCanvasMixin or not _G.BaseMapCanvasDetailLayerMixin then ---@diagnostic disable-line: undefined-global
         C_AddOns.LoadAddOn("Blizzard_MapCanvas")
@@ -84,8 +70,8 @@ local function create_world_map()
         C_AddOns.LoadAddOn("Blizzard_SharedMapDataProviders")
     end
 
-    local map_frame = CreateFrame("Frame", nil, minimod.wrapper)
-    map_frame:SetAllPoints(minimod.wrapper)
+    local map_frame = CreateFrame("Frame", nil, map.container)
+    map_frame:SetAllPoints(map.container)
 
     -- ScrollContainer required by MapCanvasMixin
     local scroll_container = CreateFrame("ScrollFrame", nil, map_frame)
@@ -113,7 +99,7 @@ local function create_world_map()
     local zoom = zoom_entry
 
     local cached_child_w, cached_child_h = scroll_child:GetSize()
-    local cached_wrap_w, cached_wrap_h = minimod.wrapper:GetSize()
+    local cached_wrap_w, cached_wrap_h = map.container:GetSize()
 
     local is_panning = false
     local has_panned = false
@@ -123,7 +109,7 @@ local function create_world_map()
     scroll_child:SetScript("OnSizeChanged", function(_, sw, sh)
         cached_child_w, cached_child_h = sw, sh
     end)
-    minimod.wrapper:SetScript("OnSizeChanged", function(_, ww, wh)
+    map.container:SetScript("OnSizeChanged", function(_, ww, wh)
         cached_wrap_w, cached_wrap_h = ww, wh
     end)
 
@@ -234,7 +220,7 @@ local function create_world_map()
 
     scroll_container:SetScript("OnMouseWheel", function(_, delta)
         if delta > 0 and zoom >= max_zoom then
-            minimod.closeWorldMap()
+            map.onHideWorldMap()
             return
         end
         apply_zoom(zoom * (delta > 0 and 1.25 or 0.8))
@@ -281,18 +267,18 @@ local function create_world_map()
         end
     end
 
-    -- Zoom constants are derived from the current wrapper width so visual quality
+    -- Zoom constants are derived from the current container width so visual quality
     -- (art pixels per viewport pixel) stays constant regardless of db.growSize.
     -- Reference: 500px growSize → ZOOM_ENTRY 0.25 → 500/0.25 = 2000 art px visible.
-    minimod.resetWorldMapZoom = function()
+    map.resetWorldMapZoom = function()
         has_panned = false
         zoom_entry = cached_wrap_w / 2000
         min_zoom = zoom_entry * 0.52
         max_zoom = zoom_entry * 1.24
         zoom = zoom_entry
         scroll_child:SetScale(zoom_entry)
-        minimod.worldMapMinZoom = min_zoom
-        minimod.worldMapMaxZoom = max_zoom
+        map.worldMapMinZoom = min_zoom
+        map.worldMapMaxZoom = max_zoom
     end
 
     map_frame:EnableMouse(true)
@@ -335,13 +321,13 @@ local function create_world_map()
     end
 
     -- Adds a data provider to map_frame. Passing db_key makes it toggleable and
-    -- store_field saves the ref on minimod. setup_fn(dp) runs after creation.
+    -- store_field saves the ref on map. setup_fn(dp) runs after creation.
     local function add_provider(mixin_name, store_field, db_key, setup_fn)
         local mixin = _G[mixin_name] ---@diagnostic disable-line: undefined-global
         if not mixin then return end
         local dp = db_key and make_toggleable_dp(mixin, db_key) or CreateFromMixins(mixin)
         if setup_fn then setup_fn(dp) end
-        if store_field then minimod[store_field] = dp end
+        if store_field then map[store_field] = dp end
         map_frame:AddDataProvider(dp)
     end
 
@@ -365,40 +351,40 @@ local function create_world_map()
     add_provider("MapLinkDataProviderMixin", "wmDpPortals", "worldMapShowTravel")
     add_provider("AreaPOIDataProviderMixin", "wmDpAreaPOI", "worldMapShowTravel")
 
-    minimod.worldMap = map_frame
+    map.worldMap = map_frame
 end
 
-minimod.openWorldMap = function()
+map.openWorldMap = function()
     if ConsolePort then
-        ConsolePort:AddInterfaceCursorFrame(minimod.wrapper)
+        ConsolePort:AddInterfaceCursorFrame(map.container)
     end
 
-    minimod.worldMapOpen = true
+    map.worldMapOpen = true
     create_world_map()
-    if minimod.resetWorldMapZoom then minimod.resetWorldMapZoom() end
+    if map.resetWorldMapZoom then map.resetWorldMapZoom() end
 
     local map_id = C_Map.GetBestMapForUnit("player")
     if map_id then
         local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(map_id)
         local layer = layers and layers[1]
         if layer and layer.layerWidth and layer.layerWidth > 0 then
-            minimod.worldMapArtW = layer.layerWidth
-            minimod.worldMapArtH = layer.layerHeight
-            minimod.worldMap.ScrollContainer.Child:SetSize(layer.layerWidth, layer.layerHeight)
+            map.worldMapArtW = layer.layerWidth
+            map.worldMapArtH = layer.layerHeight
+            map.worldMap.ScrollContainer.Child:SetSize(layer.layerWidth, layer.layerHeight)
         end
 
-        for _, pool in pairs(minimod.worldMap.pinPools or {}) do
+        for _, pool in pairs(map.worldMap.pinPools or {}) do
             for pin in pool:EnumerateActive() do
                 if pin.OnCanvasSizeChanged then pin:OnCanvasSizeChanged() end
                 if pin.ApplyCurrentPosition then pin:ApplyCurrentPosition() end
             end
         end
 
-        minimod.worldMap:SetMapID(map_id)
+        map.worldMap:SetMapID(map_id)
 
-        local sc = minimod.worldMap.ScrollContainer
+        local sc = map.worldMap.ScrollContainer
         local cw, ch = sc.Child:GetSize()
-        local vw, vh = minimod.wrapper:GetSize()
+        local vw, vh = map.container:GetSize()
         local entry_zoom = sc:GetZoom()
         local half_w_zoom = vw / (2 * entry_zoom)
         local half_h_zoom = vh / (2 * entry_zoom)
@@ -414,51 +400,29 @@ minimod.openWorldMap = function()
         end
     end
 
-    -- Swap toolbar buttons: hide minimap-only, show + sync world map filters
-    if minimod.trackingBtn    then minimod.trackingBtn:Hide()    end
-    if minimod.compartmentBtn then minimod.compartmentBtn:Hide() end
-    if minimod.calendarBtn    then minimod.calendarBtn:Hide()    end
-    local wm_db = addon.db.profile.minimap
-    for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
-        local btn = minimod[def.btn]
-        if btn then
-            btn:SetAlpha(wm_db[def.db] and 1 or 0.4); btn:Show()
-        end
-    end
-
-    minimod.worldMap:SetAlpha(0)
-    minimod.worldMap:Show()
-    minimod.startFrameFade(minimod.worldMap, minimod.worldMapFade, 1)
-    minimod.startFrameFade(Minimap, minimod.minimapFade, 0)
+    map.onShowWorldMap()
 end
 
-minimod.closeWorldMap = function()
-    minimod.worldMapOpen = false
-    minimod.applySettings()
+function map.onShowWorldMap()
+    map.setToolbarType(TOOLBAR_BUTTON_TYPE.WORLD_MAP)
+    map.worldMap:SetAlpha(0)
+    map.worldMap:Show()
+    map.startFrameFade(map.worldMap, map.worldMapFade, 1)
 
-    -- Swap toolbar buttons back: hide world map filters, restore minimap-only buttons
-    if minimod.trackingBtn    then minimod.trackingBtn:Show()    end
-    if minimod.compartmentBtn then minimod.compartmentBtn:Show() end
-    if minimod.calendarBtn    then minimod.calendarBtn:Show()    end
-    for _, def in ipairs(minimod.WM_BUTTON_DEFS) do
-        local btn = minimod[def.btn]
-        if btn then btn:Hide() end
-    end
+    map.onHideMinimap()
+end
 
-    Minimap:SetAlpha(0)
-    Minimap:Show()
-    Minimap:SetZoom(0)
+function map.onHideWorldMap()
+    map.worldMapOpen = false
+    map.applySettings()
 
-    if Minimap.ZoomIn and Minimap.ZoomOut then
-        Minimap.ZoomIn:Click()
-        Minimap.ZoomOut:Click()
-    end
-    minimod.startFrameFade(Minimap, minimod.minimapFade, 1)
-    if minimod.worldMap then
-        minimod.startFrameFade(minimod.worldMap, minimod.worldMapFade, 0)
+    map.onShowMinimap()
+
+    if map.worldMap then
+        map.startFrameFade(map.worldMap, map.worldMapFade, 0)
     end
 end
 
 --#endregion
 
-minimod:Enable()
+map:Enable()

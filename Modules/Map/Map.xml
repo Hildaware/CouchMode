@@ -1,7 +1,8 @@
 <UI xmlns='http://www.blizzard.com/wow/ui/' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
-    <Include file='Minimap.lua'/>
+    <Include file='Map.lua'/>
     <Include file='MapUtils.lua'/>
-    <Include file='MinimapToolbar.lua'/>
-    <Include file='MinimapFrame.lua'/>
+    <Include file='Toolbar.lua'/>
+    <Include file='Container.lua'/>
+    <Include file='Minimap.lua'/>
     <Include file='WorldMap.lua'/>
 </UI>

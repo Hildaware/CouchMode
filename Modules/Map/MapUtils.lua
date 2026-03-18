@@ -3,20 +3,20 @@ local addon_name = ...
 ---@class ConsoleTools: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
----@class MinimapModule: AceModule
-local minimod = addon:GetModule('Minimap')
+---@class MapModule: AceModule
+local map = addon:GetModule('Minimap')
 
 local _G = _G
 local CreateFrame = _G.CreateFrame
 
-minimod.MapUtils = {}
+map.MapUtils = {}
 
 --- Creates four border textures (T, B, L, R) parented to `parent` and initially
 --- anchored to `anchor` on the top/bottom edges. L/R anchors are set by apply_border_textures.
 ---@param parent Frame
 ---@param anchor Frame
 ---@return table @A table containing the T, B, L, and R textures.
-function minimod.MapUtils.create_border_textures(parent, anchor)
+function map.MapUtils.create_border_textures(parent, anchor)
     local borders = {}
     for _, pos in ipairs({ "T", "B", "L", "R" }) do
         borders[pos] = parent:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -33,7 +33,7 @@ end
 ---@param anchor Frame  frame the L/R textures are anchored to
 ---@param borders table The table containing the T, B, L, and R textures
 ---@param show boolean  @param size number  @param r number  @param g number  @param b number  @param a number
-function minimod.MapUtils.apply_border_textures(anchor, borders, show, size, r, g, b, a)
+function map.MapUtils.apply_border_textures(anchor, borders, show, size, r, g, b, a)
     for _, pos in ipairs({ "T", "B", "L", "R" }) do
         local tex = borders[pos]
         tex:SetShown(show)
@@ -65,7 +65,7 @@ local BUTTON_SILVER = "Interface\\AddOns\\ConsoleTools\\Media\\button_silver.blp
 ---@param atlas string
 ---@param on_click fun()
 ---@param tooltip string|nil
-function minimod.MapUtils.create_toolbar_button(parent, atlas, on_click, tooltip)
+function map.MapUtils.create_toolbar_button(parent, atlas, on_click, tooltip)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(20, 20)
 
