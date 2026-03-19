@@ -207,7 +207,8 @@
         "CALENDAR_EVENT_ALARM_MESSAGE",
         "GAMETIME_TOOLTIP_CALENDAR_INVITES",
         "GAMETIME_TOOLTIP_TOGGLE_CALENDAR",
-        "TIME_TWELVEHOURPM"
+        "TIME_TWELVEHOURPM",
+        "DEFAULT"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

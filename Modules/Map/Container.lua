@@ -91,7 +91,7 @@ end
 function map.createZoomIndicator()
     local zi = CreateFrame("Frame", nil, map.container)
     zi:SetSize(ZOOM_BAR_W, ZOOM_BAR_H)
-    zi:SetPoint("BOTTOMRIGHT", map.container, "BOTTOMRIGHT", -4, 4)
+    zi:SetPoint("BOTTOMRIGHT", map.container, "BOTTOMRIGHT", -4, 6)
     zi:SetFrameLevel(map.container:GetFrameLevel() + 150)
     map.zoomIndicator = zi
 
@@ -120,6 +120,54 @@ function map.createZoomIndicator()
 
     zi.numLevels = 0  -- cached; ticks only repositioned when this changes
     zi.lastZoom  = -1 -- sentinel → first frame always redraws fill
+
+    local lt_tex = zi:CreateTexture(nil, "OVERLAY")
+    lt_tex:SetSize(16, 16)
+    lt_tex:SetPoint("RIGHT", zi, "LEFT", -3, 0)
+    lt_tex:Hide()
+    zi.ltTex = lt_tex
+
+    local rt_tex = zi:CreateTexture(nil, "OVERLAY")
+    rt_tex:SetSize(16, 16)
+    rt_tex:SetPoint("LEFT", zi, "RIGHT", 3, 0)
+    rt_tex:Hide()
+    zi.rtTex = rt_tex
+
+    zi.cpDevice = nil
+end
+
+function map.updateZoomIndicatorIcons()
+    local zi = map.zoomIndicator
+    if not zi then return end
+    local cp = _G['ConsolePort']
+    if not cp then
+        zi.ltTex:Hide(); zi.rtTex:Hide()
+        return
+    end
+    local device = cp:GetData().Gamepad:GetActiveDevice()
+    if not device then
+        zi.ltTex:Hide(); zi.rtTex:Hide()
+        return
+    end
+    local function apply(tex, button)
+        local path, useAtlas = device:GetIconForButton(button, 32)
+        if not path then
+            tex:Hide(); return
+        end
+        if useAtlas then
+            tex:SetAtlas(path)
+        else
+            tex:SetTexture(path)
+            tex:SetTexCoord(0.25, 0.75, 0.25, 0.75)
+        end
+        tex:Show()
+    end
+    apply(zi.ltTex, 'PADLTRIGGER')
+    apply(zi.rtTex, 'PADRTRIGGER')
+    zi.cpDevice = device
+
+    zi:ClearAllPoints()
+    zi:SetPoint("BOTTOMRIGHT", map.container, "BOTTOMRIGHT", device and -23 or -4, 6)
 end
 
 function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-local
@@ -130,6 +178,13 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
     if not map.grown then return end
 
     if map.worldMapOpen and map.worldMap then
+        -- Refresh trigger icons if the active controller device changed
+        local cp = _G['ConsolePort']
+        local cur_device = cp and cp:GetData().Gamepad:GetActiveDevice()
+        if cur_device ~= zi.cpDevice then
+            map.updateZoomIndicatorIcons()
+        end
+
         -- World map mode: continuous fill, logarithmic scale (each zoom doubling = equal bar width)
         local sc   = map.worldMap.ScrollContainer
         local cur  = sc:GetZoom()
@@ -189,6 +244,12 @@ function map.setupContainerScripts()
     map.createToolbar()
     map.createMailIndicator()
     map.createZoomIndicator()
+
+    local cp = _G['ConsolePort']
+    if cp then
+        cp:GetData():RegisterCallback('Gamepad/Active', map.updateZoomIndicatorIcons)
+        map.updateZoomIndicatorIcons()
+    end
 
     map.container:SetScript("OnUpdate", function(_, elapsed)
         -- Movement fade (container alpha)
