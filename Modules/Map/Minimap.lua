@@ -11,6 +11,7 @@ local math_min         = math.min
 local math_max         = math.max
 local math_ceil        = math.ceil
 
+local CreateFrame      = _G.CreateFrame
 local Minimap          = _G.Minimap
 local UIParent         = _G.UIParent
 local InCombatLockdown = _G.InCombatLockdown
@@ -66,6 +67,44 @@ function map.applyBorder()
     end
 end
 
+function map.createZoneText()
+    local f = CreateFrame("Button", nil, map.container)
+    f:SetSize(map.container:GetWidth(), 16)
+    f:RegisterEvent("ZONE_CHANGED")
+    f:RegisterEvent("ZONE_CHANGED_INDOORS")
+    f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:SetScript("OnEvent", function() map.updateZoneText() end)
+    map.zoneTextFrame = f
+
+    local t = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    t:SetAllPoints(f)
+    t:SetJustifyH("CENTER")
+    t:SetJustifyV("MIDDLE")
+    map.zoneText = t
+end
+
+function map.updateZoneText()
+    if map.zoneText then
+        map.zoneText:SetText(_G.GetMinimapZoneText()) ---@diagnostic disable-line: undefined-global
+    end
+end
+
+function map.applyZoneText()
+    if not map.zoneTextFrame then return end
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    if not db.zoneTextEnabled then
+        map.zoneTextFrame:Hide()
+        return
+    end
+    map.zoneTextFrame:Show()
+    map.zoneText:SetFont(db.zoneTextFont, db.zoneTextSize, "OUTLINE") ---@diagnostic disable-line: need-check-nil
+    map.zoneText:SetTextColor(db.zoneTextR, db.zoneTextG, db.zoneTextB, db.zoneTextA) ---@diagnostic disable-line: need-check-nil
+    map.zoneTextFrame:ClearAllPoints()
+    map.zoneTextFrame:SetPoint("CENTER", map.container, "CENTER", db.zoneTextX, db.zoneTextY)
+    map.updateZoneText()
+end
+
 function map.applyZoom()
     if not map.container then return end
     local db = addon.db.profile.minimap ---@type MinimapDB
@@ -89,6 +128,7 @@ function map.applySettings()
     Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, offset)
     apply_minimap_shape(db.shape, w, h)
     map.applyBorder()
+    map.applyZoneText()
 end
 
 function map.updateGrowTransition(elapsed)
@@ -204,6 +244,17 @@ function map.createFrame()
     map.blizzCalendar = _G.GameTimeFrame ---@diagnostic disable-line: undefined-global
     map.blizzCalendar:SetParent(UIParent)
 
+    -- Rescue instance difficulty badge before hiding MinimapCluster
+    map.blizzInstanceDifficulty = MinimapCluster.InstanceDifficulty ---@diagnostic disable-line: undefined-field
+    map.blizzInstanceDifficulty:SetParent(map.container)
+    map.blizzInstanceDifficulty:ClearAllPoints()
+    map.blizzInstanceDifficulty:SetPoint("TOPLEFT", map.container, "TOPLEFT", 4, -4)
+
+    -- Rescue zone text button before hiding MinimapCluster
+    map.blizzZoneText = MinimapCluster.ZoneTextButton ---@diagnostic disable-line: undefined-field
+    map.blizzZoneText:SetParent(UIParent)
+    map.blizzZoneText:Hide()
+
     -- Hide all Blizzard chrome
     MinimapCluster:Hide()
     if _G.MinimapBackdrop then _G.MinimapBackdrop:Hide() end ---@diagnostic disable-line: undefined-global
@@ -221,6 +272,7 @@ function map.createFrame()
     end
 
     map.setupContainerScripts()
+    map.createZoneText()
 
     -- Scroll handler: intercepts scroll-out-at-zero-zoom to open the world map
     Minimap:EnableMouseWheel(true)
@@ -309,6 +361,7 @@ function map.createFrame()
     end
 
     map.applyZoom()
+    map.applyZoneText()
 end
 
 --#endregion

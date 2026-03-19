@@ -71,6 +71,17 @@ function map:OnDisable()
             map.blizzCalendar = nil
         end
 
+        if map.blizzInstanceDifficulty then
+            map.blizzInstanceDifficulty:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            map.blizzInstanceDifficulty = nil
+        end
+
+        if map.blizzZoneText then
+            map.blizzZoneText:SetParent(MinimapCluster) ---@diagnostic disable-line: param-type-mismatch
+            map.blizzZoneText:Show()
+            map.blizzZoneText = nil
+        end
+
         ---@diagnostic disable-next-line: undefined-global
         MinimapCluster:Show()
         if _G.MinimapBackdrop then _G.MinimapBackdrop:Show() end ---@diagnostic disable-line: undefined-global
@@ -116,6 +127,15 @@ function map:GetDefaults()
             borderG                  = 1,
             borderB                  = 1,
             borderA                  = 1,
+            zoneTextEnabled          = false,
+            zoneTextFont             = "Fonts\\FRIZQT__.TTF",
+            zoneTextSize             = 11,
+            zoneTextX                = 0,
+            zoneTextY                = 30,
+            zoneTextR                = 1,
+            zoneTextG                = 1,
+            zoneTextB                = 1,
+            zoneTextA                = 1,
         },
     }
 end
@@ -299,6 +319,129 @@ function map:GetOptions()
                     db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
                     map.applyBorder()
                 end,
+            },
+            zoneText = {
+                name   = 'Zone Text',
+                type   = 'group',
+                inline = true,
+                order  = 16,
+                args   = {
+                    enabled = {
+                        name  = 'Show Zone Text',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextEnabled
+                        end,
+                        set   = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextEnabled = value
+                            map.applyZoneText()
+                        end,
+                    },
+                    font = {
+                        name     = 'Font',
+                        type     = 'select',
+                        order    = 2,
+                        disabled = function()
+                            return not addon.db.profile.minimap.zoneTextEnabled
+                        end,
+                        values   = {
+                            ["Fonts\\FRIZQT__.TTF"] = "Friz Quadrata",
+                            ["Fonts\\MORPHEUS.TTF"] = "Morpheus",
+                            ["Fonts\\ARIALN.TTF"]   = "Arial Narrow",
+                            ["Fonts\\SKURRI.TTF"]   = "Skurri",
+                        },
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextFont
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextFont = value
+                            map.applyZoneText()
+                        end,
+                    },
+                    size = {
+                        name     = 'Font Size',
+                        type     = 'range',
+                        order    = 3,
+                        min      = 8,
+                        max      = 24,
+                        step     = 1,
+                        disabled = function()
+                            return not addon.db.profile.minimap.zoneTextEnabled
+                        end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextSize
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextSize = value
+                            map.applyZoneText()
+                        end,
+                    },
+                    color = {
+                        name     = 'Color',
+                        type     = 'color',
+                        hasAlpha = false,
+                        order    = 4,
+                        disabled = function()
+                            return not addon.db.profile.minimap.zoneTextEnabled
+                        end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextR, db.zoneTextG, db.zoneTextB
+                        end,
+                        set      = function(_, r, g, b)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextR, db.zoneTextG, db.zoneTextB = r, g, b
+                            map.applyZoneText()
+                        end,
+                    },
+                    xOffset = {
+                        name     = 'X Offset',
+                        type     = 'range',
+                        order    = 5,
+                        min      = -200,
+                        max      = 200,
+                        step     = 1,
+                        disabled = function()
+                            return not addon.db.profile.minimap.zoneTextEnabled
+                        end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextX
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextX = value
+                            map.applyZoneText()
+                        end,
+                    },
+                    yOffset = {
+                        name     = 'Y Offset',
+                        type     = 'range',
+                        order    = 6,
+                        min      = -200,
+                        max      = 200,
+                        step     = 1,
+                        disabled = function()
+                            return not addon.db.profile.minimap.zoneTextEnabled
+                        end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.zoneTextY
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.zoneTextY = value
+                            map.applyZoneText()
+                        end,
+                    },
+                },
             },
         },
     }

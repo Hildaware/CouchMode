@@ -275,9 +275,12 @@ local function create_world_map()
     -- Reference: 500px growSize → ZOOM_ENTRY 0.25 → 500/0.25 = 2000 art px visible.
     map.resetWorldMapZoom = function()
         has_panned = false
-        zoom_entry = cached_wrap_w / 2000
-        min_zoom = zoom_entry * 0.52
-        max_zoom = zoom_entry * 1.24
+        local art_w = map.worldMapArtW or 2048
+        local art_h = map.worldMapArtH or 2048
+        local fit_zoom = math.min(cached_wrap_w / art_w, cached_wrap_h / art_h)
+        zoom_entry = math.max(fit_zoom, math.min(fit_zoom * 2, cached_wrap_w / 2000))
+        min_zoom = fit_zoom
+        max_zoom = zoom_entry * 4
         zoom = zoom_entry
         scroll_child:SetScale(zoom_entry)
         map.worldMapMinZoom = min_zoom
@@ -364,7 +367,6 @@ map.openWorldMap = function()
 
     map.worldMapOpen = true
     create_world_map()
-    if map.resetWorldMapZoom then map.resetWorldMapZoom() end
 
     local map_id = C_Map.GetBestMapForUnit("player")
     if map_id then
@@ -375,6 +377,9 @@ map.openWorldMap = function()
             map.worldMapArtH = layer.layerHeight
             map.worldMap.ScrollContainer.Child:SetSize(layer.layerWidth, layer.layerHeight)
         end
+    end
+    if map.resetWorldMapZoom then map.resetWorldMapZoom() end
+    if map_id then
 
         for _, pool in pairs(map.worldMap.pinPools or {}) do
             for pin in pool:EnumerateActive() do

@@ -1,17 +1,17 @@
-local addon_name = ...
+local addon_name     = ...
 
 ---@class ConsoleTools: AceAddon
-local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map = addon:GetModule('Minimap')
+local map            = addon:GetModule('Minimap')
 
-local _G = _G
-local AnchorUtil = _G.AnchorUtil
-local CreateFrame = _G.CreateFrame
-local UIParent = _G.UIParent
+local _G             = _G
+local AnchorUtil     = _G.AnchorUtil
+local CreateFrame    = _G.CreateFrame
+local UIParent       = _G.UIParent
 
-TOOLBAR_BUTTON_TYPE = {
+TOOLBAR_BUTTON_TYPE  = {
     MINIMAP = 1,
     WORLD_MAP = 2,
 }
@@ -33,26 +33,51 @@ local function wrap_blizz_btn(btn, blizz, on_click)
     blizz:ClearAllPoints()
     blizz:SetPoint("CENTER", btn, "CENTER")
     blizz:SetAlpha(0)
+    blizz:EnableMouse(false)
     btn:SetScript("OnClick", on_click)
 end
 
 local function minimap_defs()
     local day = _G.C_DateAndTime and _G.C_DateAndTime.GetCurrentCalendarTime().monthDay or 1
     return {
-        { btn = "trackingBtn",   atlas = "UI-HUD-Minimap-Tracking-Up",         tooltip = "Tracking", blizz = map.blizzTracking,
-          setup = function(btn, blizz)
-              blizz.Button:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
-              wrap_blizz_btn(btn, blizz, function() blizz:OpenMenu() end)
-          end },
-        { btn = "compartmentBtn", atlas = "PetJournal-FavoritesIcon",           tooltip = "Addons",   blizz = map.blizzCompartment,
-          setup = function(btn, blizz)
-              blizz:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
-              wrap_blizz_btn(btn, blizz, function() blizz:OpenMenu() end)
-          end },
-        { btn = "calendarBtn",   atlas = ("ui-hud-calendar-%d-up"):format(day), tooltip = "Calendar", blizz = map.blizzCalendar,
-          setup = function(btn, blizz)
-              wrap_blizz_btn(btn, blizz, function() _G.GameTimeFrame_OnClick(blizz) end) ---@diagnostic disable-line: undefined-global
-          end },
+        {
+            btn = "trackingBtn",
+            atlas = "UI-HUD-Minimap-Tracking-Up",
+            tooltip = "Tracking",
+            blizz = map.blizzTracking,
+            setup = function(btn, blizz)
+                blizz.Button:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
+                blizz.Button:EnableMouse(false)
+                local is_open = false
+                hooksecurefunc(blizz.Button, "CloseMenu", function() is_open = false end)
+                wrap_blizz_btn(btn, blizz, function()
+                    if is_open then blizz.Button:CloseMenu() else is_open = true; blizz.Button:OpenMenu() end
+                end)
+            end
+        },
+        {
+            btn = "compartmentBtn",
+            atlas = "PetJournal-FavoritesIcon",
+            tooltip = "Addons",
+            blizz = map.blizzCompartment,
+            setup = function(btn, blizz)
+                blizz:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
+                local is_open = false
+                hooksecurefunc(blizz, "CloseMenu", function() is_open = false end)
+                wrap_blizz_btn(btn, blizz, function()
+                    if is_open then blizz:CloseMenu() else is_open = true; blizz:OpenMenu() end
+                end)
+            end
+        },
+        {
+            btn = "calendarBtn",
+            atlas = ("ui-hud-calendar-%d-up"):format(day),
+            tooltip = "Calendar",
+            blizz = map.blizzCalendar,
+            setup = function(btn, blizz)
+                wrap_blizz_btn(btn, blizz, function() _G.GameTimeFrame_OnClick(blizz) end) ---@diagnostic disable-line: undefined-global
+            end
+        },
     }
 end
 
@@ -117,8 +142,8 @@ function map.createToolbar()
     map.settings_btn = settings_btn
 
     map.toolbar.buttons = {
-        [TOOLBAR_BUTTON_TYPE.MINIMAP]    = {},
-        [TOOLBAR_BUTTON_TYPE.WORLD_MAP]  = {},
+        [TOOLBAR_BUTTON_TYPE.MINIMAP]   = {},
+        [TOOLBAR_BUTTON_TYPE.WORLD_MAP] = {},
     }
 
     -- Minimap-specific toolbar buttons

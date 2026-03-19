@@ -19,7 +19,7 @@ local GetTime             = _G.GetTime
 
 local ZOOM_BAR_W          = 80
 local ZOOM_BAR_H          = 10
-local WM_ZOOM_LEVELS      = 5
+
 local FADE_DURATION       = 0.5
 local TRANSITION_DURATION = 0.25
 
@@ -39,7 +39,7 @@ function map.createContainer(w, h)
     map.container:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     map.container:SetClipsChildren(true)
     map.container:SetAlpha(db.alpha)
-    map.container:SetFrameStrata("DIALOG")
+    map.container:SetFrameStrata("LOW")
 
     -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
     map.container:SetMovable(true)
@@ -130,33 +130,24 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
     if not map.grown then return end
 
     if map.worldMapOpen and map.worldMap then
-        -- World map mode: discrete levels (WM_ZOOM_LEVELS)
-        local n         = WM_ZOOM_LEVELS
-        local sc        = map.worldMap.ScrollContainer
-        local cur       = sc:GetZoom()
-        local wmin      = map.worldMapMinZoom or 0.12
-        local wmax      = map.worldMapMaxZoom or 0.30
-        local range     = wmax - wmin
-        local frac      = range > 0 and math_min(1, math_max(0, (cur - wmin) / range)) or 0
-        local cur_level = math_floor(frac * (n - 1) + 0.5)
+        -- World map mode: continuous fill, logarithmic scale (each zoom doubling = equal bar width)
+        local sc   = map.worldMap.ScrollContainer
+        local cur  = sc:GetZoom()
+        local wmin = map.worldMapMinZoom or 0.12
+        local wmax = map.worldMapMaxZoom or 0.30
+        local frac = (wmin > 0 and wmax > wmin and cur > 0)
+            and math_min(1, math_max(0, math.log(cur / wmin) / math.log(wmax / wmin)))
+            or 0
 
-        if n ~= zi.numLevels then
-            zi.numLevels = n
-            zi.lastZoom = -1
-            for i, tick in ipairs(zi.ticks) do
-                if n > 1 and i <= (n - 2) then
-                    local x = (i / (n - 1)) * ZOOM_BAR_W
-                    tick:ClearAllPoints()
-                    tick:SetPoint("TOPLEFT", zi, "TOPLEFT", x, 0)
-                    tick:Show()
-                else
-                    tick:Hide()
-                end
-            end
+        if zi.numLevels ~= 0 then
+            zi.numLevels = 0
+            for _, tick in ipairs(zi.ticks) do tick:Hide() end
         end
-        if cur_level ~= zi.lastZoom then
-            zi.lastZoom = cur_level
-            zi.fill:SetWidth(math_max(1, (cur_level / (n - 1)) * ZOOM_BAR_W))
+
+        local fill_w = math_floor(math_max(1, frac * ZOOM_BAR_W) + 0.5)
+        if fill_w ~= zi.lastZoom then
+            zi.lastZoom = fill_w
+            zi.fill:SetWidth(fill_w)
         end
     else
         -- Minimap mode: discrete levels with tick marks

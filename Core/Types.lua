@@ -35,6 +35,15 @@
 ---@field borderG                  number
 ---@field borderB                  number
 ---@field borderA                  number
+---@field zoneTextEnabled          boolean
+---@field zoneTextFont             string
+---@field zoneTextSize             number
+---@field zoneTextX                number
+---@field zoneTextY                number
+---@field zoneTextR                number
+---@field zoneTextG                number
+---@field zoneTextB                number
+---@field zoneTextA                number
 
 
 ---@class CTScrollContainer: ScrollFrame
@@ -74,6 +83,10 @@
 ---@field origParent             Frame|nil
 ---@field mailIndicator          Frame|nil
 ---@field blizzTracking          Frame|nil
+---@field blizzInstanceDifficulty Frame|nil
+---@field blizzZoneText          Frame|nil
+---@field zoneTextFrame          Frame|nil
+---@field zoneText               FontString|nil
 ---@field origW                  number
 ---@field origH                  number
 ---@field origPoints             table
