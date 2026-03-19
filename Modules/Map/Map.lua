@@ -105,6 +105,8 @@ function map:GetDefaults()
             size                     = 200,
             alpha                    = 0.85,
             growSize                 = 420,
+            growShape                = "rectangle",
+            locked                   = true,
             zoom                     = 2,
             growZoom                 = 3,
             point                    = "TOPRIGHT",
@@ -147,187 +149,233 @@ function map:GetOptions()
         order = 8,
         args = {
             description = {
-                name = 'A clean, resizable minimap overlay. Drag to reposition. Scroll wheel to zoom.',
-                type = 'description',
+                name  = 'A clean, resizable minimap overlay. Drag to reposition. Scroll wheel to zoom.',
+                type  = 'description',
                 order = 1,
             },
             enabled = {
-                name = 'Enable',
-                desc = 'Replace the default minimap chrome with the clean overlay.',
-                type = 'toggle',
+                name  = 'Enable',
+                desc  = 'Replace the default minimap chrome with the clean overlay.',
+                type  = 'toggle',
                 order = 2,
-                get = function() return addon.db.profile.minimap.enabled end,
-                set = function(_, value)
+                get   = function() return addon.db.profile.minimap.enabled end,
+                set   = function(_, value)
                     addon.db.profile.minimap.enabled = value
                     if value then map:Enable() else map:Disable() end
                 end,
             },
-            shape = {
-                name   = 'Shape',
-                desc   = 'Square: full square. Rectangle: wide letterbox.',
-                type   = 'select',
+            appearance = {
+                name   = 'Appearance',
+                type   = 'group',
+                inline = true,
                 order  = 3,
-                values = { square = 'Square', rectangle = 'Rectangle' },
-                get    = function() return addon.db.profile.minimap.shape end,
-                set    = function(_, value)
-                    addon.db.profile.minimap.shape = value
-                    map.applySettings()
-                end,
+                args   = {
+                    shape = {
+                        name   = 'Shape',
+                        desc   = 'Square: full square. Rectangle: wide letterbox.',
+                        type   = 'select',
+                        order  = 1,
+                        values = { square = 'Square', rectangle = 'Rectangle' },
+                        get    = function() return addon.db.profile.minimap.shape end,
+                        set    = function(_, value)
+                            addon.db.profile.minimap.shape = value
+                            map.applySettings()
+                        end,
+                    },
+                    size = {
+                        name  = 'Size',
+                        desc  = 'Normal minimap width in pixels.',
+                        type  = 'range',
+                        order = 2,
+                        min   = 100,
+                        max   = 500,
+                        step  = 10,
+                        get   = function() return addon.db.profile.minimap.size end,
+                        set   = function(_, value)
+                            addon.db.profile.minimap.size = value
+                            map.applySettings()
+                        end,
+                    },
+                    alpha = {
+                        name  = 'Opacity',
+                        desc  = 'Transparency of the minimap overlay.',
+                        type  = 'range',
+                        order = 3,
+                        min   = 0.1,
+                        max   = 1.0,
+                        step  = 0.05,
+                        get   = function() return addon.db.profile.minimap.alpha end,
+                        set   = function(_, value)
+                            addon.db.profile.minimap.alpha = value
+                            if map.container then map.container:SetAlpha(value) end
+                        end,
+                    },
+                    locked = {
+                        name  = 'Lock Position',
+                        desc  = 'Lock the minimap in place. Disable to show the drag handle.',
+                        type  = 'toggle',
+                        order = 4,
+                        get   = function() return addon.db.profile.minimap.locked end,
+                        set   = function(_, value)
+                            addon.db.profile.minimap.locked = value
+                            map.applyLock()
+                        end,
+                    },
+                },
             },
-            size = {
-                name = 'Size',
-                desc = 'Normal minimap width in pixels.',
-                type = 'range',
-                order = 4,
-                min = 100,
-                max = 500,
-                step = 10,
-                get = function() return addon.db.profile.minimap.size end,
-                set = function(_, value)
-                    addon.db.profile.minimap.size = value
-                    map.applySettings()
-                end,
+            expandedView = {
+                name   = 'Expanded View',
+                type   = 'group',
+                inline = true,
+                order  = 4,
+                args   = {
+                    growShape = {
+                        name   = 'Shape',
+                        desc   = 'Minimap shape when expanded.',
+                        type   = 'select',
+                        order  = 1,
+                        values = { square = 'Square', rectangle = 'Rectangle' },
+                        get    = function() return addon.db.profile.minimap.growShape end,
+                        set    = function(_, value)
+                            addon.db.profile.minimap.growShape = value
+                            if map.grown then map.applySettings() end
+                        end,
+                    },
+                    growSize = {
+                        name  = 'Size',
+                        desc  = 'Width when the minimap is expanded.',
+                        type  = 'range',
+                        order = 2,
+                        min   = 200,
+                        max   = 800,
+                        step  = 10,
+                        get   = function() return addon.db.profile.minimap.growSize end,
+                        set   = function(_, value) addon.db.profile.minimap.growSize = value end,
+                    },
+                },
             },
-            alpha = {
-                name = 'Opacity',
-                desc = 'Transparency of the minimap overlay.',
-                type = 'range',
-                order = 5,
-                min = 0.1,
-                max = 1.0,
-                step = 0.05,
-                get = function() return addon.db.profile.minimap.alpha end,
-                set = function(_, value)
-                    addon.db.profile.minimap.alpha = value
-                    if map.container then map.container:SetAlpha(value) end
-                end,
+            worldMap = {
+                name   = 'World Map',
+                type   = 'group',
+                inline = true,
+                order  = 5,
+                args   = {
+                    worldMapCentered = {
+                        name  = 'Map-Centered',
+                        desc  = 'Center the world map on the map origin instead of the player.',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function() return addon.db.profile.minimap.worldMapCentered end,
+                        set   = function(_, value) addon.db.profile.minimap.worldMapCentered = value end,
+                    },
+                },
             },
-            growSize = {
-                name = 'Grown Size',
-                desc = 'Width while the grow key is held.',
-                type = 'range',
-                order = 6,
-                min = 200,
-                max = 800,
-                step = 10,
-                get = function() return addon.db.profile.minimap.growSize end,
-                set = function(_, value) addon.db.profile.minimap.growSize = value end,
+            fadeOnMove = {
+                name   = 'Fade on Move',
+                type   = 'group',
+                inline = true,
+                order  = 6,
+                args   = {
+                    moveAlphaEnabled = {
+                        name  = 'Enable',
+                        desc  = 'Fade the minimap while the player is moving.',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function() return addon.db.profile.minimap.moveAlphaEnabled end,
+                        set   = function(_, value) addon.db.profile.minimap.moveAlphaEnabled = value end,
+                    },
+                    moveAlpha = {
+                        name     = 'Opacity',
+                        desc     = 'Opacity while the player is moving.',
+                        type     = 'range',
+                        order    = 2,
+                        min      = 0.0,
+                        max      = 1.0,
+                        step     = 0.05,
+                        disabled = function() return not addon.db.profile.minimap.moveAlphaEnabled end,
+                        get      = function() return addon.db.profile.minimap.moveAlpha end,
+                        set      = function(_, value) addon.db.profile.minimap.moveAlpha = value end,
+                    },
+                },
             },
-            -- zoom = {
-            --     name  = 'Default Zoom',
-            --     desc  = 'Zoom level when the minimap is at normal size.',
-            --     type  = 'range',
-            --     order = 7,
-            --     min   = 0,
-            --     max   = 5,
-            --     step  = 1,
-            --     get   = function() return addon.db.profile.minimap.zoom end,
-            --     set   = function(_, value)
-            --         addon.db.profile.minimap.zoom = value
-            --         map.applyZoom()
-            --     end,
-            -- },
-            -- growZoom = {
-            --     name  = 'Grown Zoom',
-            --     desc  = 'Zoom level when the minimap is grown.',
-            --     type  = 'range',
-            --     order = 8,
-            --     min   = 0,
-            --     max   = 5,
-            --     step  = 1,
-            --     get   = function() return addon.db.profile.minimap.growZoom end,
-            --     set   = function(_, value)
-            --         addon.db.profile.minimap.growZoom = value
-            --         map.applyZoom()
-            --     end,
-            -- },
-            worldMapCentered = {
-                name = 'Map Centered World Map',
-                desc = 'Center the world map on the map origin instead of the player.',
-                type = 'toggle',
-                order = 9,
-                get = function() return addon.db.profile.minimap.worldMapCentered end,
-                set = function(_, value) addon.db.profile.minimap.worldMapCentered = value end,
+            toolbar = {
+                name   = 'Toolbar',
+                type   = 'group',
+                inline = true,
+                order  = 7,
+                args   = {
+                    toolbarDock = {
+                        name   = 'Position',
+                        desc   = 'Dock the toolbar above or below the minimap.',
+                        type   = 'select',
+                        order  = 1,
+                        values = { top = 'Top', bottom = 'Bottom' },
+                        get    = function() return addon.db.profile.minimap.toolbarDock end,
+                        set    = function(_, value)
+                            addon.db.profile.minimap.toolbarDock = value
+                            map.applyToolbarPosition()
+                        end,
+                    },
+                },
             },
-            moveAlphaEnabled = {
-                name = 'Fade on Move',
-                desc = 'Fade the minimap while the player is moving.',
-                type = 'toggle',
-                order = 10,
-                get = function() return addon.db.profile.minimap.moveAlphaEnabled end,
-                set = function(_, value) addon.db.profile.minimap.moveAlphaEnabled = value end,
-            },
-            moveAlpha = {
-                name = 'Move Alpha',
-                desc = 'Opacity while the player is moving.',
-                type = 'range',
-                order = 11,
-                min = 0.0,
-                max = 1.0,
-                step = 0.05,
-                get = function() return addon.db.profile.minimap.moveAlpha end,
-                set = function(_, value) addon.db.profile.minimap.moveAlpha = value end,
-            },
-            toolbarDock = {
-                name   = 'Toolbar Position',
-                desc   = 'Dock the toolbar above or below the minimap.',
-                type   = 'select',
-                order  = 12,
-                values = { top = 'Top', bottom = 'Bottom' },
-                get    = function() return addon.db.profile.minimap.toolbarDock end,
-                set    = function(_, value)
-                    addon.db.profile.minimap.toolbarDock = value
-                    map.applyToolbarPosition()
-                end,
-            },
-            borderEnabled = {
-                name = 'Border',
-                desc = 'Show a colored border around the minimap and world map.',
-                type = 'toggle',
-                order = 13,
-                get = function() return addon.db.profile.minimap.borderEnabled end,
-                set = function(_, value)
-                    addon.db.profile.minimap.borderEnabled = value
-                    map.applyBorder()
-                end,
-            },
-            borderSize = {
-                name = 'Border Size',
-                desc = 'Border thickness in pixels.',
-                type = 'range',
-                order = 14,
-                min = 1,
-                max = 20,
-                step = 1,
-                get = function() return addon.db.profile.minimap.borderSize end,
-                set = function(_, value)
-                    addon.db.profile.minimap.borderSize = value
-                    map.applyBorder()
-                end,
-            },
-            borderColor = {
-                name = 'Border Color',
-                type = 'color',
-                hasAlpha = true,
-                order = 15,
-                get = function()
-                    local db = addon.db.profile.minimap ---@type MinimapDB
-                    return db.borderR, db.borderG, db.borderB, db.borderA
-                end,
-                set = function(_, r, g, b, a)
-                    local db = addon.db.profile.minimap ---@type MinimapDB
-                    db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
-                    map.applyBorder()
-                end,
+            border = {
+                name   = 'Border',
+                type   = 'group',
+                inline = true,
+                order  = 8,
+                args   = {
+                    borderEnabled = {
+                        name  = 'Enable',
+                        desc  = 'Show a colored border around the minimap and world map.',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function() return addon.db.profile.minimap.borderEnabled end,
+                        set   = function(_, value)
+                            addon.db.profile.minimap.borderEnabled = value
+                            map.applyBorder()
+                        end,
+                    },
+                    borderSize = {
+                        name     = 'Size',
+                        desc     = 'Border thickness in pixels.',
+                        type     = 'range',
+                        order    = 2,
+                        min      = 1,
+                        max      = 20,
+                        step     = 1,
+                        disabled = function() return not addon.db.profile.minimap.borderEnabled end,
+                        get      = function() return addon.db.profile.minimap.borderSize end,
+                        set      = function(_, value)
+                            addon.db.profile.minimap.borderSize = value
+                            map.applyBorder()
+                        end,
+                    },
+                    borderColor = {
+                        name     = 'Color',
+                        type     = 'color',
+                        hasAlpha = true,
+                        order    = 3,
+                        disabled = function() return not addon.db.profile.minimap.borderEnabled end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.borderR, db.borderG, db.borderB, db.borderA
+                        end,
+                        set      = function(_, r, g, b, a)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.borderR, db.borderG, db.borderB, db.borderA = r, g, b, a
+                            map.applyBorder()
+                        end,
+                    },
+                },
             },
             zoneText = {
                 name   = 'Zone Text',
                 type   = 'group',
                 inline = true,
-                order  = 16,
+                order  = 9,
                 args   = {
                     enabled = {
-                        name  = 'Show Zone Text',
+                        name  = 'Enable',
                         type  = 'toggle',
                         order = 1,
                         get   = function()
@@ -344,9 +392,7 @@ function map:GetOptions()
                         name     = 'Font',
                         type     = 'select',
                         order    = 2,
-                        disabled = function()
-                            return not addon.db.profile.minimap.zoneTextEnabled
-                        end,
+                        disabled = function() return not addon.db.profile.minimap.zoneTextEnabled end,
                         values   = {
                             ["Fonts\\FRIZQT__.TTF"] = "Friz Quadrata",
                             ["Fonts\\MORPHEUS.TTF"] = "Morpheus",
@@ -370,9 +416,7 @@ function map:GetOptions()
                         min      = 8,
                         max      = 24,
                         step     = 1,
-                        disabled = function()
-                            return not addon.db.profile.minimap.zoneTextEnabled
-                        end,
+                        disabled = function() return not addon.db.profile.minimap.zoneTextEnabled end,
                         get      = function()
                             local db = addon.db.profile.minimap ---@type MinimapDB
                             return db.zoneTextSize
@@ -388,9 +432,7 @@ function map:GetOptions()
                         type     = 'color',
                         hasAlpha = false,
                         order    = 4,
-                        disabled = function()
-                            return not addon.db.profile.minimap.zoneTextEnabled
-                        end,
+                        disabled = function() return not addon.db.profile.minimap.zoneTextEnabled end,
                         get      = function()
                             local db = addon.db.profile.minimap ---@type MinimapDB
                             return db.zoneTextR, db.zoneTextG, db.zoneTextB
@@ -408,9 +450,7 @@ function map:GetOptions()
                         min      = -200,
                         max      = 200,
                         step     = 1,
-                        disabled = function()
-                            return not addon.db.profile.minimap.zoneTextEnabled
-                        end,
+                        disabled = function() return not addon.db.profile.minimap.zoneTextEnabled end,
                         get      = function()
                             local db = addon.db.profile.minimap ---@type MinimapDB
                             return db.zoneTextX
@@ -428,9 +468,7 @@ function map:GetOptions()
                         min      = -200,
                         max      = 200,
                         step     = 1,
-                        disabled = function()
-                            return not addon.db.profile.minimap.zoneTextEnabled
-                        end,
+                        disabled = function() return not addon.db.profile.minimap.zoneTextEnabled end,
                         get      = function()
                             local db = addon.db.profile.minimap ---@type MinimapDB
                             return db.zoneTextY

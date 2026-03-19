@@ -39,27 +39,44 @@ function map.createContainer(w, h)
     map.container:SetPoint(db.point, UIParent, db.point, db.x, db.y)
     map.container:SetClipsChildren(true)
     map.container:SetAlpha(db.alpha)
-    map.container:SetFrameStrata("LOW")
+    map.container:SetFrameStrata("MEDIUM")
+    map.container:SetFrameLevel(69)
 
-    -- Drag-to-move: thin bar at the top so the Minimap's own click handling doesn't interfere
+    -- Drag-to-move: small handle in the top-right corner, visible only when unlocked
     map.container:SetMovable(true)
     map.container:SetClampedToScreen(true)
-    map.container:SetClampRectInsets(0, 0, math_ceil((w - h) / 2), math_ceil((w - h) / 2))
-    map.dragBar = CreateFrame("Frame", nil, map.container)
-    map.dragBar:SetHeight(10)
-    map.dragBar:SetPoint("TOPLEFT", map.container, "TOPLEFT")
-    map.dragBar:SetPoint("TOPRIGHT", map.container, "TOPRIGHT")
-    map.dragBar:SetFrameLevel(map.container:GetFrameLevel() + 200)
-    map.dragBar:EnableMouse(true)
-    map.dragBar:RegisterForDrag("LeftButton")
-    map.dragBar:SetScript("OnDragStart", function() map.container:StartMoving() end)
-    map.dragBar:SetScript("OnDragStop", function()
+    map.container:SetClampRectInsets(-4, 4, math_ceil((w - h) / 2), math_ceil((w - h) / 2))
+    map.dragHandle = CreateFrame("Frame", nil, map.container)
+    map.dragHandle:SetSize(20, 20)
+    map.dragHandle:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", 0, 0)
+    map.dragHandle:SetFrameLevel(map.container:GetFrameLevel() + 200)
+    map.dragHandle:EnableMouse(true)
+    map.dragHandle:RegisterForDrag("LeftButton")
+    map.dragHandle:SetScript("OnDragStart", function() map.container:StartMoving() end)
+    map.dragHandle:SetScript("OnDragStop", function()
         map.container:StopMovingOrSizing()
         local pt, _, _, ox, oy = map.container:GetPoint()
         db.point = pt
         db.x = ox
         db.y = oy
     end)
+
+    local handle_bg = map.dragHandle:CreateTexture(nil, "BACKGROUND")
+    handle_bg:SetAllPoints(map.dragHandle)
+    handle_bg:SetColorTexture(0, 0, 0, 1)
+
+    local handle_fill = map.dragHandle:CreateTexture(nil, "ARTWORK")
+    handle_fill:SetPoint("TOPLEFT", map.dragHandle, "TOPLEFT", 1, -1)
+    handle_fill:SetPoint("BOTTOMRIGHT", map.dragHandle, "BOTTOMRIGHT", -1, 1)
+    handle_fill:SetColorTexture(0, 0.8, 0.2, 0.9)
+
+    map.dragHandle:SetShown(not db.locked)
+end
+
+function map.applyLock()
+    if not map.dragHandle then return end
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    map.dragHandle:SetShown(not db.locked)
 end
 
 --#endregion
@@ -349,19 +366,21 @@ local function toggle_grow()
     -- Guard: ignore re-toggle while animation is already running
     if map.growTransition.active then return end
 
-    local db = addon.db.profile.minimap ---@type MinimapDB
+    local db             = addon.db.profile.minimap ---@type MinimapDB
     local from_w, from_h = map.container:GetSize()
-    local size = map.grown and db.growSize or db.size
-    local to_w, to_h = map.MapUtils.size_for_shape(db.shape, size)
+    local size           = map.grown and db.growSize or db.size
+    local shape          = map.grown and db.growShape or db.shape
+    local to_w, to_h     = map.MapUtils.size_for_shape(shape, size)
 
-    local gt = map.growTransition
-    gt.active = true
-    gt.elapsed = 0
-    gt.fromW = from_w
-    gt.fromH = from_h
-    gt.toW = to_w
-    gt.toH = to_h
-    gt.lastZoomAt = 0
+    local gt             = map.growTransition
+    gt.active            = true
+    gt.elapsed           = 0
+    gt.fromW             = from_w
+    gt.fromH             = from_h
+    gt.toW               = to_w
+    gt.toH               = to_h
+    gt.animShape         = db.growShape
+    gt.lastZoomAt        = 0
 end
 
 -- Expose as a global so Bindings.xml can invoke it by name

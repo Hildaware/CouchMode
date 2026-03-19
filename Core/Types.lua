@@ -13,6 +13,8 @@
 ---@field size                     number
 ---@field alpha                    number
 ---@field growSize                 number
+---@field growShape                "square"|"rectangle"
+---@field locked                   boolean
 ---@field zoom                     number
 ---@field growZoom                 number
 ---@field point                    string
@@ -93,7 +95,9 @@
 ---@field hybridMinimap          Frame|nil
 ---@field origCircleMaskTexture  string|nil
 ---@field rectMask               MaskTexture|nil
----@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number }
+---@field growTransition         { active: boolean, elapsed: number, fromW: number, fromH: number, toW: number, toH: number, lastZoomAt: number, animShape: string }
+---@field dragHandle             Frame|nil
+---@field applyLock              fun()
 ---@field toolbar                MapToolbar|nil
 ---@field toolbarBorders         table|nil
 ---@field wrapper                Frame

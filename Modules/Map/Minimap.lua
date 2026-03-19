@@ -115,9 +115,10 @@ end
 
 function map.applySettings()
     if not map.container then return end
-    local db = addon.db.profile.minimap ---@type MinimapDB
-    local size = map.grown and db.growSize or db.size
-    local w, h = map.MapUtils.size_for_shape(db.shape, size)
+    local db    = addon.db.profile.minimap ---@type MinimapDB
+    local size  = map.grown and db.growSize or db.size
+    local shape = map.grown and db.growShape or db.shape
+    local w, h  = map.MapUtils.size_for_shape(shape, size)
 
     map.container:SetSize(w, h)
     map.container:SetAlpha(db.alpha)
@@ -126,7 +127,7 @@ function map.applySettings()
     map.container:SetClampRectInsets(0, 0, offset, offset)
     Minimap:ClearAllPoints()
     Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, offset)
-    apply_minimap_shape(db.shape, w, h)
+    apply_minimap_shape(shape, w, h)
     map.applyBorder()
     map.applyZoneText()
 end
@@ -146,6 +147,7 @@ function map.updateGrowTransition(elapsed)
     Minimap:ClearAllPoints()
     Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, off)
     Minimap:SetSize(cw, cw)
+    apply_minimap_shape(gt.animShape, cw, ch)
     if (gt.elapsed - gt.lastZoomAt) >= 0.005 then
         gt.lastZoomAt = gt.elapsed
         local cz = Minimap:GetZoom()
@@ -228,6 +230,7 @@ function map.createFrame()
     Minimap:SetParent(map.container)
     Minimap:ClearAllPoints()
     Minimap:SetPoint("CENTER", map.container, "CENTER")
+    Minimap:SetFrameLevel(map.container:GetFrameLevel() + 1)
     Minimap:SetSize(w, w)
     apply_minimap_shape(db.shape, w, h)
     Minimap:Show()
