@@ -156,12 +156,11 @@ end
 function map.updateZoomIndicatorIcons()
     local zi = map.zoomIndicator
     if not zi then return end
-    local cp = _G['ConsolePort']
-    if not cp then
+    if not ConsolePort then
         zi.ltTex:Hide(); zi.rtTex:Hide()
         return
     end
-    local device = cp:GetData().Gamepad:GetActiveDevice()
+    local device = ConsolePort:GetData().Gamepad:GetActiveDevice()
     if not device then
         zi.ltTex:Hide(); zi.rtTex:Hide()
         return
@@ -179,8 +178,8 @@ function map.updateZoomIndicatorIcons()
         end
         tex:Show()
     end
-    apply(zi.ltTex, 'PADLTRIGGER')
-    apply(zi.rtTex, 'PADRTRIGGER')
+    apply(zi.ltTex, 'PADLSHOULDER')
+    apply(zi.rtTex, 'PADRSHOULDER')
     zi.cpDevice = device
 
     zi:ClearAllPoints()
@@ -196,8 +195,7 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
 
     if map.worldMapOpen and map.worldMap then
         -- Refresh trigger icons if the active controller device changed
-        local cp = _G['ConsolePort']
-        local cur_device = cp and cp:GetData().Gamepad:GetActiveDevice()
+        local cur_device = ConsolePort and ConsolePort:GetData().Gamepad:GetActiveDevice()
         if cur_device ~= zi.cpDevice then
             map.updateZoomIndicatorIcons()
         end
@@ -262,9 +260,8 @@ function map.setupContainerScripts()
     map.createMailIndicator()
     map.createZoomIndicator()
 
-    local cp = _G['ConsolePort']
-    if cp then
-        cp:GetData():RegisterCallback('Gamepad/Active', map.updateZoomIndicatorIcons)
+    if ConsolePort then
+        ConsolePort:GetData():RegisterCallback('Gamepad/Active', map.updateZoomIndicatorIcons)
         map.updateZoomIndicatorIcons()
     end
 
@@ -358,8 +355,8 @@ local function toggle_grow()
             ConsolePort:AddInterfaceCursorFrame(map.toolbar)
             local ih = _G['ConsolePortInputHandler']
             if ih and not InCombatLockdown() then
-                ih:SetCommand('PADRSHOULDER', map.container, false, 'LeftButton', 'ZoomIn', nil)
-                ih:SetCommand('PADLSHOULDER', map.container, false, 'LeftButton', 'ZoomOut', nil)
+                ih:SetCommand('PADRSHOULDER', map.container, true, 'LeftButton', 'ZoomIn', nil)
+                ih:SetCommand('PADLSHOULDER', map.container, true, 'LeftButton', 'ZoomOut', nil)
             end
         end
     end

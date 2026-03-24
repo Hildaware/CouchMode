@@ -12,11 +12,18 @@ local CreateFrame    = _G.CreateFrame
 local UIParent       = _G.UIParent
 
 TOOLBAR_BUTTON_TYPE  = {
-    MINIMAP = 1,
+    MINIMAP   = 1,
     WORLD_MAP = 2,
 }
 
 --#region ── Button definitions ───────────────────────────────────────────────
+
+local poi_defs = {
+    { btn = "poiBtnQuests",     atlas = "QuestNormal",             tooltip = "Quest Labels",      db = "poiLabelsShowQuests"    },
+    { btn = "poiBtnRares",      atlas = "VignetteKill",            tooltip = "Rare Labels",       db = "poiLabelsShowRares"     },
+    { btn = "poiBtnTreasures",  atlas = "VignetteTreasure",        tooltip = "Treasure Labels",   db = "poiLabelsShowTreasures" },
+    { btn = "poiBtnPetTamers",  atlas = "WildBattlePetCapturable", tooltip = "Pet Tamer Labels",  db = "poiLabelsShowPetTamers" },
+}
 
 local world_map_defs = {
     { btn = "wmBtnWQ",       atlas = "worldquest-tracker-questmarker", tooltip = "World Quests",   dps = { "wmDpWorldQuests" },                          db = "worldMapShowWorldQuests" },
@@ -86,8 +93,10 @@ end
 --#region ── Button visibility ────────────────────────────────────────────────
 
 local function toggle_minimap_buttons(visible)
+    local db = addon.db.profile.minimap ---@type MinimapDB
     for _, entry in ipairs(map.toolbar.buttons[TOOLBAR_BUTTON_TYPE.MINIMAP]) do
-        entry.frame:SetAlpha(visible and 1 or 0)
+        local alpha = visible and (entry.db and (db[entry.db] and 1 or 0.4) or 1) or 0
+        entry.frame:SetAlpha(alpha)
         entry.frame:SetShown(visible)
     end
 end
@@ -154,6 +163,24 @@ function map.createToolbar()
         map[config.btn] = btn
         map.toolbar.buttons[TOOLBAR_BUTTON_TYPE.MINIMAP][i] = { frame = btn }
         if config.blizz then config.setup(btn, config.blizz) end
+        prev_btn = btn
+    end
+
+    -- POI label filter toggle buttons
+    local n = #map.toolbar.buttons[TOOLBAR_BUTTON_TYPE.MINIMAP]
+    for i, config in ipairs(poi_defs) do
+        local btn
+        btn = map.MapUtils.create_toolbar_button(map.toolbar, config.atlas, function()
+            db[config.db] = not db[config.db]
+            btn.selected_bg:SetShown(db[config.db])
+            btn:SetAlpha(db[config.db] and 1 or 0.4)
+            map.updatePOILabels()
+        end, config.tooltip)
+
+        btn:SetPoint("RIGHT", prev_btn, "LEFT", i == 1 and -4 or -2, 0)
+        btn.selected_bg:SetShown(db[config.db])
+        map[config.btn] = btn
+        map.toolbar.buttons[TOOLBAR_BUTTON_TYPE.MINIMAP][n + i] = { frame = btn, db = config.db }
         prev_btn = btn
     end
 

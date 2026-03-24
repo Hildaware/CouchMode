@@ -129,6 +129,13 @@ function map:GetDefaults()
             borderG                  = 1,
             borderB                  = 1,
             borderA                  = 1,
+            poiLabelsEnabled         = false,
+            poiLabelsFontSize        = 9,
+            poiLabelsAlpha           = 0.9,
+            poiLabelsShowQuests      = true,
+            poiLabelsShowRares       = true,
+            poiLabelsShowTreasures   = true,
+            poiLabelsShowPetTamers   = true,
             zoneTextEnabled          = false,
             zoneTextFont             = "Fonts\\FRIZQT__.TTF",
             zoneTextSize             = 11,
@@ -477,6 +484,65 @@ function map:GetOptions()
                             local db = addon.db.profile.minimap ---@type MinimapDB
                             db.zoneTextY = value
                             map.applyZoneText()
+                        end,
+                    },
+                },
+            },
+            poiLabels = {
+                name   = 'POI Labels',
+                type   = 'group',
+                inline = true,
+                order  = 10,
+                args   = {
+                    enabled = {
+                        name  = 'Enable',
+                        desc  = 'Show quest objective and rare/vignette names as labels on the minimap.',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.poiLabelsEnabled
+                        end,
+                        set   = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.poiLabelsEnabled = value
+                            map.applyPOILabels()
+                        end,
+                    },
+                    fontSize = {
+                        name     = 'Font Size',
+                        type     = 'range',
+                        order    = 2,
+                        min      = 7,
+                        max      = 16,
+                        step     = 1,
+                        disabled = function() return not addon.db.profile.minimap.poiLabelsEnabled end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.poiLabelsFontSize
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.poiLabelsFontSize = value
+                            map.applyPOILabels()
+                        end,
+                    },
+                    alpha = {
+                        name     = 'Opacity',
+                        type     = 'range',
+                        order    = 3,
+                        min      = 0.1,
+                        max      = 1.0,
+                        step     = 0.05,
+                        disabled = function() return not addon.db.profile.minimap.poiLabelsEnabled end,
+                        get      = function()
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            return db.poiLabelsAlpha
+                        end,
+                        set      = function(_, value)
+                            local db = addon.db.profile.minimap ---@type MinimapDB
+                            db.poiLabelsAlpha = value
+                            map.applyPOILabels()
                         end,
                     },
                 },

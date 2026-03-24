@@ -177,13 +177,21 @@ function map.updateGrowTransition(elapsed)
 end
 
 function map.zoomMinimap(delta)
+    local zoom     = Minimap:GetZoom()
+    local max_zoom = Minimap:GetZoomLevels() - 1
     if delta > 0 then
-        if Minimap.ZoomIn then Minimap.ZoomIn:Click() end
+        if Minimap.ZoomIn then
+            Minimap.ZoomIn:Click('LeftButton')
+        else
+            Minimap:SetZoom(math_min(zoom + 1, max_zoom))
+        end
     else
-        if Minimap:GetZoom() == 0 then
+        if zoom == 0 and map.grown then
             map.openWorldMap()
         elseif Minimap.ZoomOut then
-            Minimap.ZoomOut:Click()
+            Minimap.ZoomOut:Click('LeftButton')
+        else
+            Minimap:SetZoom(math_max(zoom - 1, 0))
         end
     end
 end
@@ -277,30 +285,10 @@ function map.createFrame()
     map.setupContainerScripts()
     map.createZoneText()
 
-    -- Scroll handler: intercepts scroll-out-at-zero-zoom to open the world map
     Minimap:EnableMouseWheel(true)
     Minimap:SetScript("OnMouseWheel", function(_, delta)
-        if map.worldMapOpen then return end -- world map is visible; ignore
-        local zoom = Minimap:GetZoom()
-        local max_zoom = Minimap:GetZoomLevels() - 1
-        if delta < 0 and zoom == 0 and map.grown then
-            map.openWorldMap()
-            return
-        end
-
-        if delta > 0 then
-            if Minimap.ZoomIn then
-                Minimap.ZoomIn:Click("LeftButton")
-            else
-                Minimap:SetZoom(math_min(zoom + 1, max_zoom))
-            end
-        else
-            if Minimap.ZoomOut then
-                Minimap.ZoomOut:Click("LeftButton")
-            else
-                Minimap:SetZoom(math_max(zoom - 1, 0))
-            end
-        end
+        if map.worldMapOpen then return end
+        map.zoomMinimap(delta)
     end)
 
     Minimap:HookScript("OnEnter", function()
@@ -312,59 +300,64 @@ function map.createFrame()
         end
     end)
 
-    map.container:EnableGamePadButton(true)
-    map.container:SetScript('OnGamePadButtonDown', function(_, key)
-        if InCombatLockdown() then
-            map.container:SetPropagateKeyboardInput(true)
-            return
-        end
-        if not map.grown then
-            map.container:SetPropagateKeyboardInput(true)
-            return
-        end
-
-        local handled = false
-        -- if map.toolbar and map.toolbar:IsShown() then
-        --     if key == 'PADDLEFT' or key == 'PADLSHOULDER' then
-        --         map.navigate(-1); handled = true
-        --     elseif key == 'PADDRIGHT' or key == 'PADRSHOULDER' then
-        --         map.navigate(1); handled = true
-        --     elseif key == 'PADBTM1' and map.focused_btn then
-        --         map.focused_btn:Click(); handled = true
-        --     end
-        -- end
-
-        -- Triggers → zoom in/out on minimap or world map.
-        if key == 'PADRTRIGGER' then
-            if map.worldMapOpen then map.zoomWorldMap(1) else map.zoomMinimap(1) end
-            handled = true
-        elseif key == 'PADLTRIGGER' then
-            if map.worldMapOpen then map.zoomWorldMap(-1) else map.zoomMinimap(-1) end
-            handled = true
-        end
-
-        map.container:SetPropagateKeyboardInput(not handled)
-    end)
-
-    -- ConsolePort overrides the native handler above; shoulders handle navigation
-    -- via ih:SetCommand in toggle_grow, so here we only need trigger zoom.
     if ConsolePort then
-        map.container:SetPropagateKeyboardInput(true)
+        map.container:EnableGamePadButton(true)
 
-        map.container:SetScript('OnGamePadButtonDown', function(_, key)
-            if not map.grown or InCombatLockdown() then return end
+        local zoom_repeater = CreateFrame("Frame")
+        zoom_repeater:Hide()
+        local zoom_delta = 0
+        local zoom_timer = 0
 
-            local zoom_in  = key == 'PADRTRIGGER'
-            local zoom_out = key == 'PADLTRIGGER'
-            if not zoom_in and not zoom_out then return end
+        zoom_repeater:SetScript("OnUpdate", function(_, elapsed)
+            if not map.grown or InCombatLockdown() then
+                zoom_repeater:Hide()
+                return
+            end
+            zoom_timer = zoom_timer - elapsed
+            if zoom_timer <= 0 then
+                zoom_timer = 0.1 -- repeat delay
+                if map.worldMapOpen then map.zoomWorldMap(zoom_delta) else map.zoomMinimap(zoom_delta) end
+            end
+        end)
+
+        map.container:SetScript('OnGamePadButtonDown', function(self, key)
+            if not map.grown or InCombatLockdown() then
+                self:SetPropagateKeyboardInput(true)
+                return
+            end
+
+            local zoom_in  = key == 'PADRSHOULDER'
+            local zoom_out = key == 'PADLSHOULDER'
+
+            if not zoom_in and not zoom_out then
+                self:SetPropagateKeyboardInput(true)
+                return
+            end
+
+            -- Block input from reaching the game client so we get the Up event
+            self:SetPropagateKeyboardInput(false)
 
             local delta = zoom_in and 1 or -1
-            if map.worldMapOpen then map.zoomWorldMap(delta) else map.zoomMinimap(delta) end
+            if zoom_repeater:IsShown() and zoom_delta == delta then return end
+
+            zoom_delta = delta
+            if map.worldMapOpen then map.zoomWorldMap(zoom_delta) else map.zoomMinimap(zoom_delta) end
+            zoom_timer = 0.4 -- initial delay
+            zoom_repeater:Show()
+        end)
+
+        map.container:SetScript('OnGamePadButtonUp', function(self, key)
+            if key == 'PADRSHOULDER' or key == 'PADLSHOULDER' then
+                zoom_repeater:Hide()
+                -- Re-enable propagation since we are done intercepting
+                self:SetPropagateKeyboardInput(true)
+            end
         end)
     end
 
     map.applyZoom()
     map.applyZoneText()
+    if map.createPOILabelPool then map.createPOILabelPool() end
 end
 
 --#endregion

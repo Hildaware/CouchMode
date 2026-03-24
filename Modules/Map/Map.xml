@@ -4,5 +4,6 @@
     <Include file='Toolbar.lua'/>
     <Include file='Container.lua'/>
     <Include file='Minimap.lua'/>
+    <Include file='MinimapPOI.lua'/>
     <Include file='WorldMap.lua'/>
 </UI>

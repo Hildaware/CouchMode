@@ -46,12 +46,20 @@
 ---@field zoneTextG                number
 ---@field zoneTextB                number
 ---@field zoneTextA                number
+---@field poiLabelsEnabled         boolean
+---@field poiLabelsFontSize        number
+---@field poiLabelsAlpha           number
+---@field poiLabelsShowQuests      boolean
+---@field poiLabelsShowRares       boolean
+---@field poiLabelsShowTreasures   boolean
+---@field poiLabelsShowPetTamers   boolean
 
 
 ---@class CTScrollContainer: ScrollFrame
 ---@field Child                      Frame
 ---@field GetZoom                    fun(self: CTScrollContainer): number
 ---@field SetZoomTarget              fun(self: CTScrollContainer, z: number)
+---@field SetForceCenterFlag         fun(self: CTScrollContainer, v: boolean)
 ---@field GetCanvasScale             fun(self: CTScrollContainer): number
 ---@field IsAtMaxZoom                fun(self: CTScrollContainer): boolean
 ---@field GetCanvasZoomPercent       fun(self: CTScrollContainer): number
@@ -105,6 +113,10 @@
 ---@field borders                table|nil
 ---@field applyBorder            fun()
 ---@field applySettings          fun()
+---@field applyPOILabels         fun()
+---@field updatePOILabels        fun()
+---@field createPOILabelPool     fun()
+---@field poiLabelPool           Frame[]|nil
 ---@field createFrame            fun()
 ---@field worldMap               Frame|CTWorldMap
 ---@field worldMapArtW           number

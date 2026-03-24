@@ -222,11 +222,7 @@ local function create_world_map()
     end)
 
     scroll_container:SetScript("OnMouseWheel", function(_, delta)
-        if delta > 0 and zoom >= max_zoom then
-            map.onHideWorldMap()
-            return
-        end
-        apply_zoom(zoom * (delta > 0 and 1.25 or 0.8))
+        map.zoomWorldMap(delta)
     end)
 
     scroll_container:SetScript("OnUpdate", function()
@@ -280,7 +276,7 @@ local function create_world_map()
         local fit_zoom = math.min(cached_wrap_w / art_w, cached_wrap_h / art_h)
         zoom_entry = math.max(fit_zoom, math.min(fit_zoom * 2, cached_wrap_w / 2000))
         min_zoom = fit_zoom
-        max_zoom = zoom_entry * 4
+        max_zoom = zoom_entry * 2
         zoom = zoom_entry
         scroll_child:SetScale(zoom_entry)
         map.worldMapMinZoom = min_zoom
@@ -341,7 +337,6 @@ local function create_world_map()
         function(dp) dp.AdjustDetailLayerAlpha = function() end end)
     add_provider("MapCanvasCursorDataProviderMixin")
     add_provider("MapExplorationDataProviderMixin")
-    add_provider("GroupMembersDataProviderMixin")
     add_provider("VignetteDataProviderMixin")
     add_provider("QuestDataProviderMixin", "wmDpActiveQuests", "worldMapShowActiveQuests")
     add_provider("WorldQuestDataProviderMixin", "wmDpWorldQuests", "worldMapShowWorldQuests", function(dp)
@@ -356,6 +351,7 @@ local function create_world_map()
     add_provider("FlightPointDataProviderMixin", "wmDpTravel", "worldMapShowTravel")
     add_provider("MapLinkDataProviderMixin", "wmDpPortals", "worldMapShowTravel")
     add_provider("AreaPOIDataProviderMixin", "wmDpAreaPOI", "worldMapShowTravel")
+    add_provider("GroupMembersDataProviderMixin")
 
     map.worldMap = map_frame
 end
@@ -380,7 +376,6 @@ map.openWorldMap = function()
     end
     if map.resetWorldMapZoom then map.resetWorldMapZoom() end
     if map_id then
-
         for _, pool in pairs(map.worldMap.pinPools or {}) do
             for pin in pool:EnumerateActive() do
                 if pin.OnCanvasSizeChanged then pin:OnCanvasSizeChanged() end
@@ -391,6 +386,10 @@ map.openWorldMap = function()
         map.worldMap:SetMapID(map_id)
 
         local sc = map.worldMap.ScrollContainer
+
+        local open_zoom = map.worldMapMaxZoom
+        sc:SetZoomTarget(open_zoom)
+
         local cw, ch = sc.Child:GetSize()
         local vw, vh = map.container:GetSize()
         local entry_zoom = sc:GetZoom()
