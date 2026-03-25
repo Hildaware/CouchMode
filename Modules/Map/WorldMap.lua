@@ -188,6 +188,8 @@ local function create_world_map()
 
     function scroll_container:IsAtMaxZoom() return zoom >= max_zoom end
 
+    function scroll_container:IsAtMinZoom() return zoom <= min_zoom end
+
     function scroll_container:GetCanvasZoomPercent() return 0 end
 
     function scroll_container:GetCurrentLayerIndex() return 1 end
@@ -281,6 +283,40 @@ local function create_world_map()
         scroll_child:SetScale(zoom_entry)
         map.worldMapMinZoom = min_zoom
         map.worldMapMaxZoom = max_zoom
+    end
+
+    map.navigateToParentMap = function()
+        if not map.worldMap then return false end
+        local currentMapID = map.worldMap:GetMapID()
+        if not currentMapID then return false end
+
+        local info = C_Map.GetMapInfo(currentMapID)
+        local parentID = info and info.parentMapID
+        if not parentID or parentID <= 0 then return false end
+
+        local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(parentID)
+        local layer   = layers and layers[1]
+        if layer and layer.layerWidth and layer.layerWidth > 0 then
+            map.worldMapArtW = layer.layerWidth
+            map.worldMapArtH = layer.layerHeight
+            scroll_child:SetSize(layer.layerWidth, layer.layerHeight)
+        end
+
+        map.resetWorldMapZoom()
+        map.worldMap:SetMapID(parentID)
+
+        local sc = map.worldMap.ScrollContainer
+        sc:SetZoomTarget(map.worldMapMinZoom)
+
+        local cw, ch = sc.Child:GetSize()
+        local vw, vh = map.container:GetSize()
+        local z = sc:GetZoom()
+        if z > 0 then
+            sc:SetHorizontalScroll(cw / 2 - vw / (2 * z))
+            sc:SetVerticalScroll(ch / 2 - vh / (2 * z))
+        end
+
+        return true
     end
 
     map_frame:EnableMouse(true)
@@ -442,7 +478,11 @@ function map.zoomWorldMap(delta)
             sc:SetZoomTarget(sc:GetZoom() * 1.1)
         end
     else
-        sc:SetZoomTarget(sc:GetZoom() * 0.9)
+        if sc:IsAtMinZoom() then
+            map.navigateToParentMap()
+        else
+            sc:SetZoomTarget(sc:GetZoom() * 0.9)
+        end
     end
 end
 

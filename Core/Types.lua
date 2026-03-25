@@ -62,6 +62,7 @@
 ---@field SetForceCenterFlag         fun(self: CTScrollContainer, v: boolean)
 ---@field GetCanvasScale             fun(self: CTScrollContainer): number
 ---@field IsAtMaxZoom                fun(self: CTScrollContainer): boolean
+---@field IsAtMinZoom                fun(self: CTScrollContainer): boolean
 ---@field GetCanvasZoomPercent       fun(self: CTScrollContainer): number
 ---@field GetCurrentLayerIndex       fun(self: CTScrollContainer): number
 ---@field DenormalizeHorizontalSize  fun(self: CTScrollContainer, size: number): number
