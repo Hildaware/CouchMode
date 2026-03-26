@@ -106,6 +106,7 @@ local function create_world_map()
 
     local is_panning = false
     local has_panned = false
+    local force_centered = false
     local drag_start_x, drag_start_y = 0, 0
     local drag_start_scroll_h, drag_start_scroll_v = 0, 0
 
@@ -129,7 +130,7 @@ local function create_world_map()
             local zoom_diff = (1 / (2 * old_zoom)) - (1 / (2 * zoom))
             scroll_container:SetHorizontalScroll(scroll_container:GetHorizontalScroll() + cached_wrap_w * zoom_diff)
             scroll_container:SetVerticalScroll(scroll_container:GetVerticalScroll() + cached_wrap_h * zoom_diff)
-        elseif addon.db.profile.minimap.worldMapCentered then
+        elseif addon.db.profile.minimap.worldMapCentered or force_centered then
             scroll_container:SetHorizontalScroll(cached_child_w / 2 - half_w_zoom)
             scroll_container:SetVerticalScroll(cached_child_h / 2 - half_h_zoom)
         else
@@ -210,6 +211,7 @@ local function create_world_map()
         if button ~= "LeftButton" then return end
         is_panning = true
         has_panned = true
+        force_centered = false
         local s = scroll_container:GetEffectiveScale()
         local cx, cy = GetCursorPosition()
         drag_start_x = cx / s
@@ -238,7 +240,7 @@ local function create_world_map()
             return
         end
         if has_panned then return end
-        if addon.db.profile.minimap.worldMapCentered then return end
+        if addon.db.profile.minimap.worldMapCentered or force_centered then return end
         local map_id = map_frame.GetMapID and map_frame:GetMapID()
         if not map_id then return end
         local pos = C_Map.GetPlayerMapPosition(map_id, "player")
@@ -273,6 +275,7 @@ local function create_world_map()
     -- Reference: 500px growSize → ZOOM_ENTRY 0.25 → 500/0.25 = 2000 art px visible.
     map.resetWorldMapZoom = function()
         has_panned = false
+        force_centered = false
         local art_w = map.worldMapArtW or 2048
         local art_h = map.worldMapArtH or 2048
         local fit_zoom = math.min(cached_wrap_w / art_w, cached_wrap_h / art_h)
@@ -285,6 +288,8 @@ local function create_world_map()
         map.worldMapMaxZoom = max_zoom
     end
 
+    map.setForceCentered = function(v) force_centered = v end
+
     map.navigateToParentMap = function()
         if not map.worldMap then return false end
         local currentMapID = map.worldMap:GetMapID()
@@ -295,7 +300,7 @@ local function create_world_map()
         if not parentID or parentID <= 0 then return false end
 
         local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(parentID)
-        local layer   = layers and layers[1]
+        local layer  = layers and layers[1]
         if layer and layer.layerWidth and layer.layerWidth > 0 then
             map.worldMapArtW = layer.layerWidth
             map.worldMapArtH = layer.layerHeight
@@ -314,6 +319,20 @@ local function create_world_map()
         if z > 0 then
             sc:SetHorizontalScroll(cw / 2 - vw / (2 * z))
             sc:SetVerticalScroll(ch / 2 - vh / (2 * z))
+        end
+
+        force_centered = true
+
+        if map_frame.OnCanvasSizeChanged then
+            pcall(map_frame.OnCanvasSizeChanged, map_frame)
+        end
+
+        for _, pool in pairs(map_frame.pinPools or {}) do
+            for pin in pool:EnumerateActive() do
+                if pin.ApplyCurrentPosition then
+                    pcall(pin.ApplyCurrentPosition, pin)
+                end
+            end
         end
 
         return true
@@ -466,6 +485,7 @@ function map.openWorldMapFresh()
         sc:SetHorizontalScroll(cw / 2 - vw / (2 * z))
         sc:SetVerticalScroll(ch / 2 - vh / (2 * z))
     end
+    map.setForceCentered(true)
 end
 
 function map.zoomWorldMap(delta)

@@ -243,7 +243,9 @@
         "TOOLTIP_TRACKER_FIND_GROUP_BUTTON",
         "PERCENTAGE_STRING",
         "REWARDS",
-        "SetItemButtonTextureVertexColor"
+        "SetItemButtonTextureVertexColor",
+        "CORPSE_RED",
+        "SPIRIT_HEALER_RELEASE_RED"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [
