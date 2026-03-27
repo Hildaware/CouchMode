@@ -245,7 +245,8 @@
         "REWARDS",
         "SetItemButtonTextureVertexColor",
         "CORPSE_RED",
-        "SPIRIT_HEALER_RELEASE_RED"
+        "SPIRIT_HEALER_RELEASE_RED",
+        "WORLD_MAP_WILDBATTLEPET_LEVEL"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

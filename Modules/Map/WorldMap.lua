@@ -105,10 +105,12 @@ local function create_world_map()
     local cached_wrap_w, cached_wrap_h = map.container:GetSize()
 
     local is_panning = false
+    local drag_moved = false
     local has_panned = false
     local force_centered = false
     local drag_start_x, drag_start_y = 0, 0
     local drag_start_scroll_h, drag_start_scroll_v = 0, 0
+    local DRAG_THRESHOLD = 4 -- pixels before a press is considered a drag
 
     scroll_child:SetScript("OnSizeChanged", function(_, sw, sh)
         cached_child_w, cached_child_h = sw, sh
@@ -199,10 +201,22 @@ local function create_world_map()
 
     function scroll_container:MarkAreaTriggersDirty() end
 
+    function scroll_container:AdjustDetailLayerAlpha() end
+
     function scroll_container:GetCursorPosition()
         local x, y = GetCursorPosition()
         local s = self:GetEffectiveScale()
         return x / s, y / s
+    end
+
+    function scroll_container:GetNormalizedCursorPosition()
+        local x, y = self:GetCursorPosition()
+        local scale = self:GetCanvasScale()
+        if scale == 0 then scale = 1 end
+        local left = scroll_child:GetLeft() or 0
+        local top  = scroll_child:GetTop() or 0
+        return Saturate(self:NormalizeHorizontalSize(x / scale - left)),
+            Saturate(self:NormalizeVerticalSize(top - y / scale))
     end
 
     --#endregion
@@ -210,6 +224,7 @@ local function create_world_map()
     scroll_container:SetScript("OnMouseDown", function(_, button)
         if button ~= "LeftButton" then return end
         is_panning = true
+        drag_moved = false
         has_panned = true
         force_centered = false
         local s = scroll_container:GetEffectiveScale()
@@ -221,8 +236,18 @@ local function create_world_map()
     end)
 
     scroll_container:SetScript("OnMouseUp", function(_, button)
-        if button ~= "LeftButton" then return end
-        is_panning = false
+        if button == "LeftButton" then
+            is_panning = false
+            if not drag_moved then
+                local nx, ny = scroll_container:GetNormalizedCursorPosition()
+                local mapInfo = C_Map.GetMapInfoAtPosition(map_frame:GetMapID(), nx, ny)
+                if mapInfo then
+                    map.navigateToChildMap(mapInfo.mapID)
+                end
+            end
+        elseif button == "RightButton" then
+            map.navigateToParentMap()
+        end
     end)
 
     scroll_container:SetScript("OnMouseWheel", function(_, delta)
@@ -235,6 +260,9 @@ local function create_world_map()
             local cx, cy = GetCursorPosition()
             local dx = cx / s - drag_start_x
             local dy = cy / s - drag_start_y
+            if not drag_moved and (math.abs(dx) + math.abs(dy)) > DRAG_THRESHOLD then
+                drag_moved = true
+            end
             scroll_container:SetHorizontalScroll(drag_start_scroll_h - dx / zoom)
             scroll_container:SetVerticalScroll(drag_start_scroll_v + dy / zoom)
             return
@@ -260,6 +288,11 @@ local function create_world_map()
     map_frame:SetScript("OnShow", map_frame.OnShow)
     map_frame:SetScript("OnHide", map_frame.OnHide)
     map_frame:SetScript("OnEvent", map_frame.OnEvent)
+
+    -- AreDetailLayersLoaded stalls the exploration overlay because our scroll_container
+    -- is not a MapCanvasScrollControllerMixin so its detail layers never report as loaded.
+    -- Override to let the exploration pin restore alpha immediately.
+    map_frame.AreDetailLayersLoaded = function() return true end
 
     if map_frame.OnLoad then map_frame:OnLoad() end
 
@@ -335,7 +368,51 @@ local function create_world_map()
             end
         end
 
+        map_frame:RefreshAllDataProviders()
+
         return true
+    end
+
+    map.navigateToChildMap = function(childMapID)
+        if not map.worldMap then return end
+
+        local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(childMapID)
+        local layer  = layers and layers[1]
+        if layer and layer.layerWidth and layer.layerWidth > 0 then
+            map.worldMapArtW = layer.layerWidth
+            map.worldMapArtH = layer.layerHeight
+            scroll_child:SetSize(layer.layerWidth, layer.layerHeight)
+        end
+
+        map.resetWorldMapZoom()
+        map.worldMap:SetMapID(childMapID)
+
+        local sc = map.worldMap.ScrollContainer
+        sc:SetZoomTarget(map.worldMapMinZoom)
+
+        local cw, ch = sc.Child:GetSize()
+        local vw, vh = map.container:GetSize()
+        local z = sc:GetZoom()
+        if z > 0 then
+            sc:SetHorizontalScroll(cw / 2 - vw / (2 * z))
+            sc:SetVerticalScroll(ch / 2 - vh / (2 * z))
+        end
+
+        force_centered = true
+
+        if map_frame.OnCanvasSizeChanged then
+            pcall(map_frame.OnCanvasSizeChanged, map_frame)
+        end
+
+        for _, pool in pairs(map_frame.pinPools or {}) do
+            for pin in pool:EnumerateActive() do
+                if pin.ApplyCurrentPosition then
+                    pcall(pin.ApplyCurrentPosition, pin)
+                end
+            end
+        end
+
+        map_frame:RefreshAllDataProviders()
     end
 
     map_frame:EnableMouse(true)
@@ -343,7 +420,8 @@ local function create_world_map()
 
     -- Register pin frame levels needed by the providers below.
     local plm = map_frame:GetPinFrameLevelsManager()
-    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_EXPLORATION_TEXTURE")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_EXPLORATION")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_HIGHLIGHT")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_QUEST_PING")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_VIGNETTE", 200)
     plm:AddFrameLevel("PIN_FRAME_LEVEL_WORLD_QUEST", 500)
@@ -392,6 +470,8 @@ local function create_world_map()
         function(dp) dp.AdjustDetailLayerAlpha = function() end end)
     add_provider("MapCanvasCursorDataProviderMixin")
     add_provider("MapExplorationDataProviderMixin")
+    add_provider("MapHighlightDataProviderMixin")
+    add_provider("AreaLabelDataProviderMixin")
     add_provider("VignetteDataProviderMixin")
     add_provider("QuestDataProviderMixin", "wmDpActiveQuests", "worldMapShowActiveQuests")
     add_provider("WorldQuestDataProviderMixin", "wmDpWorldQuests", "worldMapShowWorldQuests", function(dp)
@@ -459,6 +539,10 @@ map.openWorldMap = function()
                 sc:SetHorizontalScroll(pos.x * cw - half_w_zoom)
                 sc:SetVerticalScroll(pos.y * ch - half_h_zoom)
             end
+        end
+
+        if map.worldMap.OnCanvasSizeChanged then
+            pcall(map.worldMap.OnCanvasSizeChanged, map.worldMap)
         end
     end
 
