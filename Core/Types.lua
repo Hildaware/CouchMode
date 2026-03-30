@@ -145,6 +145,14 @@
 ---@field wmDpPortals            table|nil
 ---@field wmDpAreaPOI            table|nil
 
+---@class NameplatesDB
+---@field enabled  boolean
+---@field font     string
+---@field fontSize number
+---@field fontFlag string
+
+---@class NameplatesModule: AceModule
+
 ---@class MinimapToolbarBtnConfig
 ---@field btn string
 ---@field atlas string

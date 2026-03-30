@@ -6,6 +6,6 @@
     <Include file = 'TooltipAutomation.lua' />
     <Include file = 'PlayerHealthBar.lua' />
     <Include file = 'GenericTools.lua' />
-    <Include file = 'Nameplates.lua' />
     <Include file = 'Map/Map.xml' />
+    <Include file = 'Nameplates/Nameplates.xml' />
 </UI>
