@@ -176,6 +176,7 @@ function nameplates.applyLayout(f, plateType)
         f.name:SetPoint("BOTTOMLEFT", f.bar, "TOPLEFT", 2, -6)
         f.name:SetJustifyH("LEFT")
         f.questIcon:SetPoint("RIGHT", f.name, "LEFT", 4, -6)
+        f.elite:SetPoint("RIGHT", f.name, "LEFT", 4, -6)
         f.mark:SetPoint("BOTTOM", f.bar, "TOP", 0, -6)
         f.guild:Hide()
     else -- PlateType.NameOnly
@@ -183,6 +184,7 @@ function nameplates.applyLayout(f, plateType)
         f.name:SetPoint("BOTTOM", f, "TOP")
         f.name:SetJustifyH("CENTER")
         f.questIcon:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
+        f.elite:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
         f.mark:SetPoint("BOTTOM", f.name, "TOP", 0, 2)
     end
 

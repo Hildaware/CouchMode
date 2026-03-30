@@ -24,9 +24,9 @@ local PIP_GAP        = 1
 local PIP_MAX        = 10
 
 local BAR_TEX        = "Interface\\Addons\\ConsoleTools\\Media\\basic_bar.tga"
-local SELECTED_SCALE = 1.25
+local DIMMED_SCALE   = 0.75
 
-local PlateType = { Full = 1, NameOnly = 2 }
+local PlateType      = { Full = 1, NameOnly = 2 }
 nameplates.PlateType = PlateType
 
 -- Exposed so sub-modules can reference the same values.
@@ -143,6 +143,11 @@ local function buildFrame()
     f.mark:SetTexture("Interface/TargetingFrame/UI-RaidTargetingIcons")
     f.mark:Hide()
 
+    f.elite = overlay:CreateTexture(nil, "OVERLAY")
+    f.elite:SetSize(20, 20)
+    f.elite:SetPoint("RIGHT", f.bar, "LEFT", -4, 0)
+    f.elite:Hide()
+
     return f
 end
 
@@ -161,6 +166,7 @@ local function release(f)
     f.name:SetText("")
     f.questIcon:Hide()
     f.mark:Hide()
+    f.elite:Hide()
     f.guild:SetText("")
     f.guild:Hide()
     f.bar:Hide()
@@ -209,6 +215,19 @@ local function updateAlpha(f, unit)
         and not isSelected(unit)
         and UnitCanAttack("player", unit)
     f:SetAlpha(dimmed and 0.65 or 1.0)
+end
+
+local function updateElite(f, unit)
+    local c = UnitClassification(unit)
+    if c == "elite" or c == "worldboss" then
+        f.elite:SetAtlas("nameplates-icon-elite-gold")
+        f.elite:Show()
+    elseif c == "rareelite" then
+        f.elite:SetAtlas("nameplates-icon-rareelite")
+        f.elite:Show()
+    else
+        f.elite:Hide()
+    end
 end
 
 local function updateMark(f, unit)
@@ -269,7 +288,7 @@ local function showPlate(unitToken, np)
         active[unitToken] = f
     end
 
-    f:SetScale(isSelected(unitToken) and SELECTED_SCALE or 1.0)
+    f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
     updateAlpha(f, unitToken)
     f:SetPoint("CENTER", np.UnitFrame, "CENTER")
     f.unitFrame = np.UnitFrame
@@ -282,6 +301,7 @@ local function showPlate(unitToken, np)
     f.questIcon:SetShown(nameplates.isQuestUnit(unitToken))
     nameplates.applyGuild(f, unitToken)
     updateMark(f, unitToken)
+    updateElite(f, unitToken)
     refreshBar(f, unitToken)
 end
 
@@ -296,12 +316,13 @@ end
 
 local function refreshAll()
     for unitToken, f in pairs(active) do
-        f:SetScale(isSelected(unitToken) and SELECTED_SCALE or 1.0)
+        f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
         updateAlpha(f, unitToken)
         f.name:SetShown(nameplates.shouldShowName(unitToken))
         f.questIcon:SetShown(nameplates.isQuestUnit(unitToken))
         nameplates.applyGuild(f, unitToken)
         updateMark(f, unitToken)
+        updateElite(f, unitToken)
         refreshBar(f, unitToken)
     end
 end
@@ -311,7 +332,7 @@ end
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
 function nameplates:OnEnable()
-    SetCVar("nameplateSelectedScale", SELECTED_SCALE)
+    SetCVar("nameplateSelectedScale", 1.0)
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnUnitAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnUnitRemoved")
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnInteractionChanged")
@@ -333,6 +354,7 @@ function nameplates:OnEnable()
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnCastStop")
     self:RegisterEvent("UNIT_SPELLCAST_DELAYED", "OnCastStart")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "OnCastStart")
+    self:RegisterEvent("UNIT_CLASSIFICATION_CHANGED", "OnClassificationChanged")
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("UNIT_TARGET", "OnUnitEngagement")
     self:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE", "OnUnitEngagement")
@@ -348,6 +370,8 @@ function nameplates:OnEnable()
         local unit = np.UnitFrame and np.UnitFrame.unit
         if unit then showPlate(unit, np) end
     end
+
+    -- nameplates.debugShow() -- DEBUG: comment out to disable
 end
 
 function nameplates:OnUnitAdded(_, unitToken)
@@ -383,6 +407,11 @@ end
 function nameplates:OnUnitHealth(_, unitToken)
     local f = active[unitToken]
     if f and f.bar:IsShown() then updateHealth(f, unitToken) end
+end
+
+function nameplates:OnClassificationChanged(_, unitToken)
+    local f = active[unitToken]
+    if f then updateElite(f, unitToken) end
 end
 
 function nameplates:OnUnitAura(_, unitToken)
@@ -450,6 +479,7 @@ function nameplates:OnDisable()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_DELAYED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
+    self:UnregisterEvent("UNIT_CLASSIFICATION_CHANGED")
     self:UnregisterEvent("UNIT_AURA")
     self:UnregisterEvent("UNIT_TARGET")
     self:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE")
@@ -465,6 +495,71 @@ function nameplates:OnDisable()
     end
     wipe(active)
     nameplates.wipeQuestCache()
+end
+
+--#endregion
+
+--#region ── Debug ────────────────────────────────────────────────────────────
+
+local debugFrame
+
+function nameplates.debugShow()
+    if debugFrame then nameplates.debugHide() end
+
+    debugFrame = acquire()
+    debugFrame:SetScale(1.0)
+    debugFrame:SetAlpha(1.0)
+    debugFrame:SetPoint("CENTER", UIParent, "CENTER")
+    debugFrame:Show()
+
+    -- Name & guild
+    debugFrame.name:SetFont(currentFont())
+    debugFrame.name:SetText("Rare Elite Dragon")
+    debugFrame.name:Show()
+    debugFrame.guild:SetText("<Dragon Guild>")
+    debugFrame.guild:Show()
+    debugFrame.questIcon:Show()
+
+    -- Health bar
+    debugFrame.bar:Show()
+    debugFrame.bar.fill:SetStatusBarColor(0.9, 0.1, 0.1)
+    debugFrame.bar.fill:SetMinMaxValues(0, 100)
+    debugFrame.bar.fill:SetValue(65)
+    nameplates.applyLayout(debugFrame, PlateType.Full)
+
+    -- Mark (skull)
+    SetRaidTargetIconTexture(debugFrame.mark, 8)
+    debugFrame.mark:Show()
+
+    -- Elite icon
+    debugFrame.elite:SetAtlas("nameplates-icon-elite-gold")
+    debugFrame.elite:Show()
+
+    -- Power pips
+    local PIP_W, PIP_GAP, PIP_MAX = nameplates.PIP_W, nameplates.PIP_GAP, nameplates.PIP_MAX
+    local maxPower, current = 5, 3
+    debugFrame.power:SetWidth(maxPower * PIP_W + (maxPower - 1) * PIP_GAP)
+    for i = 1, PIP_MAX do
+        local pip = debugFrame.power.pips[i]
+        if i <= maxPower then
+            pip:Show()
+            if i <= current then
+                pip.tex:Show()
+                pip.tex:SetVertexColor(1, 0.5, 0, 1)
+            else
+                pip.tex:Hide()
+            end
+        else
+            pip:Hide()
+        end
+    end
+    debugFrame.power:Show()
+end
+
+function nameplates.debugHide()
+    if not debugFrame then return end
+    release(debugFrame)
+    debugFrame = nil
 end
 
 --#endregion
