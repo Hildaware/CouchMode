@@ -37,11 +37,13 @@ end
 --#endregion
 
 --#region ── Quest detection ──────────────────────────────────────────────────
-
-local questGUIDs = {}
-
+local questGUIDs    = {}
+local subtitleCache = {}
 
 function nameplates.isQuestUnit(unit)
+    -- This function is expensive due to tooltip scanning. It should be called
+    -- sparingly, ideally only when a unit appears or when the quest log changes.
+    -- It is cached per GUID.
     if nameplates.isInInstance() then return false end
     local guid = UnitGUID(unit)
     if not guid then return false end
@@ -77,6 +79,7 @@ end
 
 function nameplates.wipeQuestCache()
     wipe(questGUIDs)
+    wipe(subtitleCache)
 end
 
 function nameplates.shouldShowName(unit)
@@ -88,7 +91,7 @@ function nameplates.shouldShowName(unit)
     if UnitIsUnit(unit, "softenemy") then return true end
     if UnitIsUnit(unit, "softinteract") then return true end
     if UnitIsQuestBoss(unit) then return true end
-    return nameplates.isQuestUnit(unit)
+    return false
 end
 
 --#endregion
@@ -161,17 +164,32 @@ function nameplates.applyName(f, unit, plateType)
 end
 
 local function getSubtitle(unitToken)
+    -- This function can be expensive due to tooltip scanning. It is cached per GUID.
     if nameplates.isInInstance() then return nil, false end
     if UnitIsPlayer(unitToken) then
         return GetGuildInfo(unitToken), true
     end
-    local tooltipData = C_TooltipInfo.GetUnit(unitToken)
+
+    local guid = UnitGUID(unitToken)
+    if guid and subtitleCache[guid] then
+        local data = subtitleCache[guid]
+        return data.text, data.isGuild
+    end
+
+    local subtitle, isGuild
+    local tooltipData = C_TooltipInfo.GetUnit(unitToken) -- Expensive call
     if tooltipData and tooltipData.lines and tooltipData.lines[2] then
         local text = tooltipData.lines[2].leftText
         if text and text ~= "" and not text:match("^Level %d") then
-            return text, false
+            subtitle = text
+            isGuild  = false
         end
     end
+
+    if guid then
+        subtitleCache[guid] = { text = subtitle, isGuild = isGuild }
+    end
+    return subtitle, isGuild
 end
 
 function nameplates.applyGuild(f, unitToken)

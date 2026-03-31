@@ -1,7 +1,9 @@
 <UI xmlns='http://www.blizzard.com/wow/ui/' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
     <Include file='Nameplates.lua'/>
+    <Include file='NameplatesFrame.lua'/>
     <Include file='NameplatesName.lua'/>
     <Include file='NameplatesAuras.lua'/>
     <Include file='NameplatesCast.lua'/>
+    <Include file='NameplatesPlate.lua'/>
     <Include file='NameplatesPower.lua'/>
 </UI>
