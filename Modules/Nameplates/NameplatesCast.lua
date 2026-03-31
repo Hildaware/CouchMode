@@ -31,17 +31,6 @@ function nameplates.buildCastFrame(f, overlay)
     f.cast.fill:SetAllPoints(f.cast)
     f.cast.fill:SetStatusBarTexture(BAR_TEX)
     f.cast.fill:GetStatusBarTexture():SetBlendMode("ADD")
-    f.cast.fill:SetMinMaxValues(0, 1)
-    f.cast.fill:SetValue(0)
-
-    f.cast:SetScript("OnUpdate", function(self)
-        if not self.endMS then return end
-        local now  = GetTime() * 1000
-        local span = self.endMS - self.startMS
-        if span <= 0 then return end
-        local pct = self.isChannel and math.max(0, (self.endMS - now) / span) or math.min(1, (now - self.startMS) / span)
-        self.fill:SetValue(pct)
-    end)
 
     f.cast.spellName = overlay:CreateFontString(nil, "OVERLAY")
     f.cast.spellName:SetFont(nameplates.currentCastFont())
@@ -67,28 +56,32 @@ end
 
 function nameplates.hideCast(f)
     f.cast:Hide()
-    f.cast.endMS = nil
     f.cast.spellName:SetText("")
     f.cast.spellName:Hide()
     f.cast.shield:SetAlpha(0)
 end
 
 function nameplates.updateCast(f, unitToken)
-    local name, _, _, startMS, endMS, _, _, notInterruptible = UnitCastingInfo(unitToken)
+    local name, _, _, _, _, _, _, notInterruptible = UnitCastingInfo(unitToken)
     local isChannel = false
-    if not name then
-        name, _, _, startMS, endMS, _, notInterruptible = UnitChannelInfo(unitToken)
+    local castDuration
+    if name then
+        castDuration = UnitCastingDuration(unitToken)
+    else
+        name, _, _, _, _, _, notInterruptible = UnitChannelInfo(unitToken)
         isChannel = true
+        if name then
+            castDuration = UnitChannelDuration(unitToken)
+        end
     end
     if not name then
         nameplates.hideCast(f)
         return
     end
-    f.cast.startMS   = startMS
-    f.cast.endMS     = endMS
-    f.cast.isChannel = isChannel
     applycastStyle(f, isChannel, notInterruptible)
-    f.cast.fill:SetValue(isChannel and 1 or 0)
+    f.cast.fill:SetTimerDuration(castDuration, nil,
+        isChannel and Enum.StatusBarTimerDirection.RemainingTime
+                   or Enum.StatusBarTimerDirection.ElapsedTime)
     f.cast.spellName:SetText(name)
     f.cast.spellName:Show()
     f.cast:Show()

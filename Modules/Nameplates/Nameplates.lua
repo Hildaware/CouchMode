@@ -373,8 +373,22 @@ end
 
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
+local function applyFriendlyVisibility()
+    if nameplates.isInInstance() then
+        SetCVar("nameplateShowFriends",      0)
+        SetCVar("nameplateShowFriendlyNPCs", 0)
+        SetCVar("UnitNameFriendlyPlayerName", 1)
+    else
+        SetCVar("nameplateShowFriends",      1)
+        SetCVar("nameplateShowFriendlyNPCs", 1)
+        SetCVar("UnitNameFriendlyPlayerName", 0)
+    end
+end
+
 function nameplates:OnEnable()
     SetCVar("nameplateSelectedScale", 1.0)
+    applyFriendlyVisibility()
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnUnitAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnUnitRemoved")
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnInteractionChanged")
@@ -414,6 +428,10 @@ function nameplates:OnEnable()
     end
 
     -- nameplates.debugShow() -- DEBUG: comment out to disable
+end
+
+function nameplates:OnEnteringWorld()
+    applyFriendlyVisibility()
 end
 
 function nameplates:OnUnitAdded(_, unitToken)
@@ -501,6 +519,7 @@ end
 
 function nameplates:OnDisable()
     SetCVar("nameplateSelectedScale", 1.2)
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
     self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
