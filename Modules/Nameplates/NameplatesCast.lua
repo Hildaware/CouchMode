@@ -53,21 +53,16 @@ function nameplates.buildCastFrame(f, overlay)
     f.cast.shield:SetAtlas("UI-CastingBar-Shield", false)
     f.cast.shield:SetSize(CAST_H + 4, CAST_H + 4)
     f.cast.shield:SetPoint("RIGHT", f.cast, "LEFT", 10, 0)
-    f.cast.shield:Hide()
+    f.cast.shield:SetAlpha(0)
 end
 
 local function applycastStyle(f, isChannel, notInterruptible)
-    if notInterruptible then
-        f.cast.fill:SetStatusBarColor(0.6, 0.6, 0.6)
-        f.cast.shield:Show()
-    else
-        f.cast.fill:SetStatusBarColor(
-            isChannel and 0.1 or 0.9,
-            isChannel and 0.9 or 0.6,
-            isChannel and 0.6 or 0.1
-        )
-        f.cast.shield:Hide()
-    end
+    f.cast.fill:SetStatusBarColor(
+        C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, 0.6, isChannel and 0.1 or 0.9),
+        C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, 0.6, isChannel and 0.9 or 0.6),
+        C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, 0.6, isChannel and 0.6 or 0.1)
+    )
+    f.cast.shield:SetAlpha(C_CurveUtil.EvaluateColorValueFromBoolean(notInterruptible, 1, 0))
 end
 
 function nameplates.hideCast(f)
@@ -75,7 +70,7 @@ function nameplates.hideCast(f)
     f.cast.endMS = nil
     f.cast.spellName:SetText("")
     f.cast.spellName:Hide()
-    f.cast.shield:Hide()
+    f.cast.shield:SetAlpha(0)
 end
 
 function nameplates.updateCast(f, unitToken)

@@ -1,54 +1,59 @@
-local addon_name     = ...
+local addon_name              = ...
 
 ---@class ConsoleTools: AceAddon
-local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
-local LSM            = LibStub('LibSharedMedia-3.0')
+local addon                   = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local LSM                     = LibStub('LibSharedMedia-3.0')
 
 ---@class NameplatesModule: AceModule
-local nameplates     = addon:NewModule('Nameplates', 'AceEvent-3.0')
+local nameplates              = addon:NewModule('Nameplates', 'AceEvent-3.0')
 ---@cast nameplates +AceEvent-3.0
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local BAR_W          = 160
-local BAR_H          = 14
-local CAST_W         = math.floor(BAR_W * 2 / 3)
-local CAST_H         = 10
-local AURA_W         = 24
-local AURA_H         = 16
-local AURA_GAP       = 4
-local AURA_MAX       = 8
-local PIP_W          = 12
-local PIP_H          = 12
-local PIP_GAP        = 1
-local PIP_MAX        = 10
+local BAR_W                   = 160
+local BAR_H                   = 14
+local CAST_W                  = math.floor(BAR_W * 2 / 3)
+local CAST_H                  = 10
+local AURA_W                  = 24
+local AURA_H                  = 16
+local AURA_GAP                = 4
+local AURA_MAX                = 8
+local PIP_W                   = 12
+local PIP_H                   = 12
+local PIP_GAP                 = 1
+local PIP_MAX                 = 10
 
-local BAR_TEX        = "Interface\\Addons\\ConsoleTools\\Media\\basic_bar.tga"
-local DIMMED_SCALE   = 0.75
+local BAR_TEX                 = "Interface\\Addons\\ConsoleTools\\Media\\basic_bar.tga"
+local DIMMED_SCALE            = 0.6
 
-local PlateType      = { Full = 1, NameOnly = 2 }
-nameplates.PlateType = PlateType
+local THREAT_COLOR_WARNING    = { 0.9, 0.15, 0.15 }
+local THREAT_COLOR_TRANSITION = { 1.0, 0.65, 0.2 }
+local THREAT_COLOR_SAFE       = { 0.25, 0.5, 0.9 }
+local THREAT_COLOR_OFFTANK    = { 0.5, 0.75, 1.0 }
+
+local PlateType               = { Full = 1, NameOnly = 2 }
+nameplates.PlateType          = PlateType
 
 -- Exposed so sub-modules can reference the same values.
-nameplates.BAR_W     = BAR_W
-nameplates.BAR_H     = BAR_H
-nameplates.CAST_W    = CAST_W
-nameplates.CAST_H    = CAST_H
-nameplates.AURA_W    = AURA_W
-nameplates.AURA_H    = AURA_H
-nameplates.AURA_GAP  = AURA_GAP
-nameplates.AURA_MAX  = AURA_MAX
-nameplates.PIP_W     = PIP_W
-nameplates.PIP_H     = PIP_H
-nameplates.PIP_GAP   = PIP_GAP
-nameplates.PIP_MAX   = PIP_MAX
-nameplates.BAR_TEX   = BAR_TEX
-nameplates.addon     = addon
+nameplates.BAR_W              = BAR_W
+nameplates.BAR_H              = BAR_H
+nameplates.CAST_W             = CAST_W
+nameplates.CAST_H             = CAST_H
+nameplates.AURA_W             = AURA_W
+nameplates.AURA_H             = AURA_H
+nameplates.AURA_GAP           = AURA_GAP
+nameplates.AURA_MAX           = AURA_MAX
+nameplates.PIP_W              = PIP_W
+nameplates.PIP_H              = PIP_H
+nameplates.PIP_GAP            = PIP_GAP
+nameplates.PIP_MAX            = PIP_MAX
+nameplates.BAR_TEX            = BAR_TEX
+nameplates.addon              = addon
 
-local PLAYER_CLASS   = select(2, UnitClass("player"))
-local playerIsDK     = (PLAYER_CLASS == "DEATHKNIGHT")
+local PLAYER_CLASS            = select(2, UnitClass("player"))
+local playerIsDK              = (PLAYER_CLASS == "DEATHKNIGHT")
 
-local FONT_FLAGS     = {
+local FONT_FLAGS              = {
     ['']             = 'None',
     ['OUTLINE']      = 'Outline',
     ['THICKOUTLINE'] = 'Thick Outline',
@@ -82,13 +87,15 @@ nameplates.currentCastFont  = currentCastFont
 
 local pool                  = {}
 local active                = {} -- [unitToken] = frame
-local hookedUFs             = {} -- [UnitFrame] = true; tracks frames with the alpha lock hook
+local hookedUFs             = {} -- [UnitFrame] = true; lock is currently active
+local installedHooks        = {} -- [UnitFrame] = true; hook has been installed (never cleared)
 
 local function lockUnitFrame(uf)
     if uf:IsForbidden() then return end
     uf:SetAlpha(0)
-    if hookedUFs[uf] then return end
     hookedUFs[uf] = true
+    if installedHooks[uf] then return end
+    installedHooks[uf] = true
     local locking = false
     hooksecurefunc(uf, "SetAlpha", function(frame)
         if locking or frame:IsForbidden() or not hookedUFs[frame] then return end
@@ -113,16 +120,17 @@ local function buildFrame()
     f.bar:SetSize(BAR_W, BAR_H)
     f.bar:SetPoint("TOP", f, "TOP", 0, 0)
     f.bar:Hide()
-    f.bar:SetAlpha(0.6)
 
     local barBg = f.bar:CreateTexture(nil, "BACKGROUND")
     barBg:SetTexture(BAR_TEX)
     barBg:SetVertexColor(0, 0, 0, 1)
     barBg:SetAllPoints(f.bar)
+    barBg:SetAlpha(0.75)
 
     f.bar.fill = CreateFrame("StatusBar", nil, f.bar)
     f.bar.fill:SetAllPoints(f.bar)
     f.bar.fill:SetStatusBarTexture(BAR_TEX)
+    f.bar.fill:SetAlpha(0.75)
 
     do
         local b = addon.Utils.create_border_textures(f.bar.fill, f.bar)
@@ -145,7 +153,6 @@ local function buildFrame()
 
     f.elite = overlay:CreateTexture(nil, "OVERLAY")
     f.elite:SetSize(20, 20)
-    f.elite:SetPoint("RIGHT", f.bar, "LEFT", -4, 0)
     f.elite:Hide()
 
     return f
@@ -159,6 +166,8 @@ local function acquire()
 end
 
 local function release(f)
+    f:SetScript("OnUpdate", nil)
+    f.layoutTrans = nil
     f:SetAlpha(1.0)
     f:Hide()
     f:ClearAllPoints()
@@ -174,7 +183,7 @@ local function release(f)
     f.cast.endMS = nil
     f.cast.spellName:SetText("")
     f.cast.spellName:Hide()
-    f.cast.shield:Hide()
+    f.cast.shield:SetAlpha(0)
     nameplates.hideAuras(f)
     nameplates.hideCC(f)
     nameplates.hidePower(f)
@@ -191,6 +200,7 @@ nameplates.inCombat = inCombat
 -- Returns true when the unit is actively fighting the player specifically:
 -- either targeting the player, or the player has threat on it (has hit/healed).
 local function isEngagedWithPlayer(unit)
+    if nameplates.isInInstance() then return true end
     if UnitIsUnit(unit .. "target", "player") then return true end
     return UnitThreatSituation("player", unit) ~= nil
 end
@@ -201,6 +211,7 @@ local function isSelected(unit)
         or UnitIsUnit(unit, "softfriend")
         or UnitIsUnit(unit, "softinteract")
 end
+nameplates.isSelected = isSelected
 
 local function getLayoutType(unit)
     if UnitIsPlayer(unit) then return PlateType.NameOnly end
@@ -214,10 +225,14 @@ local function updateAlpha(f, unit)
     local dimmed = inCombat
         and not isSelected(unit)
         and UnitCanAttack("player", unit)
-    f:SetAlpha(dimmed and 0.65 or 1.0)
+    f:SetAlpha(dimmed and 0.5 or 1.0)
 end
 
 local function updateElite(f, unit)
+    if not nameplates.shouldShowName(unit) then
+        f.elite:Hide()
+        return
+    end
     local c = UnitClassification(unit)
     if c == "elite" or c == "worldboss" then
         f.elite:SetAtlas("nameplates-icon-elite-gold")
@@ -241,11 +256,36 @@ local function updateMark(f, unit)
 end
 
 local function updateBarColor(f, unit)
-    if isSelected(unit) then
-        f.bar.fill:SetStatusBarColor(0.9, 0.1, 0.1)
-    else
-        f.bar.fill:SetStatusBarColor(0.9, 0.75, 0.0)
+    -- Priority 1: class color for players
+    if UnitIsPlayer(unit) then
+        local _, class = UnitClass(unit)
+        local c = class and RAID_CLASS_COLORS[class]
+        if c then
+            f.bar.fill:SetStatusBarColor(c.r, c.g, c.b)
+            return
+        end
     end
+
+    -- Priority 2: threat level
+    local threat = UnitThreatSituation("player", unit)
+    if threat ~= nil then
+        local tank = UnitGroupRolesAssigned("player") == "TANK"
+        local otherTankAggro = IsInRaid() and UnitGroupRolesAssigned(unit .. "target") == "TANK"
+        local tc
+        if (tank and threat <= 0 and not otherTankAggro) or (not tank and threat == 3) then
+            tc = THREAT_COLOR_WARNING
+        elseif threat == 1 or threat == 2 then
+            tc = THREAT_COLOR_TRANSITION
+        elseif tank and threat <= 0 and otherTankAggro then
+            tc = THREAT_COLOR_OFFTANK
+        else -- tank threat==3, or DPS threat==0
+            tc = THREAT_COLOR_SAFE
+        end
+        f.bar.fill:SetStatusBarColor(tc[1], tc[2], tc[3])
+        return
+    end
+
+    f.bar.fill:SetStatusBarColor(THREAT_COLOR_SAFE[1], THREAT_COLOR_SAFE[2], THREAT_COLOR_SAFE[3])
 end
 
 local function updateHealth(f, unit)
@@ -266,6 +306,7 @@ local function refreshBar(f, unitToken)
     local plateType = getLayoutType(unitToken)
     f.bar:SetShown(plateType == PlateType.Full)
     nameplates.applyLayout(f, plateType)
+    nameplates.applyName(f, unitToken, plateType)
     if plateType == PlateType.Full then
         updateBarColor(f, unitToken)
         updateHealth(f, unitToken)
@@ -289,6 +330,7 @@ local function showPlate(unitToken, np)
     end
 
     f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
+    f:SetFrameStrata(isSelected(unitToken) and "HIGH" or "MEDIUM")
     updateAlpha(f, unitToken)
     f:SetPoint("CENTER", np.UnitFrame, "CENTER")
     f.unitFrame = np.UnitFrame
@@ -296,7 +338,6 @@ local function showPlate(unitToken, np)
     f:Show()
 
     f.name:SetFont(currentFont())
-    nameplates.applyName(f, unitToken)
     f.name:SetShown(nameplates.shouldShowName(unitToken))
     f.questIcon:SetShown(nameplates.isQuestUnit(unitToken))
     nameplates.applyGuild(f, unitToken)
@@ -317,13 +358,14 @@ end
 local function refreshAll()
     for unitToken, f in pairs(active) do
         f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
+        f:SetFrameStrata(isSelected(unitToken) and "HIGH" or "MEDIUM")
         updateAlpha(f, unitToken)
         f.name:SetShown(nameplates.shouldShowName(unitToken))
         f.questIcon:SetShown(nameplates.isQuestUnit(unitToken))
         nameplates.applyGuild(f, unitToken)
         updateMark(f, unitToken)
         updateElite(f, unitToken)
-        refreshBar(f, unitToken)
+        refreshBar(f, unitToken) -- also calls applyName
     end
 end
 
@@ -452,7 +494,7 @@ end
 function nameplates:OnNameUpdate(_, unitToken)
     local f = active[unitToken]
     if f then
-        nameplates.applyName(f, unitToken)
+        nameplates.applyName(f, unitToken, getLayoutType(unitToken))
         nameplates.applyGuild(f, unitToken)
     end
 end

@@ -40,31 +40,39 @@ end
 
 local questGUIDs = {}
 
-local QUEST_LINE_TYPES = {
-    [Enum.TooltipDataLineType.QuestObjective] = true,
-    [Enum.TooltipDataLineType.QuestTitle]     = true,
-    [Enum.TooltipDataLineType.QuestPlayer]    = true,
-}
 
 function nameplates.isQuestUnit(unit)
+    if nameplates.isInInstance() then return false end
     local guid = UnitGUID(unit)
     if not guid then return false end
 
-    if questGUIDs[guid] ~= nil then return questGUIDs[guid] end
+    if questGUIDs[guid] == false then return false end
 
-    local result = false
     local tooltipData = C_TooltipInfo.GetHyperlink("unit:" .. guid)
-    if tooltipData then
-        for _, line in ipairs(tooltipData.lines or {}) do
-            if QUEST_LINE_TYPES[line.type] then
-                result = true
-                break
+    if not tooltipData then
+        questGUIDs[guid] = false
+        return false
+    end
+
+    for _, line in ipairs(tooltipData.lines or {}) do
+        if line.type == Enum.TooltipDataLineType.QuestObjective then
+            local text = line.leftText or ""
+            local p1, p2 = text:match("(%d+)/(%d+)")
+            if p1 and p2 then
+                if tonumber(p1) < tonumber(p2) then return true end
+            else
+                local pct = text:match("(%d+)%%")
+                if pct then
+                    if tonumber(pct) < 100 then return true end
+                else
+                    return true
+                end
             end
         end
     end
 
-    questGUIDs[guid] = result
-    return result
+    questGUIDs[guid] = false
+    return false
 end
 
 function nameplates.wipeQuestCache()
@@ -72,6 +80,7 @@ function nameplates.wipeQuestCache()
 end
 
 function nameplates.shouldShowName(unit)
+    if nameplates.isInInstance() then return true end
     if UnitIsUnit(unit, "target") then return true end
     if UnitIsUnit(unit, "softtarget") then return true end
     if UnitIsUnit(unit, "mouseover") then return true end
@@ -85,6 +94,15 @@ end
 --#endregion
 
 --#region ── Name & guild display ─────────────────────────────────────────────
+
+function nameplates.isInInstance()
+    local inInstance, instanceType = IsInInstance()
+    if instanceType == "scenario" then return true end
+    return inInstance
+        and instanceType ~= "none"
+        and instanceType ~= "neighborhood"
+        and instanceType ~= "interior"
+end
 
 function nameplates.buildNameFrame(f, overlay)
     local currentFont, fontSize, fontFlag = nameplates.currentFont()
@@ -104,10 +122,22 @@ function nameplates.buildNameFrame(f, overlay)
     f.guild:Hide()
 end
 
-function nameplates.applyName(f, unit)
+function nameplates.applyName(f, unit, plateType)
+    local PlateType = nameplates.PlateType
     local nameStr = UnitName(unit) or ""
-    local text
 
+    if plateType == PlateType.Full then
+        if nameplates.isSelected(unit) then
+            f.name:SetVertexColor(0.5, 0.8, 1.0)
+        else
+            f.name:SetVertexColor(1, 1, 1)
+        end
+        f.name:SetText(nameStr)
+        return
+    end
+
+    -- NameOnly: class/faction colors with PvP title support
+    local text
     if UnitIsPlayer(unit) then
         local fullStr = UnitPVPName(unit) or nameStr
         local s, e    = fullStr:find(nameStr, 1, true)
@@ -131,6 +161,7 @@ function nameplates.applyName(f, unit)
 end
 
 local function getSubtitle(unitToken)
+    if nameplates.isInInstance() then return nil, false end
     if UnitIsPlayer(unitToken) then
         return GetGuildInfo(unitToken), true
     end
@@ -171,10 +202,12 @@ function nameplates.applyLayout(f, plateType)
     local fromSize = select(2, f.name:GetFont()) or fontSize
 
     f.mark:ClearAllPoints()
+    f.elite:ClearAllPoints()
     if plateType == PlateType.Full then
         f.bar:SetPoint("CENTER", f, "CENTER")
         f.name:SetPoint("BOTTOMLEFT", f.bar, "TOPLEFT", 2, -6)
         f.name:SetJustifyH("LEFT")
+        f.name:SetWidth(nameplates.BAR_W - 10)
         f.questIcon:SetPoint("RIGHT", f.name, "LEFT", 4, -6)
         f.elite:SetPoint("RIGHT", f.name, "LEFT", 4, -6)
         f.mark:SetPoint("BOTTOM", f.bar, "TOP", 0, -6)
@@ -183,6 +216,7 @@ function nameplates.applyLayout(f, plateType)
         f.bar:SetPoint("TOP", f.guild, "BOTTOM", 0, -2)
         f.name:SetPoint("BOTTOM", f, "TOP")
         f.name:SetJustifyH("CENTER")
+        f.name:SetWidth(0)
         f.questIcon:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
         f.elite:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
         f.mark:SetPoint("BOTTOM", f.name, "TOP", 0, 2)

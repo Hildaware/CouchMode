@@ -5,5 +5,5 @@
     - player arrow strata too low
 
 - Nameplates
-    - Dungeons & in a party (Show Names)
-    - Markers (floating thingies players can mark mobs with)
+    - Enter instance >> Disable Friendly Nameplates (NPC & Player), Enable Friendly Names
+    - Enter world >> Enable Friendly Nameplates (NPC & Player), Disable Friendly Names
