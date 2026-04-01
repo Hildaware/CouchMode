@@ -1,0 +1,10 @@
+<UI xmlns='http://www.blizzard.com/wow/ui/'   xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'   xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
+    <Include file = 'Components/Filtering.lua' />
+    <Include file = 'Components/Sorting.lua' />
+    <Include file = 'Components/ItemFrame.lua' />
+    <Include file = 'Components/CategoryHeaderFrame.lua' />
+    <Include file = 'Components/BagContainer.lua' />
+    <Include file = 'Components/CurrencyFrame.lua' />
+    <Include file = 'Components/BankHeader.lua' />
+    <Include file = 'View.lua' />
+</UI>

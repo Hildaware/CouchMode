@@ -246,7 +246,12 @@
         "SetItemButtonTextureVertexColor",
         "CORPSE_RED",
         "SPIRIT_HEALER_RELEASE_RED",
-        "WORLD_MAP_WILDBATTLEPET_LEVEL"
+        "WORLD_MAP_WILDBATTLEPET_LEVEL",
+        "BANK_DEPOSIT_MONEY_BUTTON_LABEL",
+        "BANK_WITHDRAW_MONEY_BUTTON_LABEL",
+        "ClearItemButtonOverlay",
+        "SetItemButtonQuality",
+        "SetItemButtonDesaturated"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

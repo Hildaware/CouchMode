@@ -3,4 +3,5 @@
     <Include file = 'PlayerHealthBar.lua' />
     <Include file = 'Map/Map.xml' />
     <Include file = 'Nameplates/Nameplates.xml' />
+    <Include file = 'Bags/Bags.xml' />
 </UI>
