@@ -82,8 +82,25 @@ function nameplates.wipeQuestCache()
     wipe(subtitleCache)
 end
 
+local partyGUIDs = {}
+
+function nameplates.rebuildPartyGUIDs()
+    wipe(partyGUIDs)
+    local n      = GetNumGroupMembers()
+    local isRaid = IsInRaid()
+    for i = 1, n do
+        local unit = isRaid and ("raid" .. i) or ("party" .. i)
+        local guid = UnitGUID(unit)
+        if guid then partyGUIDs[guid] = true end
+    end
+end
+
 function nameplates.shouldShowName(unit)
     if nameplates.isInInstance() then return true end
+    if addon.db.profile.nameplates.alwaysShowParty then
+        local guid = UnitGUID(unit)
+        if guid and partyGUIDs[guid] then return true end
+    end
     if UnitIsUnit(unit, "target") then return true end
     if UnitIsUnit(unit, "softtarget") then return true end
     if UnitIsUnit(unit, "mouseover") then return true end

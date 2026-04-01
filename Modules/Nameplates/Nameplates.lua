@@ -84,10 +84,11 @@ function nameplates:GetDefaults()
     return {
         ---@type NameplatesDB
         nameplates = {
-            enabled  = true,
-            font     = 'Arial Narrow',
-            fontSize = 16,
-            fontFlag = 'OUTLINE',
+            enabled         = true,
+            font            = 'Arial Narrow',
+            fontSize        = 16,
+            fontFlag        = 'OUTLINE',
+            alwaysShowParty = false,
         },
     }
 end
@@ -154,6 +155,26 @@ function nameplates:GetOptions()
                         set    = function(_, value)
                             npDB().fontFlag = value
                             nameplates.applyFontToAll()
+                        end,
+                    },
+                },
+            },
+            automation = {
+                name   = 'Automation',
+                type   = 'group',
+                inline = true,
+                order  = 4,
+                args   = {
+                    alwaysShowParty = {
+                        name  = 'Always Show Party',
+                        desc  = 'Always show party members\' names on their nameplates. By default names are only shown when a party member is targeted or moused over.',
+                        type  = 'toggle',
+                        order = 1,
+                        get   = function() return npDB().alwaysShowParty end,
+                        set   = function(_, value)
+                            npDB().alwaysShowParty = value
+                            nameplates.rebuildPartyGUIDs()
+                            nameplates:OnInteractionChanged()
                         end,
                     },
                 },
