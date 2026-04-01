@@ -13,6 +13,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Checkout external repo
+        uses: actions/checkout@v4
+        with:
+          repository: Hildaware/ConsoleBags
+          ref: wipe
+          path: external-repo
+
       - name: Create Zip
         run: |
           # Name of the folder inside the zip (usually your Addon name)
@@ -33,14 +40,20 @@ jobs:
           if [ -d "Libs" ]; then cp -r Libs staging/$ADDON_NAME/; fi
           
           # --- END SELECTION ---
+
+          mkdir -p staging/ConsoleBags
+          cp external-repo/ConsoleBags.lua staging/ConsoleBags/
+          cp external-repo/ConsoleBags.toc staging/ConsoleBags/
           
           # Navigate to staging and zip the folder
           cd staging
-          zip -r ../$ZIP_NAME $ADDON_NAME
+          zip -r ../$ZIP_NAME $ADDON_NAME ConsoleBags
           cd ..
           
           # Set environment variable for the next step
           echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
