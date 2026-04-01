@@ -1,16 +1,16 @@
-local addon_name = ...
+local addon_name  = ...
 
----@class ConsoleTools: AceAddon
-local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+---@class CouchMode: AceAddon
+local addon       = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map = addon:GetModule('Minimap')
+local map         = addon:GetModule('Minimap')
 
 local _G          = _G
 local math_floor  = math.floor
 local CreateFrame = _G.CreateFrame
 
-map.MapUtils = {}
+map.MapUtils      = {}
 
 ---@param shape "square"|"rectangle"
 ---@param size number
@@ -23,11 +23,11 @@ function map.MapUtils.size_for_shape(shape, size)
 end
 
 -- Border helpers live in addon.Utils; keep aliases here for backward compatibility.
-map.MapUtils.create_border_textures  = addon.Utils.create_border_textures
-map.MapUtils.apply_border_textures   = addon.Utils.apply_border_textures
+map.MapUtils.create_border_textures = addon.Utils.create_border_textures
+map.MapUtils.apply_border_textures  = addon.Utils.apply_border_textures
 
-local BUTTON_GOLD   = "Interface\\AddOns\\ConsoleTools\\Media\\button_gold.blp"
-local BUTTON_SILVER = "Interface\\AddOns\\ConsoleTools\\Media\\button_silver.blp"
+local BUTTON_GOLD                   = "Interface\\AddOns\\CouchMode\\Media\\button_gold.blp"
+local BUTTON_SILVER                 = "Interface\\AddOns\\CouchMode\\Media\\button_silver.blp"
 
 --- Toolbar button helper: 20x20 button with atlas icon.
 --- btn.selected_bg (button_silver.blp) can be shown/hidden to indicate selected state.

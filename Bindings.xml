@@ -1,8 +1,8 @@
 <Bindings>
-    <Binding name="CONSOLETOOLS_MINIMAP_GROWTOGGLE" category="Console Tools">
-        ConsoleTools_MinimapGrowToggle()
+    <Binding name="COUCHMODE_MINIMAP_GROWTOGGLE" category="CouchMode">
+        CouchMode_MinimapGrowToggle()
     </Binding>
-    <Binding name="CONSOLETOOLS_MINIMAP_TOGGLE" category="Console Tools">
-        ConsoleTools_MinimapToggle()
+    <Binding name="COUCHMODE_MINIMAP_TOGGLE" category="CouchMode">
+        CouchMode_MinimapToggle()
     </Binding>
 </Bindings>

@@ -1,6 +1,6 @@
 local addonName = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class AttachToTarget: AceModule
@@ -69,7 +69,7 @@ end
 
 function attach:OnEnable()
     self:RegisterEvent('PLAYER_TARGET_CHANGED', 'OnTargetChanged')
-    self:RegisterEvent('NAME_PLATE_UNIT_ADDED',   'OnNamePlateAdded')
+    self:RegisterEvent('NAME_PLATE_UNIT_ADDED', 'OnNamePlateAdded')
     self:RegisterEvent('NAME_PLATE_UNIT_REMOVED', 'OnNamePlateRemoved')
 end
 
@@ -92,7 +92,7 @@ local ANCHOR_POINTS = {
     ['BOTTOMRIGHT'] = 'Bottom Right',
 }
 
-local attachArgs  -- holds the live args table for dynamic rebuilding
+local attachArgs -- holds the live args table for dynamic rebuilding
 
 local function BuildAttachmentArgs(id)
     return {
@@ -175,7 +175,8 @@ end
 function attach:GetOptions()
     attachArgs = {
         description = {
-            name  = 'Attach one or more frames to the current target\'s nameplate. Frames are restored to their original position when you lose the target.',
+            name  =
+            'Attach one or more frames to the current target\'s nameplate. Frames are restored to their original position when you lose the target.',
             type  = 'description',
             order = 1,
         },
@@ -216,7 +217,7 @@ function attach:RebuildOptions()
     for id in pairs(addon.db.profile.attachments) do
         attachArgs['entry_' .. id] = {
             name   = addon.db.profile.attachments[id].frameName ~= '' and
-                     addon.db.profile.attachments[id].frameName or '(unnamed)',
+                addon.db.profile.attachments[id].frameName or '(unnamed)',
             type   = 'group',
             order  = order,
             inline = true,

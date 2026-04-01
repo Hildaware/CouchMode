@@ -1,0 +1,6 @@
+<UI xmlns='http://www.blizzard.com/wow/ui/'   xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'   xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
+    <Include file='CastUtil.lua'/>
+    <Include file='CastBar.lua'/>
+    <Include file='Ring.lua'/>
+    <Include file='Bar.lua'/>
+</UI>

@@ -1,6 +1,6 @@
 local addonName = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub("AceAddon-3.0"):GetAddon(addonName)
 
 ---@class Nameplates: AceModule

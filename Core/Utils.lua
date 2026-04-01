@@ -1,6 +1,6 @@
 local addonName, core = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 addon.Utils = {}
@@ -15,9 +15,9 @@ function addon.Utils.create_border_textures(parent, anchor)
     for _, pos in ipairs({ "T", "B", "L", "R" }) do
         borders[pos] = parent:CreateTexture(nil, "OVERLAY", nil, 7)
     end
-    borders.T:SetPoint("TOPLEFT",     anchor, "TOPLEFT")
-    borders.T:SetPoint("TOPRIGHT",    anchor, "TOPRIGHT")
-    borders.B:SetPoint("BOTTOMLEFT",  anchor, "BOTTOMLEFT")
+    borders.T:SetPoint("TOPLEFT", anchor, "TOPLEFT")
+    borders.T:SetPoint("TOPRIGHT", anchor, "TOPRIGHT")
+    borders.B:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT")
     borders.B:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT")
     return borders
 end
@@ -47,9 +47,9 @@ function addon.Utils.apply_border_textures(anchor, borders, show, size, r, g, b,
     borders.R:SetWidth(size)
 
     borders.L:ClearAllPoints()
-    borders.L:SetPoint("TOPLEFT",    anchor, "TOPLEFT",    0, -size)
-    borders.L:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0,  size)
+    borders.L:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, -size)
+    borders.L:SetPoint("BOTTOMLEFT", anchor, "BOTTOMLEFT", 0, size)
     borders.R:ClearAllPoints()
-    borders.R:SetPoint("TOPRIGHT",    anchor, "TOPRIGHT",    0, -size)
-    borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0,  size)
+    borders.R:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, -size)
+    borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end

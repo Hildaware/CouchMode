@@ -1,6 +1,6 @@
 local addon_name     = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
@@ -18,11 +18,11 @@ TOOLBAR_BUTTON_TYPE  = {
 
 --#region ── Button definitions ───────────────────────────────────────────────
 
-local poi_defs = {
-    { btn = "poiBtnQuests",     atlas = "QuestNormal",             tooltip = "Quest Labels",      db = "poiLabelsShowQuests"    },
-    { btn = "poiBtnRares",      atlas = "VignetteKill",            tooltip = "Rare Labels",       db = "poiLabelsShowRares"     },
-    { btn = "poiBtnTreasures",  atlas = "VignetteTreasure",        tooltip = "Treasure Labels",   db = "poiLabelsShowTreasures" },
-    { btn = "poiBtnPetTamers",  atlas = "WildBattlePetCapturable", tooltip = "Pet Tamer Labels",  db = "poiLabelsShowPetTamers" },
+local poi_defs       = {
+    { btn = "poiBtnQuests",    atlas = "QuestNormal",             tooltip = "Quest Labels",     db = "poiLabelsShowQuests" },
+    { btn = "poiBtnRares",     atlas = "VignetteKill",            tooltip = "Rare Labels",      db = "poiLabelsShowRares" },
+    { btn = "poiBtnTreasures", atlas = "VignetteTreasure",        tooltip = "Treasure Labels",  db = "poiLabelsShowTreasures" },
+    { btn = "poiBtnPetTamers", atlas = "WildBattlePetCapturable", tooltip = "Pet Tamer Labels", db = "poiLabelsShowPetTamers" },
 }
 
 local world_map_defs = {
@@ -58,7 +58,9 @@ local function minimap_defs()
                 local is_open = false
                 hooksecurefunc(blizz.Button, "CloseMenu", function() is_open = false end)
                 wrap_blizz_btn(btn, blizz, function()
-                    if is_open then blizz.Button:CloseMenu() else is_open = true; blizz.Button:OpenMenu() end
+                    if is_open then blizz.Button:CloseMenu() else
+                        is_open = true; blizz.Button:OpenMenu()
+                    end
                 end)
             end
         },
@@ -72,7 +74,9 @@ local function minimap_defs()
                 local is_open = false
                 hooksecurefunc(blizz, "CloseMenu", function() is_open = false end)
                 wrap_blizz_btn(btn, blizz, function()
-                    if is_open then blizz:CloseMenu() else is_open = true; blizz:OpenMenu() end
+                    if is_open then blizz:CloseMenu() else
+                        is_open = true; blizz:OpenMenu()
+                    end
                 end)
             end
         },

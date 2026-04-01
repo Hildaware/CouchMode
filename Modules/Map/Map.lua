@@ -1,6 +1,6 @@
 local addon_name     = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule
@@ -153,7 +153,7 @@ end
 
 function map:GetOptions()
     return 'minimap', {
-        name = 'Minimap',
+        name = 'Map',
         type = 'group',
         order = 8,
         args = {

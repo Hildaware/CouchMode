@@ -1,6 +1,6 @@
 local addon_name = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
@@ -13,7 +13,7 @@ function nameplates.buildAurasFrame(f)
     local AURA_GAP = nameplates.AURA_GAP
     local BAR_W    = nameplates.BAR_W
 
-    f.auras = CreateFrame("Frame", nil, f)
+    f.auras        = CreateFrame("Frame", nil, f)
     f.auras:SetPoint("BOTTOM", f.bar, "TOP", 0, 12)
     f.auras:SetSize(BAR_W, AURA_H)
     f.auras:Hide()
@@ -31,7 +31,7 @@ function nameplates.buildAurasFrame(f)
         icon.tex:SetAllPoints(icon)
         -- Square icon cropped to fill AURA_W x AURA_H: show centre AURA_H/AURA_W of the
         -- trimmed texture vertically, leaving U unchanged and cropping V symmetrically.
-        local vCrop = (1 - AURA_H / AURA_W) / 2 * 0.84  -- 0.84 = trimmed range (0.92-0.08)
+        local vCrop = (1 - AURA_H / AURA_W) / 2 * 0.84 -- 0.84 = trimmed range (0.92-0.08)
         icon.tex:SetTexCoord(0.08, 0.92, 0.08 + vCrop, 0.92 - vCrop)
         addon.Utils.apply_border_textures(icon, addon.Utils.create_border_textures(icon, icon), true, 1, 0, 0, 0, 1)
         icon.count = icon:CreateFontString(nil, "OVERLAY")

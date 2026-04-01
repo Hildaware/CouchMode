@@ -1,6 +1,6 @@
 local addon_name       = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon            = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
@@ -21,7 +21,7 @@ local ConsolePort      = _G['ConsolePort'] ---@type any
 
 local GROW_DURATION    = 0.5
 
-local RECT_MASK        = "Interface\\AddOns\\ConsoleTools\\Media\\3-2.blp"
+local RECT_MASK        = "Interface\\AddOns\\CouchMode\\Media\\3-2.blp"
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 

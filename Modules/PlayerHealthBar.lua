@@ -1,18 +1,18 @@
-local addonName     = ...
+local addonName   = ...
 
----@class ConsoleTools: AceAddon
-local addon         = LibStub('AceAddon-3.0'):GetAddon(addonName)
+---@class CouchMode: AceAddon
+local addon       = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class PlayerHealthBar: AceModule
 ---@field preview         boolean
 ---@field visibilityCurve table
-local healthBar     = addon:NewModule('PlayerHealthBar', 'AceEvent-3.0')
+local healthBar   = addon:NewModule('PlayerHealthBar', 'AceEvent-3.0')
 ---@cast healthBar +AceEvent-3.0
 
 ---@type CastUtil
-local CastUtil      = addon.CastUtil
+local CastUtil    = addon.CastUtil
 
-local MEDIA         = {
+local MEDIA       = {
     TEXTURE      = 'interface/castingbar/uicastingbar2x',
     BAR_ATLAS    = 'ui-castingbar-disabled-tier4-empower-2x',
     BORDER_ATLAS = 'UI-CastingBar-Frame',
@@ -25,11 +25,11 @@ local MEDIA         = {
 ---@field bar        StatusBar
 ---@field border     Texture
 ---@field healthText FontString
-local gui           = {}
+local gui         = {}
 
 local healthColorCurve
 
-local SMOOTH_RATE = 2  -- exponential lerp factor for health bar (higher = snappier)
+local SMOOTH_RATE = 2 -- exponential lerp factor for health bar (higher = snappier)
 
 local function cfg()
     return addon.db.profile.playerHealthBar
@@ -219,8 +219,8 @@ end
 function healthBar:OnEnable()
     self:CreateUI()
     self:BuildVisibilityCurve()
-    self:RegisterEvent('UNIT_HEALTH',           'OnHealthChanged')
-    self:RegisterEvent('UNIT_MAXHEALTH',        'OnHealthChanged')
+    self:RegisterEvent('UNIT_HEALTH', 'OnHealthChanged')
+    self:RegisterEvent('UNIT_MAXHEALTH', 'OnHealthChanged')
     self:RegisterEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
 end
 
@@ -243,18 +243,18 @@ end
 function healthBar:GetDefaults()
     return {
         playerHealthBar = {
-            enabled          = true,
-            width            = 220,
-            height           = 18,
-            xPos             = 0,
-            yPos             = -150,
-            locked           = false,
-            showText         = false,
+            enabled       = true,
+            width         = 220,
+            height        = 18,
+            xPos          = 0,
+            yPos          = -150,
+            locked        = false,
+            showText      = false,
             autoHide      = false,
             showThreshold = 75,
             useClassColor = false,
-            colorByPct       = false,
-            barColor         = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
+            colorByPct    = false,
+            barColor      = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
         },
     }
 end

@@ -1,6 +1,6 @@
 local addon_name          = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon               = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
@@ -368,7 +368,7 @@ end
 -- Expose as a global so Bindings.xml can invoke it by name
 local grow_last_press = 0
 local DOUBLE_PRESS_THRESHOLD = 0.4
-function ConsoleTools_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-global
+function CouchMode_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-global
     if not map.container then return end
     if not map.container:IsShown() then map.container:Show() end
     local now = GetTime()
@@ -381,7 +381,7 @@ function ConsoleTools_MinimapGrowToggle() ---@diagnostic disable-line: lowercase
     end
 end
 
-function ConsoleTools_MinimapToggle() ---@diagnostic disable-line: lowercase-global
+function CouchMode_MinimapToggle() ---@diagnostic disable-line: lowercase-global
     if not map.container then return end
     local db     = addon.db.profile.minimap ---@type MinimapDB
     local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
@@ -390,6 +390,6 @@ function ConsoleTools_MinimapToggle() ---@diagnostic disable-line: lowercase-glo
 end
 
 -- Blizzard Key Bindings panel display strings
-BINDING_HEADER_CONSOLETOOLS = "Console Tools" ---@diagnostic disable-line: lowercase-global
-BINDING_NAME_CONSOLETOOLS_MINIMAP_GROWTOGGLE = "Toggle Expand Minimap" ---@diagnostic disable-line: lowercase-global
-BINDING_NAME_CONSOLETOOLS_MINIMAP_TOGGLE = "Toggle Minimap" ---@diagnostic disable-line: lowercase-global
+BINDING_HEADER_COUCHMODE = "CouchMode" ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_COUCHMODE_MINIMAP_GROWTOGGLE = "Toggle Expand Minimap" ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_COUCHMODE_MINIMAP_TOGGLE = "Toggle Minimap" ---@diagnostic disable-line: lowercase-global

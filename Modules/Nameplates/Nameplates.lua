@@ -1,54 +1,54 @@
-local addon_name = ...
+local addon_name     = ...
 
----@class ConsoleTools: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
-local LSM        = LibStub('LibSharedMedia-3.0')
+---@class CouchMode: AceAddon
+local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local LSM            = LibStub('LibSharedMedia-3.0')
 
 ---@class NameplatesModule: AceModule
-local nameplates = addon:NewModule('Nameplates', 'AceEvent-3.0')
+local nameplates     = addon:NewModule('Nameplates', 'AceEvent-3.0')
 ---@cast nameplates +AceEvent-3.0
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local BAR_W    = 160
-local BAR_H    = 14
-local CAST_W   = math.floor(BAR_W * 2 / 3)
-local CAST_H   = 10
-local AURA_W   = 24
-local AURA_H   = 16
-local AURA_GAP = 4
-local AURA_MAX = 8
-local PIP_W    = 12
-local PIP_H    = 12
-local PIP_GAP  = 1
-local PIP_MAX  = 10
+local BAR_W          = 160
+local BAR_H          = 14
+local CAST_W         = math.floor(BAR_W * 2 / 3)
+local CAST_H         = 10
+local AURA_W         = 24
+local AURA_H         = 16
+local AURA_GAP       = 4
+local AURA_MAX       = 8
+local PIP_W          = 12
+local PIP_H          = 12
+local PIP_GAP        = 1
+local PIP_MAX        = 10
 
-local BAR_TEX = "Interface\\Addons\\ConsoleTools\\Media\\basic_bar.tga"
+local BAR_TEX        = "Interface\\Addons\\CouchMode\\Media\\basic_bar.tga"
 
 local PlateType      = { Full = 1, NameOnly = 2 }
 nameplates.PlateType = PlateType
 
 -- Exposed so sub-modules can reference the same values.
-nameplates.BAR_W    = BAR_W
-nameplates.BAR_H    = BAR_H
-nameplates.CAST_W   = CAST_W
-nameplates.CAST_H   = CAST_H
-nameplates.AURA_W   = AURA_W
-nameplates.AURA_H   = AURA_H
-nameplates.AURA_GAP = AURA_GAP
-nameplates.AURA_MAX = AURA_MAX
-nameplates.PIP_W    = PIP_W
-nameplates.PIP_H    = PIP_H
-nameplates.PIP_GAP  = PIP_GAP
-nameplates.PIP_MAX  = PIP_MAX
-nameplates.BAR_TEX  = BAR_TEX
-nameplates.addon    = addon
+nameplates.BAR_W     = BAR_W
+nameplates.BAR_H     = BAR_H
+nameplates.CAST_W    = CAST_W
+nameplates.CAST_H    = CAST_H
+nameplates.AURA_W    = AURA_W
+nameplates.AURA_H    = AURA_H
+nameplates.AURA_GAP  = AURA_GAP
+nameplates.AURA_MAX  = AURA_MAX
+nameplates.PIP_W     = PIP_W
+nameplates.PIP_H     = PIP_H
+nameplates.PIP_GAP   = PIP_GAP
+nameplates.PIP_MAX   = PIP_MAX
+nameplates.BAR_TEX   = BAR_TEX
+nameplates.addon     = addon
 
 --#endregion
 
 --#region ── Font helpers ─────────────────────────────────────────────────────
 
-local FONT_FLAGS = {
+local FONT_FLAGS     = {
     ['']             = 'None',
     ['OUTLINE']      = 'Outline',
     ['THICKOUTLINE'] = 'Thick Outline',

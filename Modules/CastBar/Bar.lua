@@ -1,6 +1,6 @@
 local addonName = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class PlayerCastBar: AceModule
@@ -22,12 +22,12 @@ local MEDIA = {
         BORDER_LEFT   = 'cosmic-bar-borderleft',
         BORDER_RIGHT  = 'cosmic-bar-borderright',
     },
-    FILL_LEFT   = "Interface\\AddOns\\ConsoleTools\\Media\\BarBgLeft",
-    FILL_RIGHT  = "Interface\\AddOns\\ConsoleTools\\Media\\BarBgRight",
+    FILL_LEFT   = "Interface\\AddOns\\CouchMode\\Media\\BarBgLeft",
+    FILL_RIGHT  = "Interface\\AddOns\\CouchMode\\Media\\BarBgRight",
     SPARK_TEX   = "interface\\questframe\\objectivewidget",
     SPARK_ATLAS = "objectivewidget-bar-spark-neutral",
-    ICON_MASK   = "Interface\\AddOns\\ConsoleTools\\Media\\IconMask",
-    ICON_BORDER = "Interface\\AddOns\\ConsoleTools\\Media\\IconBorder",
+    ICON_MASK   = "Interface\\AddOns\\CouchMode\\Media\\IconMask",
+    ICON_BORDER = "Interface\\AddOns\\CouchMode\\Media\\IconBorder",
 }
 
 ---@class PlayerCastBarGUI
@@ -383,6 +383,7 @@ function castBar:ShowFallback(isChannel)
 end
 
 function castBar:HideFallback()
+    if cfg().alwaysShow then return end
     self.castEndTime  = nil
     self.castDuration = nil
     self.isChannel    = nil
@@ -423,41 +424,41 @@ end
 
 function castBar:OnCastStart(_, unit, castGUID)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     self.currentCastGUID = castGUID
     self:StartCastInternal(false)
 end
 
 function castBar:OnCastStop(_, unit, castGUID)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     if castGUID ~= self.currentCastGUID then return end
     self:StopCastInternal()
 end
 
 function castBar:OnCastDelayed(_, unit)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     self:UpdateCastInternal(false)
 end
 
 function castBar:OnChannelStart(_, unit, castGUID)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     self.currentCastGUID = castGUID
     self:StartCastInternal(true)
 end
 
 function castBar:OnChannelStop(_, unit, castGUID)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     if castGUID ~= self.currentCastGUID then return end
     self:StopCastInternal()
 end
 
 function castBar:OnChannelUpdate(_, unit)
     if unit ~= "player" then return end
-    if self.castRingMode then return end
+    if self.castRingMode and not cfg().alwaysShow then return end
     self:UpdateCastInternal(true)
 end
 
@@ -469,7 +470,7 @@ function castBar:OnEnable()
 
     CastUtil.RegisterCastEvents(self)
 
-    if not self.castRingMode then
+    if not self.castRingMode or cfg().alwaysShow then
         if UnitCastingInfo("player") then
             self:StartCastInternal(false)
         elseif UnitChannelInfo("player") then
@@ -486,222 +487,6 @@ function castBar:OnDisable()
         gui.frame:SetScript("OnUpdate", nil)
         gui.frame:Hide()
     end
-end
-
---#endregion
-
---#region ── Options ────────────────────────────────────────────────────────────────────
-
-function castBar:GetDefaults()
-    return {
-        playerCastBar = {
-            enabled       = true,
-            width         = 250,
-            height        = 24,
-            xPos          = 0,
-            yPos          = -200,
-            locked        = false,
-            showIcon      = true,
-            showSpellName = true,
-            showTimer     = true,
-            showSpark     = true,
-            showLatency   = true,
-            useClassColor = false,
-            castColor     = { r = 0.8, g = 0.4, b = 0.0, a = 1.0 },
-            channelColor  = { r = 0.0, g = 0.6, b = 1.0, a = 1.0 },
-        },
-    }
-end
-
-function castBar:GetOptions()
-    return 'playerCastBar', {
-        name  = 'Player Cast Bar',
-        type  = 'group',
-        order = 2,
-        args  = {
-            description = {
-                name  =
-                'A standard horizontal cast bar for your character. Also acts as fallback when Cast Ring is set to attach to a nameplate but no target is present.',
-                type  = 'description',
-                order = 1,
-            },
-            enabled = {
-                name  = 'Enabled',
-                type  = 'toggle',
-                order = 2,
-                get   = function() return addon.db.profile.playerCastBar.enabled end,
-                set   = function(_, value)
-                    addon.db.profile.playerCastBar.enabled = value
-                    if value then castBar:Enable() else castBar:Disable() end
-                end,
-            },
-            general = {
-                name   = 'General',
-                type   = 'group',
-                order  = 3,
-                inline = true,
-                args   = {
-                    width = {
-                        name  = 'Width',
-                        desc  = 'Width of the cast bar in pixels.',
-                        type  = 'range',
-                        order = 1,
-                        min   = 80,
-                        max   = 600,
-                        step  = 2,
-                        get   = function() return addon.db.profile.playerCastBar.width end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.width = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    height = {
-                        name  = 'Height',
-                        desc  = 'Height of the cast bar in pixels.',
-                        type  = 'range',
-                        order = 2,
-                        min   = 10,
-                        max   = 60,
-                        step  = 2,
-                        get   = function() return addon.db.profile.playerCastBar.height end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.height = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    locked = {
-                        name  = 'Lock Position',
-                        desc  = 'Prevent the bar from being dragged.',
-                        type  = 'toggle',
-                        order = 3,
-                        get   = function() return addon.db.profile.playerCastBar.locked end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.locked = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    preview = {
-                        name  = function()
-                            return castBar.preview and 'Hide Preview' or 'Show Preview'
-                        end,
-                        desc  = 'Show or hide the cast bar so you can drag it into position.',
-                        type  = 'execute',
-                        order = 4,
-                        func  = function() castBar:TogglePreview() end,
-                    },
-                },
-            },
-            display = {
-                name   = 'Display',
-                type   = 'group',
-                order  = 4,
-                inline = true,
-                args   = {
-                    showIcon = {
-                        name  = 'Show Spell Icon',
-                        type  = 'toggle',
-                        order = 1,
-                        get   = function() return addon.db.profile.playerCastBar.showIcon end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.showIcon = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    showSpellName = {
-                        name  = 'Show Spell Name',
-                        type  = 'toggle',
-                        order = 2,
-                        get   = function() return addon.db.profile.playerCastBar.showSpellName end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.showSpellName = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    showTimer = {
-                        name  = 'Show Timer',
-                        type  = 'toggle',
-                        order = 3,
-                        get   = function() return addon.db.profile.playerCastBar.showTimer end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.showTimer = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    showSpark = {
-                        name  = 'Show Spark',
-                        type  = 'toggle',
-                        order = 4,
-                        get   = function() return addon.db.profile.playerCastBar.showSpark end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.showSpark = value
-                            castBar:Refresh()
-                        end,
-                    },
-                    showLatency = {
-                        name  = 'Show Latency',
-                        desc  = 'Show a red zone at the end of the bar indicating your network latency window.',
-                        type  = 'toggle',
-                        order = 5,
-                        get   = function() return addon.db.profile.playerCastBar.showLatency end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.showLatency = value
-                            castBar:Refresh()
-                        end,
-                    },
-                },
-            },
-            colors = {
-                name   = 'Colors',
-                type   = 'group',
-                order  = 5,
-                inline = true,
-                args   = {
-                    useClassColor = {
-                        name  = 'Use Class Color',
-                        desc  = 'Color the bar with your class color instead of the custom cast/channel colors.',
-                        type  = 'toggle',
-                        order = 1,
-                        get   = function() return addon.db.profile.playerCastBar.useClassColor end,
-                        set   = function(_, value)
-                            addon.db.profile.playerCastBar.useClassColor = value
-                        end,
-                    },
-                    castColor = {
-                        name     = 'Cast Color',
-                        desc     = 'Fill color for regular casts.',
-                        type     = 'color',
-                        order    = 2,
-                        hasAlpha = false,
-                        disabled = function() return addon.db.profile.playerCastBar.useClassColor end,
-                        get      = function()
-                            local c = addon.db.profile.playerCastBar.castColor
-                            return c.r, c.g, c.b
-                        end,
-                        set      = function(_, r, g, b)
-                            local c = addon.db.profile.playerCastBar.castColor
-                            c.r, c.g, c.b = r, g, b
-                        end,
-                    },
-                    channelColor = {
-                        name     = 'Channel Color',
-                        desc     = 'Fill color for channeled spells.',
-                        type     = 'color',
-                        order    = 3,
-                        hasAlpha = false,
-                        disabled = function() return addon.db.profile.playerCastBar.useClassColor end,
-                        get      = function()
-                            local c = addon.db.profile.playerCastBar.channelColor
-                            return c.r, c.g, c.b
-                        end,
-                        set      = function(_, r, g, b)
-                            local c = addon.db.profile.playerCastBar.channelColor
-                            c.r, c.g, c.b = r, g, b
-                        end,
-                    },
-                },
-            },
-        },
-    }
 end
 
 --#endregion

@@ -1,6 +1,6 @@
 local addonName = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class Options: AceModule
@@ -13,7 +13,7 @@ local options = addon:NewModule('Options')
 
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
-local MODULES = { 'CastRing', 'PlayerCastBar', 'AttachToTarget', 'PlayerHealthBar', 'Generic', 'Nameplates', 'Minimap' } --'Compass'
+local MODULES = { 'CastBar', 'Nameplates', 'Minimap', 'PlayerHealthBar' }
 
 function options:OnInitialize()
     -- Collect defaults from each module.
@@ -27,7 +27,7 @@ function options:OnInitialize()
         end
     end
 
-    addon.db = LibStub("AceDB-3.0"):New("ConsoleToolsDB", defaults, true)
+    addon.db = LibStub("AceDB-3.0"):New("CouchModeDB", defaults, true)
 
     -- Collect settings panels from each module.
     local settings = { type = 'group', args = {} }
@@ -40,11 +40,11 @@ function options:OnInitialize()
     end
 
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, settings)
-    LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Console Tools')
+    LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Couch Mode')
 
-    LibStub('AceConsole-3.0'):RegisterChatCommand('ct',
+    LibStub('AceConsole-3.0'):RegisterChatCommand('cm',
         function() LibStub("AceConfigDialog-3.0"):Open(addonName) end)
-    LibStub('AceConsole-3.0'):RegisterChatCommand('consoletools',
+    LibStub('AceConsole-3.0'):RegisterChatCommand('couchmode',
         function() LibStub("AceConfigDialog-3.0"):Open(addonName) end)
 
     -- Populate dynamic entries saved from previous sessions.

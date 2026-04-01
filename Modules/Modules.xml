@@ -1,11 +1,6 @@
 <UI xmlns='http://www.blizzard.com/wow/ui/'   xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'   xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
-    <Include file = 'AttachToTarget.lua' />
-    <Include file = 'CastUtil.lua' />
-    <Include file = 'PlayerCastBar.lua' />
-    <Include file = 'CastRing.lua' />
-    <Include file = 'TooltipAutomation.lua' />
+    <Include file = 'CastBar/CastBar.xml' />
     <Include file = 'PlayerHealthBar.lua' />
-    <Include file = 'GenericTools.lua' />
     <Include file = 'Map/Map.xml' />
     <Include file = 'Nameplates/Nameplates.xml' />
 </UI>

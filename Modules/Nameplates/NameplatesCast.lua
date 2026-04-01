@@ -1,6 +1,6 @@
 local addon_name = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
@@ -81,7 +81,7 @@ function nameplates.updateCast(f, unitToken)
     applycastStyle(f, isChannel, notInterruptible)
     f.cast.fill:SetTimerDuration(castDuration, nil,
         isChannel and Enum.StatusBarTimerDirection.RemainingTime
-                   or Enum.StatusBarTimerDirection.ElapsedTime)
+        or Enum.StatusBarTimerDirection.ElapsedTime)
     f.cast.spellName:SetText(name)
     f.cast.spellName:Show()
     f.cast:Show()

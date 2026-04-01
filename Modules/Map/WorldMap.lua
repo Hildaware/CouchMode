@@ -2,7 +2,7 @@
 
 local addon_name        = ...
 
----@class ConsoleTools: AceAddon
+---@class CouchMode: AceAddon
 local addon             = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
