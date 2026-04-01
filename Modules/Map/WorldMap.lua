@@ -572,20 +572,59 @@ function map.openWorldMapFresh()
     map.setForceCentered(true)
 end
 
+local UIMapType = _G.Enum and _G.Enum.UIMapType
+
+-- Zone/Dungeon/Micro maps allow internal zoom; Continent/World navigate directly.
+local function is_zone_map(mapID)
+    if not mapID then return false end
+    local info = C_Map.GetMapInfo(mapID)
+    return info and info.mapType and info.mapType >= (UIMapType and UIMapType.Zone or 3)
+end
+
+-- Walk from the player's zone up the parent chain to find the direct child of parentMapID.
+local function get_child_map_for_player(parentMapID)
+    local playerMapID = C_Map.GetBestMapForUnit("player")
+    if not playerMapID or playerMapID == parentMapID then return nil end
+    local candidate = playerMapID
+    local seen = {}
+    while candidate and not seen[candidate] do
+        seen[candidate] = true
+        local info = C_Map.GetMapInfo(candidate)
+        if not info then break end
+        if info.parentMapID == parentMapID then return candidate end
+        candidate = info.parentMapID
+    end
+    return nil
+end
+
 function map.zoomWorldMap(delta)
     if not map.worldMap then return end
     local sc = map.worldMap.ScrollContainer ---@diagnostic disable-line: undefined-field
+    local currentMapID = map.worldMap:GetMapID()
     if delta > 0 then
-        if sc:IsAtMaxZoom() then
-            map.onHideWorldMap()
+        if is_zone_map(currentMapID) then
+            -- Zone: zoom within map; at max zoom close and return to minimap
+            if sc:IsAtMaxZoom() then
+                map.onHideWorldMap()
+            else
+                sc:SetZoomTarget(sc:GetZoom() * 1.1)
+            end
         else
-            sc:SetZoomTarget(sc:GetZoom() * 1.1)
+            -- Non-zone: skip internal zoom, jump directly to child toward player's zone
+            local childID = get_child_map_for_player(currentMapID)
+            if childID then map.navigateToChildMap(childID) end
         end
     else
-        if sc:IsAtMinZoom() then
-            map.navigateToParentMap()
+        if is_zone_map(currentMapID) then
+            -- Zone: zoom within map; at min zoom navigate to parent
+            if sc:IsAtMinZoom() then
+                map.navigateToParentMap()
+            else
+                sc:SetZoomTarget(sc:GetZoom() * 0.9)
+            end
         else
-            sc:SetZoomTarget(sc:GetZoom() * 0.9)
+            -- Non-zone: skip internal zoom, jump directly to parent
+            map.navigateToParentMap()
         end
     end
 end

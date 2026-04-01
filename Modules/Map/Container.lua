@@ -266,20 +266,6 @@ function map.setupContainerScripts()
     end
 
     map.container:SetScript("OnUpdate", function(_, elapsed)
-        -- Movement fade (container alpha)
-        if map.fadeTo then
-            map.fadeElapsed = map.fadeElapsed + elapsed
-            local t = math_min(1, map.fadeElapsed / FADE_DURATION)
-            map.container:SetAlpha(map.fadeFrom + (map.fadeTo - map.fadeFrom) * t)
-            if t >= 1 then
-                if map.fadeHideOnComplete then
-                    map.container:Hide()
-                    map.fadeHideOnComplete = false
-                end
-                map.fadeTo = nil
-            end
-        end
-        -- Frame cross-fade helper
         local function update_fade(state, frame, duration)
             if not state.active or not frame then return end
             state.elapsed = state.elapsed + elapsed
@@ -287,9 +273,10 @@ function map.setupContainerScripts()
             frame:SetAlpha(state.from + (state.to - state.from) * t)
             if t >= 1 then
                 state.active = false
-                if state.to == 0 then frame:Hide() end
+                if state.hideOnComplete then frame:Hide() end
             end
         end
+        update_fade(map.containerFade, map.container, FADE_DURATION)
         update_fade(map.minimapFade, Minimap)
         update_fade(map.worldMapFade, map.worldMap)
         update_fade(map.toolbarFade, map.toolbar, FADE_DURATION)
@@ -312,9 +299,7 @@ function map.setupContainerScripts()
     end)
 
     local function start_fade(target)
-        map.fadeFrom = map.container:GetAlpha()
-        map.fadeTo = target
-        map.fadeElapsed = 0
+        map.startFrameFade(map.container, map.containerFade, target)
     end
 
     map.container:RegisterEvent("PLAYER_STARTED_MOVING")
@@ -400,15 +385,8 @@ function ConsoleTools_MinimapToggle() ---@diagnostic disable-line: lowercase-glo
     if not map.container then return end
     local db     = addon.db.profile.minimap ---@type MinimapDB
     local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
-    if target > 0 then
-        map.container:Show()
-        map.fadeHideOnComplete = false
-    else
-        map.fadeHideOnComplete = true
-    end
-    map.fadeFrom    = map.container:GetAlpha()
-    map.fadeTo      = target
-    map.fadeElapsed = 0
+    if target > 0 then map.container:Show() end
+    map.startFrameFade(map.container, map.containerFade, target, target == 0)
 end
 
 -- Blizzard Key Bindings panel display strings

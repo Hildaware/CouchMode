@@ -127,6 +127,7 @@ function map.applySettings()
     map.container:SetClampRectInsets(0, 0, offset, offset)
     Minimap:ClearAllPoints()
     Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, offset)
+    Minimap:SetSize(w, w)
     apply_minimap_shape(shape, w, h)
     map.applyBorder()
     map.applyZoneText()
@@ -180,16 +181,10 @@ function map.zoomMinimap(delta)
     local zoom     = Minimap:GetZoom()
     local max_zoom = Minimap:GetZoomLevels() - 1
     if delta > 0 then
-        if Minimap.ZoomIn then
-            Minimap.ZoomIn:Click('LeftButton')
-        else
-            Minimap:SetZoom(math_min(zoom + 1, max_zoom))
-        end
+        Minimap:SetZoom(math_min(zoom + 1, max_zoom))
     else
         if zoom == 0 and map.grown then
             map.openWorldMap()
-        elseif Minimap.ZoomOut then
-            Minimap.ZoomOut:Click('LeftButton')
         else
             Minimap:SetZoom(math_max(zoom - 1, 0))
         end

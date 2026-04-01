@@ -2,10 +2,11 @@
 ---@field buttons table<integer, { frame: Frame, db: string|nil }[]>
 
 ---@class FadeState
----@field from    number
----@field to      number
----@field elapsed number
----@field active  boolean
+---@field from           number
+---@field to             number
+---@field elapsed        number
+---@field active         boolean
+---@field hideOnComplete boolean
 
 ---@class MinimapDB
 ---@field enabled                  boolean
@@ -85,10 +86,9 @@
 ---@class MapModule: AceModule
 ---@field minimapFade            FadeState
 ---@field worldMapFade           FadeState
----@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number)
----@field fadeTo                 number|nil
----@field fadeFrom               number
----@field fadeElapsed            number
+---@field toolbarFade            FadeState
+---@field containerFade          FadeState
+---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number, hideOnComplete?: boolean)
 ---@field grown                  boolean
 ---@field worldMapOpen           boolean
 ---@field origParent             Frame|nil

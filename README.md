@@ -1,8 +1,7 @@
 ** Tools
 
 - Map
-    - double tab should always be centered
-    - player arrow strata too low
+    - Regional map doesn't have arrow????????
 
 - Nameplates
     - Can title be smaller?

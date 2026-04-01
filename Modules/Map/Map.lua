@@ -11,16 +11,18 @@ local unpack         = unpack
 local Minimap        = _G.Minimap
 local MinimapCluster = _G.MinimapCluster ---@type Frame
 
-map.minimapFade      = { from = 1, to = 1, elapsed = 0, active = false }
-map.worldMapFade     = { from = 0, to = 0, elapsed = 0, active = false }
-map.toolbarFade      = { from = 0, to = 0, elapsed = 0, active = false }
+map.minimapFade      = { from = 1, to = 1, elapsed = 0, active = false, hideOnComplete = false }
+map.worldMapFade     = { from = 0, to = 0, elapsed = 0, active = false, hideOnComplete = false }
+map.toolbarFade      = { from = 0, to = 0, elapsed = 0, active = false, hideOnComplete = false }
+map.containerFade    = { from = 1, to = 1, elapsed = 0, active = false, hideOnComplete = false }
 map.growTransition   = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
 
-function map.startFrameFade(frame, state, to_alpha)
-    state.from = frame:GetAlpha()
-    state.to = to_alpha
-    state.elapsed = 0
-    state.active = true
+function map.startFrameFade(frame, state, to_alpha, hide_on_complete)
+    state.from           = frame:GetAlpha()
+    state.to             = to_alpha
+    state.elapsed        = 0
+    state.active         = true
+    state.hideOnComplete = hide_on_complete or false
 end
 
 --#region ── Module lifecycle ─────────────────────────────────────────────────
@@ -88,7 +90,7 @@ function map:OnDisable()
 
         map.origParent = nil
         map.grown = false
-        map.fadeTo = nil
+        map.containerFade.active = false
     end
 end
 
@@ -254,7 +256,7 @@ function map:GetOptions()
                         type  = 'range',
                         order = 2,
                         min   = 200,
-                        max   = 800,
+                        max   = 1600,
                         step  = 10,
                         get   = function() return addon.db.profile.minimap.growSize end,
                         set   = function(_, value) addon.db.profile.minimap.growSize = value end,
