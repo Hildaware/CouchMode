@@ -328,7 +328,9 @@ local function toggle_grow()
     if map.grown then
         map.grown = false
         if map.worldMapOpen then map.onHideWorldMap() end
+        if map.toolbar then map.toolbar:Hide() end
         if ConsolePort and ConsolePort:RemoveInterfaceCursorFrame(map.container) then
+            ConsolePort:RemoveInterfaceCursorFrame(map.toolbar)
             local ih = _G['ConsolePortInputHandler']
             if ih then ih:Release(map.container) end
             _G['ConsolePortCursor']:SetEnabled(false)
