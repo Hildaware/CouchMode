@@ -5,6 +5,14 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 addon.Utils = {}
 
+---@param r number
+---@param g number
+---@param b number
+---@return string
+function addon.Utils.hexColor(r, g, b)
+    return string.format("|cFF%02X%02X%02X", r * 255, g * 255, b * 255)
+end
+
 --- Creates four border textures (T, B, L, R) parented to `parent` and anchored to `anchor`.
 --- Call apply_border_textures to set size and color.
 ---@param parent Frame

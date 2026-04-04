@@ -11,9 +11,7 @@ local nameplates = addon:GetModule('Nameplates')
 local COLOR_END  = "|r"
 local titleColorCache
 
-local function hexColor(r, g, b)
-    return string.format("|cFF%02X%02X%02X", r * 255, g * 255, b * 255)
-end
+local hexColor   = addon.Utils.hexColor
 
 local function titleColor()
     if not titleColorCache then
@@ -37,48 +35,15 @@ end
 --#endregion
 
 --#region ── Quest detection ──────────────────────────────────────────────────
-local questGUIDs    = {}
 local subtitleCache = {}
 
 function nameplates.isQuestUnit(unit)
-    -- This function is expensive due to tooltip scanning. It should be called
-    -- sparingly, ideally only when a unit appears or when the quest log changes.
-    -- It is cached per GUID.
     if nameplates.isInInstance() then return false end
-    local guid = UnitGUID(unit)
-    if not guid then return false end
-
-    if questGUIDs[guid] == false then return false end
-
-    local tooltipData = C_TooltipInfo.GetHyperlink("unit:" .. guid)
-    if not tooltipData then
-        questGUIDs[guid] = false
-        return false
-    end
-
-    for _, line in ipairs(tooltipData.lines or {}) do
-        if line.type == Enum.TooltipDataLineType.QuestObjective then
-            local text = line.leftText or ""
-            local p1, p2 = text:match("(%d+)/(%d+)")
-            if p1 and p2 then
-                if tonumber(p1) < tonumber(p2) then return true end
-            else
-                local pct = text:match("(%d+)%%")
-                if pct then
-                    if tonumber(pct) < 100 then return true end
-                else
-                    return true
-                end
-            end
-        end
-    end
-
-    questGUIDs[guid] = false
-    return false
+    return addon.QuestUtils.isQuestUnit(unit)
 end
 
 function nameplates.wipeQuestCache()
-    wipe(questGUIDs)
+    addon.QuestUtils.wipeCache()
     wipe(subtitleCache)
 end
 

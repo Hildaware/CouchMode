@@ -40,7 +40,6 @@ function bags:Build(type, parent)
     CreateContainer(bagButton, type)
 
     bagButton:SetScript('OnClick', function(self)
-        print('Button Click')
         if self.Container:IsShown() then
             self.Container:Hide()
             self:GetParent().ItemCountContainer:Show()
