@@ -43,6 +43,7 @@ function tips:GetDefaults()
         tips = {
             enabled          = true,
             showFriendlyNpcs = true,
+            showEnemyNpcs    = true,
             font             = 'Arial Narrow',
             side             = 'RIGHT',
             y                = -200,
@@ -81,11 +82,19 @@ function tips:GetOptions()
                 get   = function() return tipsDB().showFriendlyNpcs end,
                 set   = function(_, value) tipsDB().showFriendlyNpcs = value end,
             },
+            showEnemyNpcs = {
+                name  = 'Show Enemy NPC Tips',
+                desc  = 'Show tooltip for attackable NPCs.',
+                type  = 'toggle',
+                order = 4,
+                get   = function() return tipsDB().showEnemyNpcs end,
+                set   = function(_, value) tipsDB().showEnemyNpcs = value end,
+            },
             position = {
                 name   = 'Position',
                 type   = 'group',
                 inline = true,
-                order  = 3,
+                order  = 5,
                 args   = {
                     side = {
                         name   = 'Side',
@@ -116,7 +125,7 @@ function tips:GetOptions()
                 name   = 'Appearance',
                 type   = 'group',
                 inline = true,
-                order  = 4,
+                order  = 6,
                 args   = {
                     font = {
                         name          = 'Font',

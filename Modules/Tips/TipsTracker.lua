@@ -13,16 +13,24 @@ local function isFriendlyNpc(unit)
     return not UnitIsPlayer(unit) and not UnitCanAttack("player", unit)
 end
 
+local function isEnemyNpc(unit)
+    return not UnitIsPlayer(unit) and UnitCanAttack("player", unit)
+end
+
 local function getCurrentUnit()
-    local showFriendlyNpcs = tips.tipsDB().showFriendlyNpcs
+    local db               = tips.tipsDB()
+    local showFriendlyNpcs = db.showFriendlyNpcs
+    local showEnemyNpcs    = db.showEnemyNpcs
     local function allow(unit)
-        return showFriendlyNpcs or not isFriendlyNpc(unit)
+        if not showFriendlyNpcs and isFriendlyNpc(unit) then return false end
+        if not showEnemyNpcs    and isEnemyNpc(unit)    then return false end
+        return true
     end
 
     if UnitExists("mouseover") and not UnitIsUnit("mouseover", "player") then
         if allow("mouseover") then return "mouseover" end
     end
-    if UnitExists("softenemy") then return "softenemy" end
+    if UnitExists("softenemy") and allow("softenemy") then return "softenemy" end
     if UnitExists("softfriend") and allow("softfriend") then return "softfriend" end
     if UnitExists("softinteract") and allow("softinteract") then return "softinteract" end
     if UnitExists("target") and not UnitIsUnit("target", "player") then
