@@ -40,11 +40,14 @@ function tips.populateCharacteristics(f, unit)
             f.info:SetText(className or "")
         end
         f.classIcon:Show()
+        f.hasInfo = (className ~= nil) or (specInfo ~= nil)
     else
         f.classIconBorder:Hide()
         f.classIcon:Hide()
-        f.info:SetText(UnitCreatureType(unit) or "")
+        local creatureType = UnitCreatureType(unit)
+        f.info:SetText(creatureType or "")
         f.info:SetTextColor(1, 1, 1)
+        f.hasInfo = (creatureType ~= nil)
     end
 end
 
@@ -72,8 +75,7 @@ end
 function tips.layoutCharacteristics(f, y, height, fonts)
     f.info:SetFont(fonts.path, fonts.titleSize, fonts.flag)
 
-    local infoText = f.info:GetText() or ""
-    if infoText ~= "" then
+    if f.hasInfo then
         y                 = y + 6
         height            = height + tips.LINE_GAP
 
@@ -94,7 +96,7 @@ function tips.layoutCharacteristics(f, y, height, fonts)
             f.info:SetPoint("TOPLEFT", f, "TOPLEFT", tips.PADDING, y - 14)
         end
 
-        local h = math.max(borderShown and borderW or 0, f.info:GetStringHeight(), 1)
+        local h = math.max(borderShown and borderW or 0, fonts.titleSize, 1)
         y       = y - h - tips.LINE_GAP
         height  = height + h + tips.LINE_GAP
     end

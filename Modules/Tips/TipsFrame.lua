@@ -136,6 +136,7 @@ local function release(f)
     f.classIcon:Hide()
     f.classIconBorder:Hide()
     f.info:SetText("")
+    f.hasInfo = false
     f.mountDivider:Hide()
     f.mountIconBorder:Hide()
     f.mountIcon:Hide()

@@ -13,7 +13,7 @@ function nameplates.buildPowerFrame(f)
     local PIP_MAX = nameplates.PIP_MAX
 
     f.power = CreateFrame("Frame", nil, f)
-    f.power:SetFrameLevel(f.bar:GetFrameLevel() + 5)
+    f.power:SetFrameLevel(f.cast:GetFrameLevel() + 5)
     f.power:SetPoint("TOP", f.bar, "BOTTOM", 0, 6)
     f.power:SetSize(1, PIP_H)
     f.power:Hide()

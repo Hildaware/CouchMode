@@ -73,6 +73,8 @@ local function scanGUID(guid, unit)
 end
 
 local function getEntry(unit)
+    local _, instanceType = IsInInstance()
+    if instanceType ~= "none" then return nil end
     local guid = UnitGUID(unit)
     if not guid then return nil end
     if not questCache[guid] then scanGUID(guid, unit) end

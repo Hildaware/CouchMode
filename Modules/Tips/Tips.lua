@@ -41,11 +41,12 @@ tips.tipsDB         = tipsDB
 function tips:GetDefaults()
     return {
         tips = {
-            enabled = true,
-            font    = 'Arial Narrow',
-            side    = 'RIGHT',
-            y       = -200,
-            locked  = true,
+            enabled          = true,
+            showFriendlyNpcs = true,
+            font             = 'Arial Narrow',
+            side             = 'RIGHT',
+            y                = -200,
+            locked           = true,
         },
     }
 end
@@ -71,6 +72,14 @@ function tips:GetOptions()
                     tipsDB().enabled = value
                     if value then tips:Enable() else tips:Disable() end
                 end,
+            },
+            showFriendlyNpcs = {
+                name  = 'Show Friendly NPC Tips',
+                desc  = 'Show tooltip for friendly (non-attackable) NPCs.',
+                type  = 'toggle',
+                order = 3,
+                get   = function() return tipsDB().showFriendlyNpcs end,
+                set   = function(_, value) tipsDB().showFriendlyNpcs = value end,
             },
             position = {
                 name   = 'Position',

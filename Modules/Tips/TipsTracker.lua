@@ -9,15 +9,24 @@ local tips       = addon:GetModule('Tips')
 
 --#region ── Unit priority ────────────────────────────────────────────────────
 
+local function isFriendlyNpc(unit)
+    return not UnitIsPlayer(unit) and not UnitCanAttack("player", unit)
+end
+
 local function getCurrentUnit()
+    local showFriendlyNpcs = tips.tipsDB().showFriendlyNpcs
+    local function allow(unit)
+        return showFriendlyNpcs or not isFriendlyNpc(unit)
+    end
+
     if UnitExists("mouseover") and not UnitIsUnit("mouseover", "player") then
-        return "mouseover"
+        if allow("mouseover") then return "mouseover" end
     end
     if UnitExists("softenemy") then return "softenemy" end
-    if UnitExists("softfriend") then return "softfriend" end
-    if UnitExists("softinteract") then return "softinteract" end
+    if UnitExists("softfriend") and allow("softfriend") then return "softfriend" end
+    if UnitExists("softinteract") and allow("softinteract") then return "softinteract" end
     if UnitExists("target") and not UnitIsUnit("target", "player") then
-        return "target"
+        if allow("target") then return "target" end
     end
     return nil
 end
@@ -119,41 +128,46 @@ end
 
 function tips:OnWorldCursorUpdate(_, anchorType)
     if anchorType == Enum.WorldCursorAnchorType.None then
-        if not getCurrentUnit() then hideTip() end
+        C_Timer.After(0, refreshTip)
         return
     end
     local tooltipData = C_TooltipInfo.GetWorldCursor()
     if not tooltipData or not tooltipData.lines or #tooltipData.lines == 0 then
-        if not getCurrentUnit() then hideTip() end
+        refreshTip()
         return
     end
     local name = tooltipData.lines[1].leftText
-    if not name or name == "" then return end
+    if not name then return end
 
-    -- Parse quest titles and objectives from the remaining lines
-    local quests       = {}
-    local currentQuest = nil
-    for i = 2, #tooltipData.lines do
-        local line = tooltipData.lines[i]
-        local text = line.leftText
-        if text and text ~= "" then
-            if line.type == Enum.TooltipDataLineType.QuestObjective then
-                local finished = false
-                local p1, p2   = text:match("(%d+)/(%d+)")
-                if p1 and p2 then
-                    finished = tonumber(p1) >= tonumber(p2)
+    -- Tooltip text is a secret string in instances; pattern matching on it is forbidden there.
+    local _, instanceType = IsInInstance()
+    local quests = nil
+    if instanceType == "none" then
+        quests = {}
+        local currentQuest = nil
+        for i = 2, #tooltipData.lines do
+            local line = tooltipData.lines[i]
+            local text = line.leftText
+            if text and text ~= "" then
+                if line.type == Enum.TooltipDataLineType.QuestObjective then
+                    local finished = false
+                    local p1, p2   = text:match("(%d+)/(%d+)")
+                    if p1 and p2 then
+                        finished = tonumber(p1) >= tonumber(p2)
+                    else
+                        local pct = text:match("(%d+)%%")
+                        if pct then finished = tonumber(pct) >= 100 end
+                    end
+                    if currentQuest then
+                        currentQuest.objectives[#currentQuest.objectives + 1] = { text = text, finished = finished }
+                    end
                 else
-                    local pct = text:match("(%d+)%%")
-                    if pct then finished = tonumber(pct) >= 100 end
+                    currentQuest = { title = text, objectives = {} }
+                    quests[#quests + 1] = currentQuest
                 end
-                if currentQuest then
-                    currentQuest.objectives[#currentQuest.objectives + 1] = { text = text, finished = finished }
-                end
-            else
-                currentQuest = { title = text, objectives = {} }
-                quests[#quests + 1] = currentQuest
             end
         end
+        if #quests == 0 then quests = nil end
     end
 
     local f     = tips.activeFrame
@@ -163,7 +177,7 @@ function tips:OnWorldCursorUpdate(_, anchorType)
         tips.activeFrame = f
     end
     currentUnit = nil
-    tips.updateFrameForObject(f, name, #quests > 0 and quests or nil)
+    tips.updateFrameForObject(f, name, quests)
     if isNew then fadeInFrame(f) end
     GameTooltip:Hide()
 end

@@ -20,17 +20,18 @@ function nameplates.buildCastFrame(f, overlay)
 
     local castBg = f.cast:CreateTexture(nil, "BACKGROUND")
     castBg:SetTexture(BAR_TEX)
+    castBg:SetVertexColor(0, 0, 0, 1)
     castBg:SetAllPoints(f.cast)
-
-    do
-        local b = nameplates.addon.Utils.create_border_textures(f.cast, f.cast)
-        nameplates.addon.Utils.apply_border_textures(f.cast, b, true, 1, 0, 0, 0, 1)
-    end
 
     f.cast.fill = CreateFrame("StatusBar", nil, f.cast)
     f.cast.fill:SetAllPoints(f.cast)
     f.cast.fill:SetStatusBarTexture(BAR_TEX)
     f.cast.fill:GetStatusBarTexture():SetBlendMode("ADD")
+
+    do
+        local b = nameplates.addon.Utils.create_border_textures(f.cast.fill, f.cast)
+        nameplates.addon.Utils.apply_border_textures(f.cast, b, true, 1, 0, 0, 0, 1)
+    end
 
     f.cast.spellName = overlay:CreateFontString(nil, "OVERLAY")
     f.cast.spellName:SetFont(nameplates.currentCastFont())

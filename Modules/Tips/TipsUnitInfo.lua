@@ -45,6 +45,11 @@ function tips.getSubtitle(unit)
         return GetGuildInfo(unit)
     end
 
+    -- GUIDs and tooltip text are secret strings in instances; pattern matching and
+    -- table indexing on them are forbidden there.
+    local _, instanceType = IsInInstance()
+    if instanceType ~= "none" then return nil end
+
     local guid = UnitGUID(unit)
     if guid and subtitleCache[guid] ~= nil then
         return subtitleCache[guid] or nil
@@ -64,6 +69,9 @@ function tips.getSubtitle(unit)
 end
 
 function tips.getFaction(unit)
+    local _, instanceType = IsInInstance()
+    if instanceType ~= "none" then return nil end
+
     local guid = UnitGUID(unit)
     if guid and factionCache[guid] ~= nil then
         return factionCache[guid] or nil
@@ -93,13 +101,14 @@ end
 function tips.populateUnitInfo(f, unit)
     local isPlayer = UnitIsPlayer(unit)
     local baseName = UnitName(unit) or ""
-    if #baseName > 30 then baseName = baseName:sub(1, 30) .. "…" end
     f.name:SetText(tips.nameColor(unit) .. baseName .. "|r")
 
     if isPlayer then
-        -- Split PvP title from name: may be prefix ("Private Brandon") or suffix ("Brandon the Explorer")
+        -- Split PvP title from name: may be prefix ("Private Brandon") or suffix ("Brandon the Explorer").
+        -- UnitName/UnitPVPName are secret strings in instances — string operations on them are forbidden there.
+        local _, instanceType = IsInInstance()
         local pvpName = UnitPVPName(unit) or baseName
-        if pvpName ~= baseName then
+        if pvpName ~= baseName and instanceType == "none" then
             local s, e = pvpName:find(baseName, 1, true)
             f.pretitle:SetText(s and s > 1 and pvpName:sub(1, s - 1):match("^%s*(.-)%s*$") or "")
             f.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
@@ -160,15 +169,17 @@ function tips.populateUnitInfo(f, unit)
 end
 
 function tips.buildUnitInfo(f, headerOverlay, subfont)
-    local c      = FACTION_BAR_COLORS[4]
+    local c     = FACTION_BAR_COLORS[4]
     -- Pre-title (prefix before name, e.g. "Private ")
-    f.pretitle   = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
+    f.pretitle  = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
     -- Name (large, class/faction colored)
-    f.name       = tips.makeFontString(headerOverlay, tips.currentFont)
+    f.name      = tips.makeFontString(headerOverlay, tips.currentFont)
     -- Post-title (suffix after name, e.g. " the Explorer")
-    f.posttitle  = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
+    f.posttitle = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
     -- Guild (players) or NPC sub-title
-    f.subtitle   = tips.makeFontString(headerOverlay, subfont, { 0.7, 0.7, 0.7 })
+    f.subtitle  = tips.makeFontString(headerOverlay, subfont, { 0.7, 0.7, 0.7 })
+
+    f.name:SetWidth(tips.TIP_W - (tips.PADDING * 4))
 
     -- Level badge texture (housing-dashboard-tasks-listitem-flag, 68x69)
     f.levelBadge = headerOverlay:CreateTexture(nil, "OVERLAY")
@@ -188,8 +199,8 @@ function tips.buildUnitInfo(f, headerOverlay, subfont)
 
     -- Classification icon (elite / rare / etc.) anchored to the right of the header
     f.classificationIcon = headerOverlay:CreateTexture(nil, "OVERLAY")
-    f.classificationIcon:SetSize(40, 40)
-    f.classificationIcon:SetPoint("RIGHT", f.headerFrame, "RIGHT", -12, 2)
+    f.classificationIcon:SetSize(24, 24)
+    f.classificationIcon:SetPoint("TOPRIGHT", f.headerFrame, "TOPRIGHT", -2, 2)
     f.classificationIcon:Hide()
 end
 
@@ -231,8 +242,21 @@ function tips.layoutUnitInfo(f, fonts)
         f.faction:SetPoint("TOPLEFT", f.subtitle, 'BOTTOMLEFT', 0, -1)
     end
 
-    local nameY = (hasGuild and posttitle) and 14 or
-    (isNpcTitled and 14 or ((not hasGuild) ~= (not hasTitle) and 8 or 2))
+    local nameY
+    if hasGuild and pretitle then
+        nameY = 4
+    elseif hasGuild and posttitle then
+        nameY = 16
+    elseif not hasGuild and posttitle then
+        nameY = 10
+    elseif not hasGuild and pretitle then
+        nameY = -2
+    elseif hasGuild then
+        nameY = 10
+    else
+        nameY = 4
+    end
+
     f.name:SetPoint("LEFT", f.headerFrame, "LEFT", textX, nameY)
 
     if badgeShown then

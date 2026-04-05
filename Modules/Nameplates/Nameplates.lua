@@ -69,7 +69,7 @@ end
 
 local function currentCastFont()
     local path, size, flag = currentFont()
-    return path, math.max(8, size - 8), flag
+    return path, math.max(8, size - 10), flag
 end
 
 nameplates.currentFont      = currentFont
@@ -89,6 +89,7 @@ function nameplates:GetDefaults()
             fontSize        = 16,
             fontFlag        = 'OUTLINE',
             alwaysShowParty = false,
+            occludedAlpha   = 0,
         },
     }
 end
@@ -159,15 +160,38 @@ function nameplates:GetOptions()
                     },
                 },
             },
-            automation = {
-                name   = 'Automation',
+            visibility = {
+                name   = 'Visibility',
                 type   = 'group',
                 inline = true,
                 order  = 4,
                 args   = {
+                    occludedAlpha = {
+                        name  = 'Occluded Alpha',
+                        desc  = 'Alpha of nameplates visible through walls. 0 hides them completely.',
+                        type  = 'range',
+                        order = 1,
+                        min   = 0,
+                        max   = 1,
+                        step  = 0.05,
+                        get   = function() return npDB().occludedAlpha end,
+                        set   = function(_, value)
+                            npDB().occludedAlpha = value
+                            SetCVar("nameplateOccludedAlphaMult", value)
+                        end,
+                    },
+                },
+            },
+            automation = {
+                name   = 'Automation',
+                type   = 'group',
+                inline = true,
+                order  = 5,
+                args   = {
                     alwaysShowParty = {
                         name  = 'Always Show Party',
-                        desc  = 'Always show party members\' names on their nameplates. By default names are only shown when a party member is targeted or moused over.',
+                        desc  =
+                        'Always show party members\' names on their nameplates. By default names are only shown when a party member is targeted or moused over.',
                         type  = 'toggle',
                         order = 1,
                         get   = function() return npDB().alwaysShowParty end,

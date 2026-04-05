@@ -5,6 +5,7 @@ local addon                   = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
 local nameplates              = addon:GetModule('Nameplates')
+---@cast nameplates +AceEvent-3.0
 
 --#region ── Plate constants ──────────────────────────────────────────────────
 
@@ -170,6 +171,7 @@ local function showPlate(unitToken, np)
         active[unitToken] = f
     end
 
+    f:SetParent(np) -- inherit np's alpha so occlusion applies automatically
     f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
     f:SetFrameStrata(isSelected(unitToken) and "HIGH" or "MEDIUM")
     updateAlpha(f, unitToken)
@@ -212,11 +214,11 @@ end
 
 local function applyFriendlyVisibility()
     if nameplates.isInInstance() then
-        SetCVar("nameplateShowFriends", 0)
+        SetCVar("nameplateShowFriendlyPlayers", 0)
         SetCVar("nameplateShowFriendlyNPCs", 0)
         SetCVar("UnitNameFriendlyPlayerName", 1)
     else
-        SetCVar("nameplateShowFriends", 1)
+        SetCVar("nameplateShowFriendlyPlayers", 1)
         SetCVar("nameplateShowFriendlyNPCs", 1)
         SetCVar("UnitNameFriendlyPlayerName", 0)
     end
@@ -228,6 +230,7 @@ end
 
 function nameplates:OnEnable()
     SetCVar("nameplateSelectedScale", 1.0)
+    SetCVar("nameplateOccludedAlphaMult", addon.db.profile.nameplates.occludedAlpha)
     applyFriendlyVisibility()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnUnitAdded")
@@ -269,6 +272,8 @@ function nameplates:OnEnable()
         local unit = np.UnitFrame and np.UnitFrame.unit
         if unit then showPlate(unit, np) end
     end
+
+    nameplates:debugShow()
 end
 
 function nameplates:OnEnteringWorld()
@@ -462,6 +467,15 @@ function nameplates.debugShow()
         end
     end
     debugFrame.power:Show()
+
+    debugFrame.cast.fill:SetStatusBarColor(0.9, 0.6, 0.1)  -- interruptible cast colour
+    debugFrame.cast.fill:SetMinMaxValues(0, 100)
+    debugFrame.cast.fill:SetValue(60)
+    debugFrame.cast.spellName:SetFont(nameplates.currentCastFont())
+    debugFrame.cast.spellName:SetText("Pyroblast")
+    debugFrame.cast.spellName:Show()
+    debugFrame.cast.shield:SetAlpha(0)
+    debugFrame.cast:Show()
 end
 
 function nameplates.debugHide()
