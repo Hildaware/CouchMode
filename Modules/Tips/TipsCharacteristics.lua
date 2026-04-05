@@ -27,20 +27,48 @@ tips.CREATURE_TYPE_SET = {
 function tips.populateCharacteristics(f, unit)
     local isPlayer = UnitIsPlayer(unit)
     if isPlayer then
-        local className, classToken = UnitClass(unit)
-        local cc                    = classToken and RAID_CLASS_COLORS[classToken]
-        local specInfo              = addon.TipsUtils and addon.TipsUtils.getSpecData(unit)
-        if cc then f.info:SetVertexColor(cc.r, cc.g, cc.b) end
-        f.classIconBorder:Show()
-        if specInfo then
-            f.classIcon:SetTexture(specInfo.specIcon)
-            f.info:SetText(specInfo.specName .. " " .. (className or ""))
+        local rpRace  = addon.TRPUtils.getRPRace(unit)
+        local rpClass = addon.TRPUtils.getRPClass(unit)
+
+        if rpRace or rpClass then
+            -- TRP3 custom race/class: show as plain text, hide class icon.
+            local parts = {}
+            if rpRace  then parts[#parts + 1] = rpRace  end
+            if rpClass then parts[#parts + 1] = rpClass end
+            f.info:SetText(table.concat(parts, " "))
+            local r, g, b = addon.TRPUtils.getRPColor(unit)
+            if r then
+                f.info:SetVertexColor(r, g, b)
+            else
+                local _, classToken = UnitClass(unit)
+                local cc = classToken and RAID_CLASS_COLORS[classToken]
+                if cc then f.info:SetVertexColor(cc.r, cc.g, cc.b) end
+            end
+            local rpIcon = addon.TRPUtils.getRPIcon(unit)
+            if rpIcon then
+                f.classIcon:SetTexture("Interface/icons/" .. rpIcon)
+            else
+                f.classIcon:SetTexture("Interface/AddOns/totalRP3/Resources/trp3logo")
+            end
+            f.classIcon:Show()
+            f.classIconBorder:Show()
+            f.hasInfo = true
         else
-            f.classIcon:SetAtlas("BfAMission-Icon-Normal")
-            f.info:SetText(className or "")
+            local className, classToken = UnitClass(unit)
+            local cc                    = classToken and RAID_CLASS_COLORS[classToken]
+            local specInfo              = addon.TipsUtils and addon.TipsUtils.getSpecData(unit)
+            if cc then f.info:SetVertexColor(cc.r, cc.g, cc.b) end
+            f.classIconBorder:Show()
+            if specInfo then
+                f.classIcon:SetTexture(specInfo.specIcon)
+                f.info:SetText(specInfo.specName .. " " .. (className or ""))
+            else
+                f.classIcon:SetAtlas("BfAMission-Icon-Normal")
+                f.info:SetText(className or "")
+            end
+            f.classIcon:Show()
+            f.hasInfo = (className ~= nil) or (specInfo ~= nil)
         end
-        f.classIcon:Show()
-        f.hasInfo = (className ~= nil) or (specInfo ~= nil)
     else
         f.classIconBorder:Hide()
         f.classIcon:Hide()

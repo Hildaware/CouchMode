@@ -2,5 +2,6 @@
     <Include file = 'Init.lua' />
     <Include file = 'Utils.lua' />
     <Include file = 'QuestUtils.lua' />
+    <Include file = 'TRPUtils.lua' />
     <Include file = 'Options.lua' />
 </UI>

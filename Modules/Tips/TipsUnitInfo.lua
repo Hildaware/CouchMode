@@ -10,6 +10,8 @@ local hexColor   = addon.Utils.hexColor
 
 function tips.nameColor(unit)
     if UnitIsPlayer(unit) then
+        local r, g, b = addon.TRPUtils.getRPColor(unit)
+        if r then return hexColor(r, g, b) end
         local _, class = UnitClass(unit)
         local c = class and RAID_CLASS_COLORS[class]
         if c then return hexColor(c.r, c.g, c.b) end
@@ -104,25 +106,37 @@ function tips.populateUnitInfo(f, unit)
     f.name:SetText(tips.nameColor(unit) .. baseName .. "|r")
 
     if isPlayer then
-        -- Split PvP title from name: may be prefix ("Private Brandon") or suffix ("Brandon the Explorer").
-        -- UnitName/UnitPVPName are secret strings in instances — string operations on them are forbidden there.
-        local _, instanceType = IsInInstance()
-        local pvpName = UnitPVPName(unit) or baseName
-        if pvpName ~= baseName and instanceType == "none" then
-            local s, e = pvpName:find(baseName, 1, true)
-            f.pretitle:SetText(s and s > 1 and pvpName:sub(1, s - 1):match("^%s*(.-)%s*$") or "")
-            f.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
-        else
-            f.pretitle:SetText("")
+        local rpFullName = addon.TRPUtils.getRPFullName(unit)
+
+        if rpFullName then
+            -- TRP3: First+Last as the main name; short title (TI) as pretitle.
+            f.name:SetText(tips.nameColor(unit) .. rpFullName .. "|r")
+            local rpTitle = addon.TRPUtils.getRPTitle(unit)
+            f.pretitle:SetText(rpTitle or "")
             f.posttitle:SetText("")
+        else
+            -- No TRP3 data — existing WoW PvP title path.
+            -- UnitName/UnitPVPName are secret strings in instances; string operations forbidden there.
+            local _, instanceType = IsInInstance()
+            local pvpName = UnitPVPName(unit) or baseName
+            if pvpName ~= baseName and instanceType == "none" then
+                local s, e = pvpName:find(baseName, 1, true)
+                f.pretitle:SetText(s and s > 1 and pvpName:sub(1, s - 1):match("^%s*(.-)%s*$") or "")
+                f.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
+            else
+                f.pretitle:SetText("")
+                f.posttitle:SetText("")
+            end
         end
     else
         f.pretitle:SetText("")
         f.posttitle:SetText("")
     end
 
-    -- SUBTITLE: guild (players) or NPC sub-name
-    local subtitle = tips.getSubtitle(unit)
+    -- SUBTITLE: TRP3 full title (FT) > guild (players) or NPC sub-name
+    local subtitle = isPlayer
+        and (addon.TRPUtils.getRPFullTitle(unit) or tips.getSubtitle(unit))
+        or tips.getSubtitle(unit)
     if subtitle then
         f.subtitle:SetText(subtitle)
         if isPlayer then
@@ -178,6 +192,9 @@ function tips.buildUnitInfo(f, headerOverlay, subfont)
     f.posttitle = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
     -- Guild (players) or NPC sub-title
     f.subtitle  = tips.makeFontString(headerOverlay, subfont, { 0.7, 0.7, 0.7 })
+    f.subtitle:SetWidth(tips.TIP_W - (tips.PADDING * 4))
+    f.subtitle:SetWordWrap(true)
+    f.subtitle:SetMaxLines(2)
 
     f.name:SetWidth(tips.TIP_W - (tips.PADDING * 4))
 

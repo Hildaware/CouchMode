@@ -87,6 +87,14 @@ end
 local tooltipHooked = false
 
 function tips:OnEnable()
+    if not tips._trpCallbackRegistered then
+        tips._trpCallbackRegistered = true
+        addon.TRPUtils.registerDataUpdatedCallback(function()
+            if tips:IsEnabled() and currentUnit and tips.activeFrame then
+                tips.updateFrame(tips.activeFrame, currentUnit)
+            end
+        end)
+    end
     -- Suppress the native GameTooltip when it's showing a unit.
     -- Guard with a flag so we don't double-hook on re-enable.
     if not tooltipHooked then

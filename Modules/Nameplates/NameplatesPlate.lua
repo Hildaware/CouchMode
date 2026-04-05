@@ -184,6 +184,7 @@ local function showPlate(unitToken, np)
     f.questIcon:SetShown(hasQuest)
     f.name:SetShown(nameplates.shouldShowName(unitToken) or hasQuest)
     nameplates.applyGuild(f, unitToken)
+    nameplates.applyMusicIcon(f, unitToken)
     updateMark(f, unitToken)
     updateElite(f, unitToken)
     refreshBar(f, unitToken)
@@ -206,6 +207,7 @@ local function refreshAll()
         updateAlpha(f, unitToken)
         f.name:SetShown(nameplates.shouldShowName(unitToken) or f.questIcon:IsShown())
         nameplates.applyGuild(f, unitToken)
+        nameplates.applyMusicIcon(f, unitToken)
         updateMark(f, unitToken)
         updateElite(f, unitToken)
         refreshBar(f, unitToken) -- also calls applyName
@@ -232,6 +234,17 @@ function nameplates:OnEnable()
     SetCVar("nameplateSelectedScale", 1.0)
     SetCVar("nameplateOccludedAlphaMult", addon.db.profile.nameplates.occludedAlpha)
     applyFriendlyVisibility()
+    if not nameplates._trpCallbackRegistered then
+        nameplates._trpCallbackRegistered = true
+        addon.TRPUtils.registerDataUpdatedCallback(function()
+            if nameplates:IsEnabled() then refreshAll() end
+        end)
+    end
+    if not nameplates._musicianCallbackRegistered then
+        nameplates._musicianCallbackRegistered = true
+        self:RegisterMessage("MusicianSongPlay", function() if nameplates:IsEnabled() then refreshAll() end end)
+        self:RegisterMessage("MusicianSongStop", function() if nameplates:IsEnabled() then refreshAll() end end)
+    end
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnEnteringWorld")
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnUnitAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnUnitRemoved")
@@ -272,8 +285,6 @@ function nameplates:OnEnable()
         local unit = np.UnitFrame and np.UnitFrame.unit
         if unit then showPlate(unit, np) end
     end
-
-    nameplates:debugShow()
 end
 
 function nameplates:OnEnteringWorld()
@@ -370,6 +381,7 @@ function nameplates:OnNameUpdate(_, unitToken)
     if f then
         nameplates.applyName(f, unitToken, getLayoutType(unitToken))
         nameplates.applyGuild(f, unitToken)
+        nameplates.applyMusicIcon(f, unitToken)
     end
 end
 
@@ -468,7 +480,7 @@ function nameplates.debugShow()
     end
     debugFrame.power:Show()
 
-    debugFrame.cast.fill:SetStatusBarColor(0.9, 0.6, 0.1)  -- interruptible cast colour
+    debugFrame.cast.fill:SetStatusBarColor(0.9, 0.6, 0.1) -- interruptible cast colour
     debugFrame.cast.fill:SetMinMaxValues(0, 100)
     debugFrame.cast.fill:SetValue(60)
     debugFrame.cast.spellName:SetFont(nameplates.currentCastFont())

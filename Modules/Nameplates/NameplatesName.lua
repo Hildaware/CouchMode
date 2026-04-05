@@ -23,6 +23,8 @@ end
 
 local function nameColor(unit)
     if UnitIsPlayer(unit) then
+        local r, g, b = addon.TRPUtils.getRPColor(unit)
+        if r then return hexColor(r, g, b) end
         local _, class = UnitClass(unit)
         local c = class and RAID_CLASS_COLORS[class]
         if c then return hexColor(c.r, c.g, c.b) end
@@ -104,8 +106,17 @@ function nameplates.buildNameFrame(f, overlay)
 
     f.guild = overlay:CreateFontString(nil, "OVERLAY")
     f.guild:SetFont(nameplates.currentGuildFont())
+    f.guild:SetWidth(nameplates.BAR_W * 2)
+    f.guild:SetWordWrap(true)
+    f.guild:SetMaxLines(2)
     f.guild:SetPoint("TOP", f.name, "BOTTOM", 0, -1)
     f.guild:Hide()
+
+    f.musicIcon = overlay:CreateTexture(nil, "OVERLAY")
+    f.musicIcon:SetSize(fontSize + 2, fontSize + 2)
+    f.musicIcon:SetTexture("Interface/AddOns/Musician/ui/textures/unmuted.blp")
+    f.musicIcon:SetPoint("BOTTOM", f.name, "TOP", 0, -10)
+    f.musicIcon:Hide()
 end
 
 function nameplates.applyName(f, unit, plateType)
@@ -125,18 +136,31 @@ function nameplates.applyName(f, unit, plateType)
     -- NameOnly: class/faction colors with PvP title support
     local text
     if UnitIsPlayer(unit) then
-        local fullStr = UnitPVPName(unit) or nameStr
-        local s, e    = fullStr:find(nameStr, 1, true)
-        local nc      = nameColor(unit)
-
-        if s and s > 1 then
-            local prefix = fullStr:sub(1, s - 1)
-            text = titleColor() .. prefix .. COLOR_END .. nc .. nameStr .. COLOR_END
-        elseif e and e < #fullStr then
-            local suffix = fullStr:sub(e + 1)
-            text = nc .. nameStr .. COLOR_END .. titleColor() .. suffix .. COLOR_END
+        -- TRP3: use structured name fields. Title (TI) is colored as a title prefix;
+        -- First + Last becomes the main colored name.
+        local rpFullName = addon.TRPUtils.getRPFullName(unit)
+        if rpFullName then
+            local nc      = nameColor(unit)
+            local rpTitle = addon.TRPUtils.getRPTitle(unit)
+            if rpTitle then
+                text = titleColor() .. rpTitle .. " " .. COLOR_END .. nc .. rpFullName .. COLOR_END
+            else
+                text = nc .. rpFullName .. COLOR_END
+            end
         else
-            text = nc .. nameStr .. COLOR_END
+            local fullStr = UnitPVPName(unit) or nameStr
+            local s, e    = fullStr:find(nameStr, 1, true)
+            local nc      = nameColor(unit)
+
+            if s and s > 1 then
+                local prefix = fullStr:sub(1, s - 1)
+                text = titleColor() .. prefix .. COLOR_END .. nc .. nameStr .. COLOR_END
+            elseif e and e < #fullStr then
+                local suffix = fullStr:sub(e + 1)
+                text = nc .. nameStr .. COLOR_END .. titleColor() .. suffix .. COLOR_END
+            else
+                text = nc .. nameStr .. COLOR_END
+            end
         end
     else
         text = nameColor(unit) .. nameStr .. COLOR_END
@@ -175,9 +199,20 @@ local function getSubtitle(unitToken)
     return subtitle, isGuild
 end
 
+function nameplates.applyMusicIcon(f, unit)
+    f.musicIcon:SetShown(addon.TRPUtils.isPlayingMusic(unit))
+end
+
 function nameplates.applyGuild(f, unitToken)
     local showName = nameplates.shouldShowName(unitToken)
-    local subtitle = getSubtitle(unitToken)
+
+    local subtitle
+    if UnitIsPlayer(unitToken) then
+        subtitle = addon.TRPUtils.getRPFullTitle(unitToken) or getSubtitle(unitToken)
+    else
+        subtitle = getSubtitle(unitToken)
+    end
+
     if showName and subtitle then
         local gc = ChatTypeInfo["GUILD"]
         f.guild:SetVertexColor(gc.r, gc.g, gc.b)
