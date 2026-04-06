@@ -1,18 +1,25 @@
-local addon_name = ...
+local addon_name     = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
-local LSM        = LibStub('LibSharedMedia-3.0')
+local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local LSM            = LibStub('LibSharedMedia-3.0')
 
 ---@class TipsModule: AceModule
-local tips       = addon:NewModule('Tips', 'AceEvent-3.0')
+local tips           = addon:NewModule('Tips', 'AceEvent-3.0')
 ---@cast tips +AceEvent-3.0
 
 --#region ── Constants ────────────────────────────────────────────────────────
-local FONT_SIZE  = 16
+local FONT_SIZE_BASE = 14
+local TIP_W_DEFAULT  = 240
+local FONT_FLAGS     = {
+    ['']             = 'None',
+    ['OUTLINE']      = 'Outline',
+    ['THICKOUTLINE'] = 'Thick Outline',
+    ['MONOCHROME']   = 'Monochrome',
+}
 
-tips.TIP_W       = 240
-tips.addon       = addon
+tips.TIP_W           = TIP_W_DEFAULT
+tips.addon           = addon
 
 --#endregion
 
@@ -21,13 +28,14 @@ tips.addon       = addon
 local function tipsDB() return addon.db.profile.tips end
 
 local function currentFont()
-    local db = tipsDB()
-    return LSM:Fetch(LSM.MediaType.FONT, db.font) or "Fonts\\ARIALN.TTF", FONT_SIZE, ""
+    local db       = tipsDB()
+    local fontSize = math.max(10, math.floor(FONT_SIZE_BASE * (tips.TIP_W / TIP_W_DEFAULT)))
+    return LSM:Fetch(LSM.MediaType.FONT, db.font) or "Fonts\\ARIALN.TTF", fontSize, db.fontFlags or ""
 end
 
 local function currentSubFont()
-    local path = currentFont()
-    return path, FONT_SIZE, ""
+    local path, fontSize = currentFont()
+    return path, fontSize, ""
 end
 
 tips.currentFont    = currentFont
@@ -45,7 +53,9 @@ function tips:GetDefaults()
             showFriendlyNpcs = true,
             showEnemyNpcs    = true,
             font             = 'Arial Narrow',
-            side             = 'RIGHT',
+            fontFlags        = '',
+            width            = TIP_W_DEFAULT,
+            x                = 0,
             y                = -200,
             locked           = true,
         },
@@ -96,26 +106,14 @@ function tips:GetOptions()
                 inline = true,
                 order  = 5,
                 args   = {
-                    side = {
-                        name   = 'Side',
-                        desc   = 'Which edge of the screen the tooltip docks to.',
-                        type   = 'select',
-                        order  = 1,
-                        values = { LEFT = 'Left', RIGHT = 'Right' },
-                        get    = function() return tipsDB().side end,
-                        set    = function(_, value)
-                            tipsDB().side = value
-                            tips.applyDock()
-                        end,
-                    },
-                    locked = {
-                        name  = 'Lock Position',
-                        desc  = 'Prevent the tooltip from being dragged.',
-                        type  = 'toggle',
-                        order = 2,
-                        get   = function() return tipsDB().locked end,
-                        set   = function(_, value)
-                            tipsDB().locked = value
+                    lockToggle = {
+                        name  = function() return tipsDB().locked and 'Unlock Position' or 'Lock Position' end,
+                        desc  = 'Toggle the drag handle. While unlocked, a green border marks the frame and it can be freely dragged.',
+                        type  = 'execute',
+                        order = 1,
+                        func  = function()
+                            local db  = tipsDB()
+                            db.locked = not db.locked
                             tips.applyDock()
                         end,
                     },
@@ -137,6 +135,31 @@ function tips:GetOptions()
                         set           = function(_, value)
                             tipsDB().font = value
                             tips.applyFonts()
+                        end,
+                    },
+                    fontFlags = {
+                        name   = 'Font Style',
+                        type   = 'select',
+                        order  = 3,
+                        values = FONT_FLAGS,
+                        get    = function() return tipsDB().fontFlags end,
+                        set    = function(_, value)
+                            tipsDB().fontFlags = value
+                            tips.applyFonts()
+                        end,
+                    },
+                    width = {
+                        name  = 'Width',
+                        desc  = 'Width of the tooltip frame in pixels.',
+                        type  = 'range',
+                        order = 2,
+                        min   = 150,
+                        max   = 500,
+                        step  = 1,
+                        get   = function() return tipsDB().width end,
+                        set   = function(_, value)
+                            tipsDB().width = value
+                            tips.applyWidth()
                         end,
                     },
                 },

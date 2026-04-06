@@ -97,6 +97,7 @@ function nameplates.buildNameFrame(f, overlay)
     f.name:SetFont(currentFont, fontSize, fontFlag)
     f.name:SetWordWrap(false)
     f.name:SetPoint("BOTTOM", f, "TOP", 0, 0)
+    f.name:SetJustifyH("CENTER")
 
     f.questIcon = overlay:CreateTexture(nil, "OVERLAY")
     f.questIcon:SetSize(fontSize + 4, fontSize + 4)
@@ -110,12 +111,13 @@ function nameplates.buildNameFrame(f, overlay)
     f.guild:SetWordWrap(true)
     f.guild:SetMaxLines(2)
     f.guild:SetPoint("TOP", f.name, "BOTTOM", 0, -1)
+    f.guild:SetJustifyH("CENTER")
     f.guild:Hide()
 
     f.musicIcon = overlay:CreateTexture(nil, "OVERLAY")
     f.musicIcon:SetSize(fontSize + 2, fontSize + 2)
     f.musicIcon:SetTexture("Interface/AddOns/Musician/ui/textures/unmuted.blp")
-    f.musicIcon:SetPoint("BOTTOM", f.name, "TOP", 0, -10)
+    f.musicIcon:SetPoint("BOTTOM", f.name, "TOP", 0, 4)
     f.musicIcon:Hide()
 end
 
@@ -136,10 +138,8 @@ function nameplates.applyName(f, unit, plateType)
     -- NameOnly: class/faction colors with PvP title support
     local text
     if UnitIsPlayer(unit) then
-        -- TRP3: use structured name fields. Title (TI) is colored as a title prefix;
-        -- First + Last becomes the main colored name.
         local rpFullName = addon.TRPUtils.getRPFullName(unit)
-        if rpFullName then
+        if rpFullName and rpFullName ~= "" then
             local nc      = nameColor(unit)
             local rpTitle = addon.TRPUtils.getRPTitle(unit)
             if rpTitle then
@@ -171,7 +171,6 @@ function nameplates.applyName(f, unit, plateType)
 end
 
 local function getSubtitle(unitToken)
-    -- This function can be expensive due to tooltip scanning. It is cached per GUID.
     if nameplates.isInInstance() then return nil, false end
     if UnitIsPlayer(unitToken) then
         return GetGuildInfo(unitToken), true

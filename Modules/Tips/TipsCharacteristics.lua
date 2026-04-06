@@ -33,7 +33,7 @@ function tips.populateCharacteristics(f, unit)
         if rpRace or rpClass then
             -- TRP3 custom race/class: show as plain text, hide class icon.
             local parts = {}
-            if rpRace  then parts[#parts + 1] = rpRace  end
+            if rpRace then parts[#parts + 1] = rpRace end
             if rpClass then parts[#parts + 1] = rpClass end
             f.info:SetText(table.concat(parts, " "))
             local r, g, b = addon.TRPUtils.getRPColor(unit)
@@ -97,36 +97,51 @@ function tips.buildCharacteristics(f, overlay, subfont)
     f.classIcon:AddMaskTexture(mask)
 
     -- Info line: "Assassination Rogue" (players) or creature type (NPCs)
-    f.info = tips.makeFontString(overlay, subfont, { 0.6, 0.6, 0.6 })
+    f.info = tips.makeFontString(overlay, tips.currentFont, { 0.6, 0.6, 0.6 })
+    f.info:SetWordWrap(true)
+    f.info:SetMaxLines(2)
 end
 
 function tips.layoutCharacteristics(f, y, height, fonts)
-    f.info:SetFont(fonts.path, fonts.titleSize, fonts.flag)
+    f.info:SetFont(fonts.path, fonts.baseSize, fonts.flag)
 
     if f.hasInfo then
-        y                 = y + 6
-        height            = height + tips.LINE_GAP
+        y                    = y + 6
+        height               = height + tips.LINE_GAP
 
-        local borderShown = f.classIconBorder:IsShown()
-        local borderW     = tips.ICON_SIZE + 4
-        local xText       = tips.PADDING + (borderShown and (borderW + tips.ICON_GAP) or 0)
+        local borderShown    = f.classIconBorder:IsShown()
+
+        -- Scale icon and border proportionally with TIP_W
+        local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
+        local scaledIconSz   = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
+        -- Effective height preserves the original compact-overlap ratio
+        local scaledEffectH  = math.floor(scaledBorderSz * (tips.ICON_SIZE + 4) / (tips.ICON_SIZE + 24))
 
         if borderShown then
+            f.classIconBorder:SetSize(scaledBorderSz, scaledBorderSz)
+            f.classIcon:SetSize(scaledIconSz, scaledIconSz)
             f.classIconBorder:ClearAllPoints()
             f.classIconBorder:SetPoint("TOPLEFT", f, "TOPLEFT", -2, y)
         end
 
+        -- Info width: available space from border's right edge (or left padding) to frame right
+        local infoW = borderShown
+            and (tips.TIP_W + 2 - scaledBorderSz - tips.PADDING)
+            or (tips.TIP_W - tips.PADDING * 2)
+
         f.info:ClearAllPoints()
-        f.info:SetWidth(tips.TIP_W - xText - tips.PADDING)
+        f.info:SetWidth(math.max(infoW, 20))
         if borderShown then
             f.info:SetPoint("LEFT", f.classIconBorder, "RIGHT", 0, 0)
         else
             f.info:SetPoint("TOPLEFT", f, "TOPLEFT", tips.PADDING, y - 14)
         end
 
-        local h = math.max(borderShown and borderW or 0, fonts.titleSize, 1)
-        y       = y - h - tips.LINE_GAP
-        height  = height + h + tips.LINE_GAP
+        -- Height: max of scaled border or 2 lines of wrapped text
+        local textH = fonts.titleSize * 2 + tips.LINE_GAP
+        local h     = math.max(borderShown and scaledEffectH or 0, textH, 1)
+        y           = y - h - tips.LINE_GAP
+        height      = height + h + tips.LINE_GAP
     end
     return y, height
 end

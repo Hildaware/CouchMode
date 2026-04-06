@@ -52,6 +52,7 @@ local function fadeInFrame(f)
 end
 
 local function showTip(unit)
+    tips.hideGhostFrame()
     local f     = tips.activeFrame
     local isNew = (f == nil)
     if isNew then
@@ -75,6 +76,9 @@ local function hideTip()
         UIFrameFadeOut(f, 0.25, f:GetAlpha(), 0)
         C_Timer.After(0.25, function()
             tips.release(f)
+            if not tips.tipsDB().locked then
+                tips.showGhostFrame()
+            end
         end)
     end
 end
@@ -95,6 +99,7 @@ end
 local tooltipHooked = false
 
 function tips:OnEnable()
+    tips.TIP_W = tips.tipsDB().width or 240
     if not tips._trpCallbackRegistered then
         tips._trpCallbackRegistered = true
         addon.TRPUtils.registerDataUpdatedCallback(function()

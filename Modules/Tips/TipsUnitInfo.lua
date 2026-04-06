@@ -101,16 +101,20 @@ function tips.getFaction(unit)
 end
 
 function tips.populateUnitInfo(f, unit)
-    local isPlayer = UnitIsPlayer(unit)
-    local baseName = UnitName(unit) or ""
-    f.name:SetText(tips.nameColor(unit) .. baseName .. "|r")
+    local isPlayer  = UnitIsPlayer(unit)
+    local baseName  = UnitName(unit) or ""
+    local nameColor = tips.nameColor(unit)
+    f._nameColor    = nameColor
+    f._rawName      = baseName
+    f.name:SetText(nameColor .. baseName .. "|r")
 
     if isPlayer then
         local rpFullName = addon.TRPUtils.getRPFullName(unit)
 
         if rpFullName then
             -- TRP3: First+Last as the main name; short title (TI) as pretitle.
-            f.name:SetText(tips.nameColor(unit) .. rpFullName .. "|r")
+            f._rawName = rpFullName
+            f.name:SetText(nameColor .. rpFullName .. "|r")
             local rpTitle = addon.TRPUtils.getRPTitle(unit)
             f.pretitle:SetText(rpTitle or "")
             f.posttitle:SetText("")
@@ -182,6 +186,21 @@ function tips.populateUnitInfo(f, unit)
     end
 end
 
+-- Truncates text to fit maxWidth pixels, appending "..." if needed.
+-- Requires the fontstring to already have its font set.
+local function applyTruncatedText(fs, text, maxWidth)
+    if not text or text == "" then return end
+    fs:SetText(text)
+    if fs:GetStringWidth() <= maxWidth then return end
+    local lo, hi = 0, #text
+    while lo < hi do
+        local mid = math.ceil((lo + hi) / 2)
+        fs:SetText(text:sub(1, mid) .. "...")
+        if fs:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
+    end
+    fs:SetText(text:sub(1, lo) .. "...")
+end
+
 function tips.buildUnitInfo(f, headerOverlay, subfont)
     local c     = FACTION_BAR_COLORS[4]
     -- Pre-title (prefix before name, e.g. "Private ")
@@ -192,11 +211,10 @@ function tips.buildUnitInfo(f, headerOverlay, subfont)
     f.posttitle = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
     -- Guild (players) or NPC sub-title
     f.subtitle  = tips.makeFontString(headerOverlay, subfont, { 0.7, 0.7, 0.7 })
-    f.subtitle:SetWidth(tips.TIP_W - (tips.PADDING * 4))
-    f.subtitle:SetWordWrap(true)
-    f.subtitle:SetMaxLines(2)
+    f.subtitle:SetWordWrap(false)
+    f.subtitle:SetMaxLines(1)
 
-    f.name:SetWidth(tips.TIP_W - (tips.PADDING * 4))
+    f.name:SetMaxLines(1)
 
     -- Level badge texture (housing-dashboard-tasks-listitem-flag, 68x69)
     f.levelBadge = headerOverlay:CreateTexture(nil, "OVERLAY")
@@ -222,65 +240,121 @@ function tips.buildUnitInfo(f, headerOverlay, subfont)
 end
 
 function tips.layoutUnitInfo(f, fonts)
-    local badgeShown = f.levelBadge:IsShown()
-    local textX      = tips.PADDING + (badgeShown and (tips.BADGE_W + tips.BADGE_GAP) or 0)
-    local headerH    = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
+    -- Scaled badge dimensions
+    local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
+    local scaledBadgeH = math.floor(scaledBadgeW * tips.BADGE_H / tips.BADGE_W)
 
+    local badgeShown   = f.levelBadge:IsShown()
+    local textX        = (tips.PADDING / 2) + (badgeShown and (scaledBadgeW + tips.BADGE_GAP) or 0)
+    local headerH      = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
+    local textW        = tips.TIP_W - textX - (tips.PADDING / 2)
+
+    -- Update badge to scaled size each layout
+    if badgeShown then
+        f.levelBadge:SetSize(scaledBadgeW, scaledBadgeH)
+        f.level:SetWidth(scaledBadgeW)
+    end
+
+    -- Fonts must be set before GetStringWidth calls below
     f.name:SetFont(fonts.path, fonts.baseSize, fonts.flag)
     f.pretitle:SetFont(fonts.path, fonts.titleSize, fonts.flag)
     f.posttitle:SetFont(fonts.path, fonts.titleSize, fonts.flag)
     f.subtitle:SetFont(fonts.path, fonts.guildSize, fonts.flag)
     f.faction:SetFont(fonts.path, fonts.guildSize, fonts.flag)
 
+    -- Widths (dynamic — badge size changes textW at different TIP_W values)
+    f.name:SetWidth(textW)
+    f.pretitle:SetWidth(textW)
+    f.posttitle:SetWidth(textW)
+    f.subtitle:SetWidth(textW)
+    f.faction:SetWidth(textW)
+
+    -- Name truncation: raw text stored without color codes to avoid mangling escapes
+    if f._rawName then
+        local truncated = f._rawName
+        f.name:SetText(truncated)
+        if f.name:GetStringWidth() > textW then
+            local lo, hi = 0, #truncated
+            while lo < hi do
+                local mid = math.ceil((lo + hi) / 2)
+                f.name:SetText(truncated:sub(1, mid) .. "...")
+                if f.name:GetStringWidth() <= textW then lo = mid else hi = mid - 1 end
+            end
+            truncated = truncated:sub(1, lo) .. "..."
+        end
+        f.name:SetText((f._nameColor or "") .. truncated .. "|r")
+    end
+
+    -- Truncation for plain-text fields
+    applyTruncatedText(f.pretitle, f.pretitle:GetText(), textW)
+    applyTruncatedText(f.posttitle, f.posttitle:GetText(), textW)
+    applyTruncatedText(f.faction, f.faction:GetText(), textW)
+
+    -- Re-read after truncation for positioning decisions
     local pretitle    = f.pretitle:GetText()
     local posttitle   = f.posttitle:GetText()
-    local subtitle    = f.subtitle:GetText()
     local faction     = f.faction:GetText()
-    local hasTitle    = pretitle or posttitle
-    local hasGuild    = subtitle or faction
-    local guildParent = f.name
-    local isNpcTitled = subtitle and faction
+
+    -- Subtitle: wrap up to 2 lines when no pre/posttitle; otherwise truncate to 1
+    local subtitleRaw = f.subtitle:GetText()
+    local subtitleLines
+    if pretitle or posttitle then
+        f.subtitle:SetWordWrap(false)
+        f.subtitle:SetMaxLines(1)
+        applyTruncatedText(f.subtitle, subtitleRaw, textW)
+        subtitleLines = subtitleRaw and subtitleRaw ~= "" and 1 or 0
+    else
+        f.subtitle:SetWordWrap(true)
+        f.subtitle:SetMaxLines(2)
+        f.subtitle:SetText(subtitleRaw or "")
+        subtitleLines = subtitleRaw and subtitleRaw ~= "" and 2 or 0
+    end
+    local subtitle   = f.subtitle:GetText()
+
+    -- Vertical centering: compute nameY from font metrics rather than hardcoded offsets.
+    -- nameY is the offset of the name's midpoint from the header's vertical midpoint.
+    -- Block layout (top→bottom): [pretitle] name [posttitle] [subtitle] [faction]
+    local titleLineH = fonts.titleSize + tips.LINE_GAP
+    local guildLineH = fonts.guildSize + tips.LINE_GAP
+    local aboveH     = pretitle and titleLineH or 0
+    local belowH     = (posttitle and titleLineH or 0)
+        + (subtitle and guildLineH * subtitleLines or 0)
+        + (faction and guildLineH or 0)
+    -- +4 nudge: the atlas background has visual weight at the top, shifting optical center down
+    local nameY      = math.floor((belowH - aboveH) / 2) + 4
+
+    -- Clear and re-anchor everything
+    f.name:ClearAllPoints()
+    f.pretitle:ClearAllPoints()
+    f.posttitle:ClearAllPoints()
+    f.subtitle:ClearAllPoints()
+    f.faction:ClearAllPoints()
+
+    f.name:SetPoint("LEFT", f.headerFrame, "LEFT", textX, nameY)
 
     if pretitle then
-        f.pretitle:SetPoint("BOTTOMLEFT", f.name, "TOPLEFT", 0, -1)
-    elseif posttitle then
-        guildParent = f.posttitle
+        f.pretitle:SetPoint("BOTTOMLEFT", f.name, "TOPLEFT", 0, 1)
+    end
+    if posttitle then
         f.posttitle:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -1)
     end
 
-    if subtitle then
+    local guildParent = (posttitle and f.posttitle) or f.name
+    local isNpcTitled = subtitle and faction
+    if isNpcTitled then
+        f.subtitle:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -1)
+        f.faction:SetPoint("TOPLEFT", f.subtitle, "BOTTOMLEFT", 0, -1)
+    elseif subtitle then
         f.subtitle:SetPoint("TOPLEFT", guildParent, "BOTTOMLEFT", 0, -1)
     elseif faction then
         f.faction:SetPoint("TOPLEFT", guildParent, "BOTTOMLEFT", 0, -1)
     end
 
-    if isNpcTitled then
-        f.subtitle:SetPoint("TOPLEFT", f.name, 'BOTTOMLEFT', 0, -1)
-        f.faction:SetPoint("TOPLEFT", f.subtitle, 'BOTTOMLEFT', 0, -1)
-    end
-
-    local nameY
-    if hasGuild and pretitle then
-        nameY = 4
-    elseif hasGuild and posttitle then
-        nameY = 16
-    elseif not hasGuild and posttitle then
-        nameY = 10
-    elseif not hasGuild and pretitle then
-        nameY = -2
-    elseif hasGuild then
-        nameY = 10
-    else
-        nameY = 4
-    end
-
-    f.name:SetPoint("LEFT", f.headerFrame, "LEFT", textX, nameY)
-
     if badgeShown then
         f.levelBadge:ClearAllPoints()
-        f.levelBadge:SetPoint("TOPLEFT", f.headerFrame, "TOPLEFT", tips.PADDING, 0)
+        f.levelBadge:SetPoint("TOPLEFT", f.headerFrame, "TOPLEFT", tips.PADDING / 2, 2)
         f.level:ClearAllPoints()
-        f.level:SetPoint("CENTER", f.levelBadge, "CENTER", -2, 2)
+        f.level:SetPoint("CENTER", f.levelBadge, "CENTER", -1, 2)
     end
 
     return -headerH, headerH

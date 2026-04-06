@@ -101,21 +101,31 @@ function tips.layoutMountInfo(f, y, height, fonts)
         y          = y - divH - tips.LINE_GAP
         height     = height + divH + tips.LINE_GAP
 
-        -- Icon on the left
+        -- Scale icon/border with TIP_W (same ratios as characteristics)
+        local scaledBorderSz    = math.floor(tips.TIP_W * tips.ICON_X)
+        local scaledIconSz      = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
+        local scaledCollectedSz = math.floor(scaledBorderSz * 24 / (tips.ICON_SIZE + 24))
+
+        f.mountIconBorder:SetSize(scaledBorderSz, scaledBorderSz)
+        f.mountIcon:SetSize(scaledIconSz, scaledIconSz)
+        f.mountCollected:SetSize(scaledCollectedSz, scaledCollectedSz)
+
+        -- Icon on the left (same -2 x-offset as class icon border)
         f.mountIconBorder:ClearAllPoints()
         f.mountIconBorder:SetPoint("TOPLEFT", f, "TOPLEFT", tips.PADDING - 12, y + 8)
 
-        -- Name + source stacked to the right of the icon
-        local mountTextX = tips.PADDING + tips.ICON_SIZE + tips.ICON_GAP + 10
-        local mountTextW = tips.TIP_W - mountTextX - tips.PADDING
+        -- Text starts at mountIcon's right edge + 10; derive available width from that
+        local textLeftX  = -2 + math.floor(scaledBorderSz / 2) + math.floor(scaledIconSz / 2) + 10
+        local mountTextW = tips.TIP_W - textLeftX - tips.PADDING
+
         f.mountName:SetFont(fonts.path, fonts.guildSize, fonts.flag)
         f.mountName:ClearAllPoints()
-        f.mountName:SetWidth(mountTextW - 20)
+        f.mountName:SetWidth(math.max(mountTextW - scaledCollectedSz - tips.ICON_GAP, 20))
         f.mountName:SetPoint("TOPLEFT", f.mountIcon, "TOPRIGHT", 10, -4)
 
         f.mountSource:SetFont(fonts.path, fonts.guildSize, fonts.flag)
         f.mountSource:ClearAllPoints()
-        f.mountSource:SetWidth(mountTextW - 20)
+        f.mountSource:SetWidth(math.max(mountTextW, 20))
         f.mountSource:SetPoint("TOPLEFT", f.mountName, "BOTTOMLEFT", 0, -tips.LINE_GAP)
 
         f.mountCollected:ClearAllPoints()
@@ -123,9 +133,9 @@ function tips.layoutMountInfo(f, y, height, fonts)
 
         local nameH   = math.max(f.mountName:GetStringHeight(), 1)
         local sourceH = (f.mountSource:GetText() ~= "") and math.max(f.mountSource:GetStringHeight(), 1) or 0
-        local rowH    = math.max(tips.ICON_SIZE, nameH + (sourceH > 0 and (tips.LINE_GAP + sourceH) or 0))
-        y             = y - rowH - tips.LINE_GAP
-        height        = height + rowH + tips.LINE_GAP
+        local rowH    = math.max(scaledIconSz, nameH + (sourceH > 0 and (tips.LINE_GAP + sourceH) or 0))
+        y      = y - rowH - tips.LINE_GAP
+        height = height + rowH + tips.LINE_GAP
     end
     return y, height
 end
