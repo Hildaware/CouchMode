@@ -23,7 +23,7 @@ local function getCurrentUnit()
     local showEnemyNpcs    = db.showEnemyNpcs
     local function allow(unit)
         if not showFriendlyNpcs and isFriendlyNpc(unit) then return false end
-        if not showEnemyNpcs    and isEnemyNpc(unit)    then return false end
+        if not showEnemyNpcs and isEnemyNpc(unit) then return false end
         return true
     end
 

@@ -245,7 +245,7 @@ function tips.layoutUnitInfo(f, fonts)
     local scaledBadgeH = math.floor(scaledBadgeW * tips.BADGE_H / tips.BADGE_W)
 
     local badgeShown   = f.levelBadge:IsShown()
-    local textX        = (tips.PADDING / 2) + (badgeShown and (scaledBadgeW + tips.BADGE_GAP) or 0)
+    local textX        = (tips.PADDING / 2) + (badgeShown and (scaledBadgeW + tips.BADGE_GAP) or 8)
     local headerH      = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
     local textW        = tips.TIP_W - textX - (tips.PADDING / 2)
 
@@ -311,17 +311,19 @@ function tips.layoutUnitInfo(f, fonts)
     end
     local subtitle   = f.subtitle:GetText()
 
-    -- Vertical centering: compute nameY from font metrics rather than hardcoded offsets.
-    -- nameY is the offset of the name's midpoint from the header's vertical midpoint.
-    -- Block layout (top→bottom): [pretitle] name [posttitle] [subtitle] [faction]
+    local cleanName  = not pretitle and not posttitle and not subtitle and not faction
     local titleLineH = fonts.titleSize + tips.LINE_GAP
     local guildLineH = fonts.guildSize + tips.LINE_GAP
     local aboveH     = pretitle and titleLineH or 0
     local belowH     = (posttitle and titleLineH or 0)
         + (subtitle and guildLineH * subtitleLines or 0)
         + (faction and guildLineH or 0)
-    -- +4 nudge: the atlas background has visual weight at the top, shifting optical center down
+
     local nameY      = math.floor((belowH - aboveH) / 2) + 4
+
+    if not badgeShown then
+        nameY = (cleanName and nameY - 1) or nameY - 8
+    end
 
     -- Clear and re-anchor everything
     f.name:ClearAllPoints()

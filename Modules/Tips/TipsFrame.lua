@@ -72,15 +72,10 @@ local function buildFrame()
 
     -- Outer background
     f.bg = f:CreateTexture(nil, "BACKGROUND")
-    f.bg:SetAllPoints(f)
-    f.bg:SetColorTexture(0, 0, 0, 0.65)
-
-    -- 1px frame border
-    local border = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    border:SetAllPoints(f)
-    border:SetFrameLevel(f:GetFrameLevel() + 5)
-    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
-    border:SetBackdropBorderColor(0.08, 0.08, 0.08, 1)
+    f.bg:SetAtlas("UI-Frame-Alliance-CardParchmentWider")
+    f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", -6, 2)
+    f.bg:SetWidth(TIP_W + 12)
+    f.bg:SetAlpha(0.75)
 
     -- Position indicator: light green border shown when unlocked
     f.indicator = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -264,12 +259,22 @@ local function buildLayout(f)
         guildSize = math.max(8, math.floor(baseSize * 0.60)),
     }
 
+    local baseHeight                   = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
     local y, height                    = tips.layoutUnitInfo(f, fonts)
     y, height                          = tips.layoutCharacteristics(f, y, height, fonts)
     y, height                          = tips.layoutMountInfo(f, y, height, fonts)
     y, height                          = tips.layoutQuestInfo(f, y, height, fonts)
 
-    f:SetHeight(math.max(-y + tips.PADDING, 30))
+    local totalHeight                  = math.max(-y + tips.PADDING, 30)
+    f:SetHeight(totalHeight)
+
+    f.bg:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 6, -4)
+
+    if baseHeight == height then
+        f.bg:Hide()
+    else
+        f.bg:Show()
+    end
 end
 
 --#endregion
