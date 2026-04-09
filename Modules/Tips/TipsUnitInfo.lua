@@ -268,9 +268,24 @@ function tips.buildUnitInfo()
 
     --#region draw
 
-    function container:draw()
-        -- Badge sizing
+    function container:naturalWidth()
+        local badgeShown = self.levelBadge:IsShown()
+        local classShown = self.classificationIcon:IsShown()
         local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
+        local badgeW  = badgeShown and scaledBadgeW or 0
+        local classW  = classShown and 24 or 0
+        local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
+        local spacing = 4
+        local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
+        local nameW   = self.name:GetStringWidth()
+        local subW    = self.subtitle:GetStringWidth()
+        local textW   = math.max(nameW, subW)
+        return math.ceil(startX + badgeW + classW + (numGaps * spacing) + textW + 6)
+    end
+
+    function container:draw(w)
+        -- Badge sizing
+        local scaledBadgeW = math.floor(w * tips.BADGE_X)
         local scaledBadgeH = math.floor(scaledBadgeW * tips.BADGE_H / tips.BADGE_W)
         local badgeShown = self.levelBadge:IsShown()
 
@@ -284,12 +299,12 @@ function tips.buildUnitInfo()
         local classShown = self.classificationIcon:IsShown()
         self.classIconContainer:SetSize(classShown and 24 or 0, classShown and 24 or 0)
 
-        local badgeW = badgeShown and scaledBadgeW or 0
-        local classW = classShown and 24 or 0
-        local startX = tips.PADDING / 2 + (badgeShown and 0 or 8)
+        local badgeW  = badgeShown and scaledBadgeW or 0
+        local classW  = classShown and 24 or 0
+        local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
         local spacing = 4
         local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
-        local textW = tips.TIP_W - startX - badgeW - classW - (numGaps * spacing) - 6
+        local textW   = w - startX - badgeW - classW - (numGaps * spacing) - 6
 
         self.nameBlock:SetWidth(textW)
         self.name:SetWidth(textW)
@@ -322,7 +337,7 @@ function tips.buildUnitInfo()
 
         self.nameBlock:Layout()
         self:Layout(startX, 0)
-        self:SetWidth(tips.TIP_W - 8)
+        self:SetWidth(w - 8)
     end
 
     --#endregion
@@ -332,11 +347,11 @@ function tips.buildUnitInfo()
     function container:reset()
         self.rawName = nil
         self.nameColor = nil
-        self.pretitle:SetText(""); self.pretitle:SetHeight(0)
-        self.name:SetText(""); self.name:SetHeight(0)
-        self.posttitle:SetText(""); self.posttitle:SetHeight(0)
-        self.subtitle:SetText(""); self.subtitle:SetHeight(0)
-        self.faction:SetText(""); self.faction:SetHeight(0)
+        self.pretitle:SetText("");  self.pretitle:SetWidth(0);  self.pretitle:SetHeight(0)
+        self.name:SetText("");      self.name:SetWidth(0);      self.name:SetHeight(0)
+        self.posttitle:SetText(""); self.posttitle:SetWidth(0); self.posttitle:SetHeight(0)
+        self.subtitle:SetText("");  self.subtitle:SetWidth(0);  self.subtitle:SetHeight(0)
+        self.faction:SetText("");   self.faction:SetWidth(0);   self.faction:SetHeight(0)
         self.level:SetText("")
         self.levelBadge:Hide()
         self.classificationIcon:Hide()

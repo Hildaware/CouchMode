@@ -103,23 +103,31 @@ function tips.buildMountInfo()
 
     --#region draw
 
-    function container:draw()
+    function container:naturalWidth()
+        local scaledBorderSz    = math.floor(tips.TIP_W * tips.ICON_X)
+        local scaledCollectedSz = math.floor(scaledBorderSz * 24 / (tips.ICON_SIZE + 24))
+        local nameW   = self.mountName:GetStringWidth()
+        local sourceW = self.mountSource:GetStringWidth()
+        return math.ceil(scaledBorderSz + math.max(nameW + scaledCollectedSz + tips.ICON_GAP, sourceW) + tips.PADDING + 4)
+    end
+
+    function container:draw(w)
         if not self.hasData then
             self:SetHeight(0)
             return
         end
 
-        local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
-        local scaledIconSz = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
+        local scaledBorderSz    = math.floor(w * tips.ICON_X)
+        local scaledIconSz      = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
         local scaledCollectedSz = math.floor(scaledBorderSz * 24 / (tips.ICON_SIZE + 24))
 
-        dividerRow:SetWidth(tips.TIP_W)
+        dividerRow:SetWidth(w)
 
         iconStack:SetSize(scaledBorderSz, scaledBorderSz)
         self.mountIcon:SetSize(scaledIconSz, scaledIconSz)
         self.mountCollected:SetSize(scaledCollectedSz, scaledCollectedSz)
 
-        local textW = tips.TIP_W - scaledBorderSz - tips.PADDING - 4
+        local textW = w - scaledBorderSz - tips.PADDING - 4
         textStack:SetWidth(textW)
         self.mountName:SyncHeight()
         self.mountSource:SyncHeight()
@@ -130,7 +138,7 @@ function tips.buildMountInfo()
         contentRow:Layout()
 
         self:Layout(-6)
-        self:SetWidth(tips.TIP_W)
+        self:SetWidth(w)
 
         self.mountCollected:SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, -20)
     end
@@ -143,8 +151,8 @@ function tips.buildMountInfo()
         self.hasData = false
         self.mountIconBorder:Hide()
         self.mountIcon:Hide()
-        self.mountName:SetText("")
-        self.mountSource:SetText("")
+        self.mountName:SetText("");   self.mountName:SetWidth(0)
+        self.mountSource:SetText(""); self.mountSource:SetWidth(0)
         self.mountCollected:Hide()
         self:SetHeight(0)
     end

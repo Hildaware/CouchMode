@@ -185,7 +185,8 @@
 ---@field rawName            string|nil
 ---@field nameColor          string|nil
 ---@field populate           fun(self: UnitInfoSection, unit: string|nil, name: string|nil, headerAtlas: string)
----@field draw               fun(self: UnitInfoSection)
+---@field naturalWidth       fun(self: UnitInfoSection): number
+---@field draw               fun(self: UnitInfoSection, w: number)
 ---@field reset              fun(self: UnitInfoSection)
 
 ---@class CharSection: LayoutVStack
@@ -195,7 +196,8 @@
 ---@field info            LayoutFontString
 ---@field hasData         boolean
 ---@field populate        fun(self: CharSection, unit: string)
----@field draw            fun(self: CharSection)
+---@field naturalWidth    fun(self: CharSection): number
+---@field draw            fun(self: CharSection, w: number)
 ---@field reset           fun(self: CharSection)
 
 ---@class MountSection: LayoutVStack
@@ -209,7 +211,8 @@
 ---@field mountTextStack  LayoutVStack
 ---@field hasData         boolean
 ---@field populate        fun(self: MountSection, unit: string)
----@field draw            fun(self: MountSection)
+---@field naturalWidth    fun(self: MountSection): number
+---@field draw            fun(self: MountSection, w: number)
 ---@field reset           fun(self: MountSection)
 
 ---@class QuestSection: LayoutVStack
@@ -221,5 +224,6 @@
 ---@field hasData         boolean
 ---@field populate        fun(self: QuestSection, unit: string)
 ---@field populateFromData fun(self: QuestSection, questData: table)
----@field draw            fun(self: QuestSection)
+---@field naturalWidth    fun(self: QuestSection): number
+---@field draw            fun(self: QuestSection, w: number)
 ---@field reset           fun(self: QuestSection)

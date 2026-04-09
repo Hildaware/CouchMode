@@ -33,8 +33,6 @@ function tips.buildQuestInfo()
     container.questObjectives = {}
     container.questRows = {}
 
-    local lineW = tips.TIP_W - tips.PADDING * 2 - tips.QUEST_ICON_SIZE - tips.QUEST_ICON_GAP
-
     for i = 1, tips.MAX_QUEST_LINES do
         -- Quest title row: icon + label side by side
         local questRow = addon.Layout:HStack(questStack, { spacing = tips.QUEST_ICON_GAP })
@@ -44,7 +42,7 @@ function tips.buildQuestInfo()
         container.questIcons[i] = icon
         questRow:AddChild(icon, { valign = "TOP" })
 
-        local ql = questRow:FontString({ font = guildFont, color = { 1, 0.82, 0 }, justifyH = "LEFT" })
+        local ql = questRow:FontString({ font = guildFont, color = { 1, 0.82, 0 }, justifyH = "LEFT", wrap = false })
         container.questLines[i] = ql
         questRow:AddChild(ql, { valign = "TOP" })
 
@@ -53,7 +51,7 @@ function tips.buildQuestInfo()
         -- Objectives
         container.questObjectives[i] = {}
         for j = 1, tips.MAX_OBJECTIVES do
-            local obj = questStack:FontString({ font = guildFont, color = { 0.6, 0.6, 0.6 }, justifyH = "LEFT" })
+            local obj = questStack:FontString({ font = guildFont, color = { 0.6, 0.6, 0.6 }, justifyH = "LEFT", wrap = false })
             container.questObjectives[i][j] = obj
             questStack:AddChild(obj, {
                 xOffset = tips.PADDING + 10,
@@ -127,21 +125,40 @@ function tips.buildQuestInfo()
 
     --#region draw
 
-    function container:draw()
+    function container:naturalWidth()
+        -- questStack is laid out at x=PADDING, so all child offsets are relative to that
+        local stackX     = tips.PADDING
+        local iconOffset = stackX + tips.QUEST_ICON_SIZE + tips.QUEST_ICON_GAP
+        local objOffset  = stackX + (tips.PADDING + 10)
+        local w = 0
+        for i = 1, tips.MAX_QUEST_LINES do
+            if not self.questLines[i]:IsShown() then break end
+            w = math.max(w, iconOffset + self.questLines[i]:GetStringWidth())
+            for j = 1, tips.MAX_OBJECTIVES do
+                local obj = self.questObjectives[i][j]
+                if not obj:IsShown() then break end
+                w = math.max(w, objOffset + obj:GetStringWidth())
+            end
+        end
+        return math.ceil(w + tips.PADDING)
+    end
+
+    function container:draw(w)
         if not self.hasData then
             self:SetHeight(0)
             return
         end
 
-        dividerRow:SetWidth(tips.TIP_W)
-        questStack:SetWidth(tips.TIP_W - tips.PADDING)
+        local qlW = w - tips.PADDING * 2 - tips.QUEST_ICON_SIZE - tips.QUEST_ICON_GAP
+        dividerRow:SetWidth(w)
+        questStack:SetWidth(w - tips.PADDING)
         questStack:ClearChildren()
 
         for i = 1, tips.MAX_QUEST_LINES do
             local ql = self.questLines[i]
             if not ql:IsShown() then break end
 
-            ql:SetWidth(lineW)
+            ql:SetWidth(qlW)
             local rowH = math.max(ql:GetStringHeight(), tips.QUEST_ICON_SIZE)
             ql:SetHeight(rowH)
             self.questRows[i]:SetHeight(rowH)
@@ -162,7 +179,7 @@ function tips.buildQuestInfo()
 
         questStack:Layout(tips.PADDING)
         self:Layout()
-        self:SetWidth(tips.TIP_W)
+        self:SetWidth(w)
     end
 
     --#endregion
@@ -173,10 +190,12 @@ function tips.buildQuestInfo()
         self.hasData = false
         for i = 1, tips.MAX_QUEST_LINES do
             self.questLines[i]:SetText("")
+            self.questLines[i]:SetWidth(0)
             self.questLines[i]:Hide()
             self.questIcons[i]:Hide()
             for j = 1, tips.MAX_OBJECTIVES do
                 self.questObjectives[i][j]:SetText("")
+                self.questObjectives[i][j]:SetWidth(0)
                 self.questObjectives[i][j]:Hide()
             end
         end

@@ -123,16 +123,22 @@ function tips.buildCharacteristics()
 
     --#region draw
 
-    function container:draw()
+    function container:naturalWidth()
+        local borderShown    = self.classIconBorder:IsShown()
+        local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
+        return math.ceil((borderShown and scaledBorderSz + 4 or 0) + self.info:GetStringWidth() + tips.PADDING)
+    end
+
+    function container:draw(w)
         if not self.hasData then
             self:SetHeight(0)
             return
         end
 
-        local borderShown = self.classIconBorder:IsShown()
-        local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
-        local scaledIconSz = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
-        local scaledEffectH = math.floor(scaledBorderSz * (tips.ICON_SIZE + 4) / (tips.ICON_SIZE + 24))
+        local borderShown    = self.classIconBorder:IsShown()
+        local scaledBorderSz = math.floor(w * tips.ICON_X)
+        local scaledIconSz   = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
+        local scaledEffectH  = math.floor(scaledBorderSz * (tips.ICON_SIZE + 4) / (tips.ICON_SIZE + 24))
 
         if borderShown then
             iconStack:SetSize(scaledBorderSz, scaledBorderSz)
@@ -142,13 +148,13 @@ function tips.buildCharacteristics()
         end
 
         local textH = self.charFontSize * 2 + tips.LINE_GAP
-        local infoW = tips.TIP_W - (borderShown and scaledBorderSz + 4 or 0) - tips.PADDING
+        local infoW = w - (borderShown and scaledBorderSz + 4 or 0) - tips.PADDING
         self.info:SetWidth(math.max(infoW, 20))
         self.info:SetHeight(textH)
 
         self:SetHeight(math.max(borderShown and scaledEffectH or 0, textH, 1) + tips.LINE_GAP)
         self:Layout(borderShown and -6 or tips.PADDING)
-        self:SetWidth(tips.TIP_W)
+        self:SetWidth(w)
     end
 
     --#endregion
@@ -160,6 +166,7 @@ function tips.buildCharacteristics()
         self.classIcon:Hide()
         self.classIconBorder:Hide()
         self.info:SetText("")
+        self.info:SetWidth(0)
         self:SetHeight(0)
     end
 

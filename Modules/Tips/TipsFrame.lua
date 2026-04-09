@@ -234,16 +234,25 @@ local function buildLayout(f)
     if f.mount then f:AddChild(f.mount) end
     if f.quest then f:AddChild(f.quest) end
 
-    -- Draw each section (sets its container height)
-    f.unitInfo:draw()
-    if f.chars then f.chars:draw() end
-    if f.mount then f.mount:draw() end
-    if f.quest then f.quest:draw() end
+    -- Measure natural width across all sections, capped at TIP_W
+    local w = f.unitInfo:naturalWidth()
+    if f.chars then w = math.max(w, f.chars:naturalWidth()) end
+    if f.mount then w = math.max(w, f.mount:naturalWidth()) end
+    if f.quest then w = math.max(w, f.quest:naturalWidth()) end
+    w = math.max(math.min(w, tips.TIP_W), 120)
+
+    f:SetWidth(w + 4)
+
+    -- Draw each section at the resolved width
+    f.unitInfo:draw(w)
+    if f.chars then f.chars:draw(w) end
+    if f.mount then f.mount:draw(w) end
+    if f.quest then f.quest:draw(w) end
 
     local totalH, _ = f:Layout()
     f:SetHeight(math.max(totalH + tips.PADDING, 30))
 
-    local baseHeight = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
+    local baseHeight = math.floor(w * tips.HEADER_ASPECT)
     if f:GetHeight() <= baseHeight then
         f.bg:Hide()
     else
