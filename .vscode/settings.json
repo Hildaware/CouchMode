@@ -349,7 +349,9 @@
         "LOCALE_enGB",
         "LE_EXPANSION_LEVEL_CURRENT",
         "CompactUnitFrame_UpdateWidgetsOnlyMode",
-        "ChatFrame_OnEvent"
+        "ChatFrame_OnEvent",
+        "AddOn_TotalRP3",
+        "TRP3_API"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

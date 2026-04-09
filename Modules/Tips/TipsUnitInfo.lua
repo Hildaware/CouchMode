@@ -269,18 +269,22 @@ function tips.buildUnitInfo()
     --#region draw
 
     function container:naturalWidth()
-        local badgeShown = self.levelBadge:IsShown()
-        local classShown = self.classificationIcon:IsShown()
+        local badgeShown   = self.levelBadge:IsShown()
+        local classShown   = self.classificationIcon:IsShown()
         local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
         local badgeW  = badgeShown and scaledBadgeW or 0
         local classW  = classShown and 24 or 0
         local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
         local spacing = 4
         local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
-        local nameW   = self.name:GetStringWidth()
-        local subW    = self.subtitle:GetStringWidth()
-        local textW   = math.max(nameW, subW)
-        return math.ceil(startX + badgeW + classW + (numGaps * spacing) + textW + 6)
+        local textW = math.max(
+            self.pretitle:GetStringWidth(),
+            self.name:GetStringWidth(),
+            self.posttitle:GetStringWidth(),
+            self.subtitle:GetStringWidth(),
+            self.faction:GetStringWidth()
+        )
+        return math.ceil(startX + badgeW + classW + (numGaps * spacing) + textW + startX)
     end
 
     function container:draw(w)
@@ -304,7 +308,7 @@ function tips.buildUnitInfo()
         local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
         local spacing = 4
         local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
-        local textW   = w - startX - badgeW - classW - (numGaps * spacing) - 6
+        local textW   = w - startX - badgeW - classW - (numGaps * spacing) - startX
 
         self.nameBlock:SetWidth(textW)
         self.name:SetWidth(textW)

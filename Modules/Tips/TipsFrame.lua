@@ -226,7 +226,8 @@ tips.release = containerPool.release
 --#region ── Layout ───────────────────────────────────────────────────────────
 
 ---@param f TipsFrame
-local function buildLayout(f)
+---@param fullWidth? boolean
+local function buildLayout(f, fullWidth)
     -- Register only the sections that were acquired
     f:ClearChildren()
     f:AddChild(f.unitInfo)
@@ -234,12 +235,17 @@ local function buildLayout(f)
     if f.mount then f:AddChild(f.mount) end
     if f.quest then f:AddChild(f.quest) end
 
-    -- Measure natural width across all sections, capped at TIP_W
-    local w = f.unitInfo:naturalWidth()
-    if f.chars then w = math.max(w, f.chars:naturalWidth()) end
-    if f.mount then w = math.max(w, f.mount:naturalWidth()) end
-    if f.quest then w = math.max(w, f.quest:naturalWidth()) end
-    w = math.max(math.min(w, tips.TIP_W), 120)
+    -- Players always use the full user-configured width
+    local w
+    if fullWidth then
+        w = tips.TIP_W
+    else
+        w = f.unitInfo:naturalWidth()
+        if f.chars then w = math.max(w, f.chars:naturalWidth()) end
+        if f.mount then w = math.max(w, f.mount:naturalWidth()) end
+        if f.quest then w = math.max(w, f.quest:naturalWidth()) end
+        w = math.max(math.min(w, tips.TIP_W), 140)
+    end
 
     f:SetWidth(w + 4)
 
