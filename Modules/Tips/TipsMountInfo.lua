@@ -1,10 +1,10 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class TipsModule: AceModule
-local tips       = addon:GetModule('Tips')
+local tips = addon:GetModule('Tips')
 
 function tips.getMountInfo(unit)
     if not C_MountJournal or not C_UnitAuras then return nil end
@@ -29,113 +29,129 @@ function tips.getMountInfo(unit)
     return nil
 end
 
-function tips.populateMountInfo(f, unit)
-    local isPlayer = UnitIsPlayer(unit)
-    if isPlayer then
+--#region ── Section build ────────────────────────────────────────────────────
+
+function tips.buildMountInfo()
+    ---@type MountSection
+    local container = addon.Layout:VStack(UIParent, { spacing = 8 })
+    local divH = 8
+
+    -- Divider row
+    local dividerRow = addon.Layout:Container(container)
+    dividerRow:SetHeight(divH)
+    container.mountDivider = dividerRow:AddBackground("Adventure-MissionEnd-Line")
+    container:AddChild(dividerRow)
+
+    -- Content row
+    local contentRow = addon.Layout:HStack(container, { spacing = 4 })
+
+    local iconStack = addon.Layout:Container(contentRow)
+    container.mountIconBorder = iconStack:Texture("OVERLAY", 1, { atlas = "Relic-Wind-TraitBG" })
+    container.mountIconBorder:SetAllPoints(iconStack)
+    container.mountIconBorder:Hide()
+
+    container.mountIcon = iconStack:Texture("OVERLAY", 0)
+    container.mountIcon:SetPoint("CENTER", container.mountIconBorder, "CENTER")
+    container.mountIcon:Hide()
+
+    iconStack:Mask(container.mountIcon, { texture = "Interface\\CharacterFrame\\TempPortraitAlphaMask" })
+
+    contentRow:AddChild(iconStack, { valign = "CENTER" })
+
+    local fontPath, baseSize, fontFlag = tips.currentFont()
+    local guildSize = math.max(8, math.floor(baseSize * 0.60))
+    local guildFont = function() return fontPath, guildSize, fontFlag end
+    container.mountFontSize = guildSize
+
+    local textStack = addon.Layout:VStack(contentRow, { spacing = tips.LINE_GAP })
+    container.mountName = textStack:FontString({ font = guildFont, color = { 0.9, 0.85, 0.7 }, justifyH = "LEFT" })
+    container.mountSource = textStack:FontString({ font = guildFont, color = { 0.5, 0.5, 0.5 }, justifyH = "LEFT" })
+    textStack:AddChild(container.mountName, { fillWidth = true, widthOffset = -(tips.ICON_SIZE + tips.ICON_GAP) })
+    textStack:AddChild(container.mountSource, { fillWidth = true })
+    contentRow:AddChild(textStack, { valign = "CENTER" })
+
+    container.mountCollected = contentRow:Texture("OVERLAY")
+    container.mountCollected:Hide()
+
+    container:AddChild(contentRow)
+
+    container.hasData = false
+
+    --#region populate
+
+    function container:populate(unit)
+        if not UnitIsPlayer(unit) then
+            self.hasData = false
+            return
+        end
         local mount = tips.getMountInfo(unit)
         if mount then
-            f.mountDivider:Show()
-            f.mountIcon:SetTexture(mount.icon)
-            f.mountIconBorder:Show()
-            f.mountIcon:Show()
-            f.mountName:SetText(mount.name)
-            f.mountSource:SetText(mount.source or "")
-            f.mountCollected:SetAtlas(mount.isCollected and "VAS-icon-checkmark" or "common-icon-redx")
-            f.mountCollected:Show()
+            self.mountIcon:SetTexture(mount.icon)
+            self.mountIconBorder:Show()
+            self.mountIcon:Show()
+            self.mountName:SetText(mount.name)
+            self.mountSource:SetText(mount.source or "")
+            self.mountCollected:SetAtlas(mount.isCollected and "VAS-icon-checkmark" or "common-icon-redx")
+            self.mountCollected:Show()
+            self.hasData = true
         else
-            f.mountDivider:Hide()
-            f.mountIconBorder:Hide()
-            f.mountIcon:Hide()
-            f.mountName:SetText("")
-            f.mountSource:SetText("")
-            f.mountCollected:Hide()
+            self.hasData = false
         end
-    else
-        f.mountDivider:Hide()
-        f.mountIconBorder:Hide()
-        f.mountIcon:Hide()
-        f.mountName:SetText("")
-        f.mountSource:SetText("")
-        f.mountCollected:Hide()
     end
-end
 
-function tips.buildMountInfo(f, overlay, subfont)
-    -- Mount section
-    f.mountDivider = overlay:CreateTexture(nil, "OVERLAY")
-    f.mountDivider:SetAtlas("Adventure-MissionEnd-Line")
-    f.mountDivider:SetHeight(8)
-    f.mountDivider:Hide()
+    --#endregion
 
-    f.mountIconBorder = overlay:CreateTexture(nil, "OVERLAY", nil, 1)
-    f.mountIconBorder:SetAtlas("Relic-Wind-TraitBG")
-    f.mountIconBorder:SetSize(tips.ICON_SIZE + 24, tips.ICON_SIZE + 24)
-    f.mountIconBorder:Hide()
+    --#region draw
 
-    f.mountIcon = overlay:CreateTexture(nil, "OVERLAY", nil, 0)
-    f.mountIcon:SetSize(tips.ICON_SIZE - 2, tips.ICON_SIZE - 2)
-    f.mountIcon:SetPoint("CENTER", f.mountIconBorder, "CENTER")
-    f.mountIcon:Hide()
+    function container:draw()
+        if not self.hasData then
+            self:SetHeight(0)
+            return
+        end
 
-    local mountMask = overlay:CreateMaskTexture()
-    mountMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE",
-        "CLAMPTOBLACKADDITIVE")
-    mountMask:SetAllPoints(f.mountIcon)
-    f.mountIcon:AddMaskTexture(mountMask)
-
-    f.mountName      = tips.makeFontString(overlay, subfont, { 0.9, 0.85, 0.7 })
-    f.mountSource    = tips.makeFontString(overlay, subfont, { 0.5, 0.5, 0.5 })
-    f.mountCollected = overlay:CreateTexture(nil, "OVERLAY")
-    f.mountCollected:SetSize(24, 24)
-    f.mountCollected:Hide()
-end
-
-function tips.layoutMountInfo(f, y, height, fonts)
-    if f.mountDivider:IsShown() then
-        y = y - 8
-
-        f.mountDivider:ClearAllPoints()
-        f.mountDivider:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
-        f.mountDivider:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, y)
-        local divH = f.mountDivider:GetHeight()
-        y          = y - divH - tips.LINE_GAP
-        height     = height + divH + tips.LINE_GAP
-
-        -- Scale icon/border with TIP_W (same ratios as characteristics)
-        local scaledBorderSz    = math.floor(tips.TIP_W * tips.ICON_X)
-        local scaledIconSz      = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
+        local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
+        local scaledIconSz = math.floor(scaledBorderSz * (tips.ICON_SIZE - 2) / (tips.ICON_SIZE + 24))
         local scaledCollectedSz = math.floor(scaledBorderSz * 24 / (tips.ICON_SIZE + 24))
 
-        f.mountIconBorder:SetSize(scaledBorderSz, scaledBorderSz)
-        f.mountIcon:SetSize(scaledIconSz, scaledIconSz)
-        f.mountCollected:SetSize(scaledCollectedSz, scaledCollectedSz)
+        dividerRow:SetWidth(tips.TIP_W)
 
-        -- Icon on the left (same -2 x-offset as class icon border)
-        f.mountIconBorder:ClearAllPoints()
-        f.mountIconBorder:SetPoint("TOPLEFT", f, "TOPLEFT", tips.PADDING - 12, y + 8)
+        iconStack:SetSize(scaledBorderSz, scaledBorderSz)
+        self.mountIcon:SetSize(scaledIconSz, scaledIconSz)
+        self.mountCollected:SetSize(scaledCollectedSz, scaledCollectedSz)
 
-        -- Text starts at mountIcon's right edge + 10; derive available width from that
-        local textLeftX  = -2 + math.floor(scaledBorderSz / 2) + math.floor(scaledIconSz / 2) + 10
-        local mountTextW = tips.TIP_W - textLeftX - tips.PADDING
+        local textW = tips.TIP_W - scaledBorderSz - tips.PADDING - 4
+        textStack:SetWidth(textW)
+        self.mountName:SyncHeight()
+        self.mountSource:SyncHeight()
+        textStack:Layout()
 
-        f.mountName:SetFont(fonts.path, fonts.guildSize, fonts.flag)
-        f.mountName:ClearAllPoints()
-        f.mountName:SetWidth(math.max(mountTextW - scaledCollectedSz - tips.ICON_GAP, 20))
-        f.mountName:SetPoint("TOPLEFT", f.mountIcon, "TOPRIGHT", 10, -4)
+        local rowH = math.max(scaledIconSz, textStack:GetTotalHeight())
+        contentRow:SetHeight(rowH)
+        contentRow:Layout()
 
-        f.mountSource:SetFont(fonts.path, fonts.guildSize, fonts.flag)
-        f.mountSource:ClearAllPoints()
-        f.mountSource:SetWidth(math.max(mountTextW, 20))
-        f.mountSource:SetPoint("TOPLEFT", f.mountName, "BOTTOMLEFT", 0, -tips.LINE_GAP)
+        self:Layout(-6)
+        self:SetWidth(tips.TIP_W)
 
-        f.mountCollected:ClearAllPoints()
-        f.mountCollected:SetPoint("TOPLEFT", f.mountName, "TOPRIGHT", tips.ICON_GAP, 0)
-
-        local nameH   = math.max(f.mountName:GetStringHeight(), 1)
-        local sourceH = (f.mountSource:GetText() ~= "") and math.max(f.mountSource:GetStringHeight(), 1) or 0
-        local rowH    = math.max(scaledIconSz, nameH + (sourceH > 0 and (tips.LINE_GAP + sourceH) or 0))
-        y      = y - rowH - tips.LINE_GAP
-        height = height + rowH + tips.LINE_GAP
+        self.mountCollected:SetPoint("TOPRIGHT", self, "TOPRIGHT", -8, -20)
     end
-    return y, height
+
+    --#endregion
+
+    --#region reset
+
+    function container:reset()
+        self.hasData = false
+        self.mountIconBorder:Hide()
+        self.mountIcon:Hide()
+        self.mountName:SetText("")
+        self.mountSource:SetText("")
+        self.mountCollected:Hide()
+        self:SetHeight(0)
+    end
+
+    --#endregion
+
+    return container
 end
+
+--#endregion

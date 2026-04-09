@@ -61,3 +61,33 @@ function addon.Utils.apply_border_textures(anchor, borders, show, size, r, g, b,
     borders.R:SetPoint("TOPRIGHT", anchor, "TOPRIGHT", 0, -size)
     borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end
+
+---@class CouchModePool
+---@field acquire fun(...): any
+---@field release fun(obj: any)
+---@field flush   fun()
+
+--- Creates a generic object/table pool to reuse tables or UI frames.
+---@param createFunc fun(...): any Function that returns a newly constructed object.
+---@param resetFunc? fun(obj: any) Optional function called when an object is released back to the pool.
+---@return CouchModePool
+function addon.Utils.CreatePool(createFunc, resetFunc)
+    local pool = {}
+    return {
+        ---@return any
+        acquire = function(...)
+            local obj = table.remove(pool)
+            if not obj then
+                obj = createFunc(...)
+            end
+            return obj
+        end,
+        release = function(obj)
+            if resetFunc then resetFunc(obj) end
+            pool[#pool + 1] = obj
+        end,
+        flush = function()
+            wipe(pool)
+        end
+    }
+end

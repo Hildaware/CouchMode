@@ -159,3 +159,67 @@
 ---@field tooltip string
 ---@field blizz table|nil Blizzard button to wrap (optional)
 ---@field setup fun(btn:table, blizz:table) Setup function for Blizzard button (optional)
+
+
+---@class TipsFrame: LayoutVStack
+---@field bg        Texture
+---@field indicator Frame
+---@field unitInfo  UnitInfoSection
+---@field chars     CharSection|nil
+---@field mount     MountSection|nil
+---@field quest     QuestSection|nil
+
+---@class UnitInfoSection: LayoutHStack
+---@field headerBg           Texture
+---@field badgeContainer     LayoutContainer
+---@field levelBadge         Texture
+---@field level              FontString
+---@field nameBlock          LayoutVStack
+---@field pretitle           LayoutFontString
+---@field name               LayoutFontString
+---@field posttitle          LayoutFontString
+---@field subtitle           LayoutFontString
+---@field faction            LayoutFontString
+---@field classIconContainer LayoutContainer
+---@field classificationIcon Texture
+---@field rawName            string|nil
+---@field nameColor          string|nil
+---@field populate           fun(self: UnitInfoSection, unit: string|nil, name: string|nil, headerAtlas: string)
+---@field draw               fun(self: UnitInfoSection)
+---@field reset              fun(self: UnitInfoSection)
+
+---@class CharSection: LayoutVStack
+---@field classIcon       Texture
+---@field classIconBorder Texture
+---@field charFontSize    number
+---@field info            LayoutFontString
+---@field hasData         boolean
+---@field populate        fun(self: CharSection, unit: string)
+---@field draw            fun(self: CharSection)
+---@field reset           fun(self: CharSection)
+
+---@class MountSection: LayoutVStack
+---@field mountDivider    Texture
+---@field mountIconBorder Texture
+---@field mountIcon       Texture
+---@field mountFontSize   number
+---@field mountName       LayoutFontString
+---@field mountSource     LayoutFontString
+---@field mountCollected  Texture
+---@field mountTextStack  LayoutVStack
+---@field hasData         boolean
+---@field populate        fun(self: MountSection, unit: string)
+---@field draw            fun(self: MountSection)
+---@field reset           fun(self: MountSection)
+
+---@class QuestSection: LayoutVStack
+---@field questDivider    Texture
+---@field questRows       LayoutHStack[]
+---@field questLines      LayoutFontString[]
+---@field questIcons      LayoutTexture[]
+---@field questObjectives LayoutFontString[][]
+---@field hasData         boolean
+---@field populate        fun(self: QuestSection, unit: string)
+---@field populateFromData fun(self: QuestSection, questData: table)
+---@field draw            fun(self: QuestSection)
+---@field reset           fun(self: QuestSection)

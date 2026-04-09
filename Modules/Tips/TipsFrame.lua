@@ -1,27 +1,45 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class TipsModule: AceModule
-local tips       = addon:GetModule('Tips')
+local tips = addon:GetModule('Tips')
 
 --#region ── Anchor ───────────────────────────────────────────────────────────
 
+-- Derives the best anchor point from the frame's current screen position and
+-- stores x/y as offsets from that corner (rather than from CENTER).
+local function saveAnchor(frame)
+    local db = tips.tipsDB()
+    local uiW = UIParent:GetWidth()
+    local uiH = UIParent:GetHeight()
+    local cx = frame:GetLeft() + frame:GetWidth() / 2
+    local cy = frame:GetBottom() + frame:GetHeight() / 2
+    local h = cx < uiW * 0.4 and "LEFT" or cx > uiW * 0.6 and "RIGHT" or ""
+    -- Default to TOP so the frame always grows downward; only flip to BOTTOM
+    -- when near the very bottom of the screen.
+    local v = cy < uiH * 0.2 and "BOTTOM" or "TOP"
+    db.anchor = v .. h
+    db.x = math.floor((h == "LEFT" and frame:GetLeft()
+        or h == "RIGHT" and (frame:GetRight() - uiW)
+        or (cx - uiW / 2)) + 0.5)
+    db.y = math.floor((v == "TOP" and (frame:GetTop() - uiH)
+        or frame:GetBottom()) + 0.5)
+end
+
+---@param f TipsFrame
 function tips.applyAnchor(f)
     if not f then return end
     local db = tips.tipsDB()
+    local anchor = db.anchor or "TOP"
     f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", db.x or 0, db.y or -200)
-    if db.locked then
-        f.indicator:Hide()
-    else
-        f.indicator:Show()
-    end
+    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
+    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
 end
 
 function tips.applyDock()
-    local f      = tips.activeFrame
+    local f = tips.activeFrame
     local locked = tips.tipsDB().locked
     if locked then
         tips.hideGhostFrame()
@@ -37,100 +55,24 @@ end
 
 --#endregion
 
---#region ── Frame building ───────────────────────────────────────────────────
+--#region ── Constants ────────────────────────────────────────────────────────
 
-tips.PADDING       = 10
-tips.LINE_GAP      = 3
-tips.ICON_SIZE     = 32
-tips.ICON_GAP      = 4
-tips.ICON_X        = (tips.ICON_SIZE + 24) / 240 -- class icon border width as fraction of default TIP_W
-tips.HEADER_ASPECT = 69 / 304                    -- native atlas dimensions
-tips.BADGE_W       = 37
-tips.BADGE_H       = 38
-tips.BADGE_GAP     = 6
-tips.BADGE_X       = tips.BADGE_W / 240 -- badge width as fraction of default TIP_W
-
-function tips.makeFontString(overlay, font, color)
-    local fs = overlay:CreateFontString(nil, "OVERLAY")
-    fs:SetFont(font())
-    fs:SetJustifyH("LEFT")
-    fs:SetWordWrap(false)
-    if color then fs:SetVertexColor(unpack(color)) end
-    return fs
-end
-
-local function buildFrame()
-    local TIP_W = tips.TIP_W
-    local f     = CreateFrame("Frame", nil, UIParent)
-    f:SetFrameStrata("TOOLTIP")
-    f:SetFrameLevel(100)
-    f:SetWidth(TIP_W + 4)
-    f:SetMovable(true)
-    f:SetClampedToScreen(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-
-    -- Outer background
-    f.bg = f:CreateTexture(nil, "BACKGROUND")
-    f.bg:SetAtlas("UI-Frame-Alliance-CardParchmentWider")
-    f.bg:SetPoint("TOPLEFT", f, "TOPLEFT", -6, 2)
-    f.bg:SetWidth(TIP_W + 12)
-    f.bg:SetAlpha(0.75)
-
-    -- Position indicator: light green border shown when unlocked
-    f.indicator = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    f.indicator:SetAllPoints(f)
-    f.indicator:SetFrameLevel(f:GetFrameLevel() + 20)
-    f.indicator:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
-    f.indicator:SetBackdropBorderColor(0.3, 1.0, 0.3, 0.9)
-    f.indicator:Hide()
-
-    f.headerFrame = CreateFrame("Frame", nil, f)
-    f.headerFrame:SetFrameLevel(f:GetFrameLevel() + 1)
-    f.headerFrame:SetPoint("TOP", f, "TOP", 0, -4)
-    f.headerFrame:SetSize(TIP_W, math.floor(TIP_W * tips.HEADER_ASPECT))
-
-    f.headerBg = f.headerFrame:CreateTexture(nil, "ARTWORK")
-    f.headerBg:SetAllPoints(f.headerFrame)
-
-    local subfont = tips.currentSubFont
-
-    -- Header overlay: text and badge live here, sized with headerFrame.
-    local headerOverlay = CreateFrame("Frame", nil, f.headerFrame)
-    headerOverlay:SetAllPoints(f.headerFrame)
-    headerOverlay:SetFrameLevel(f.headerFrame:GetFrameLevel() + 1)
-
-    tips.buildUnitInfo(f, headerOverlay, subfont)
-
-    -- Main overlay: info line, class icon, mount section.
-    local overlay = CreateFrame("Frame", nil, f)
-    overlay:SetAllPoints(f)
-    overlay:SetFrameLevel(f:GetFrameLevel() + 1)
-
-    tips.buildCharacteristics(f, overlay, subfont)
-    tips.buildMountInfo(f, overlay, subfont)
-    tips.buildQuestInfo(f, overlay, subfont)
-
-    -- Drag: free positioning — save center x/y on drop.
-    f:SetScript("OnDragStart", function(self)
-        if not tips.tipsDB().locked then self:StartMoving() end
-    end)
-    f:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local db  = tips.tipsDB()
-        local uiW = UIParent:GetWidth()
-        local uiH = UIParent:GetHeight()
-        db.x      = math.floor(self:GetLeft() + self:GetWidth() / 2 - uiW / 2 + 0.5)
-        db.y      = math.floor(self:GetBottom() + self:GetHeight() / 2 - uiH / 2 + 0.5)
-        tips.applyAnchor(self)
-    end)
-
-    return f
-end
+tips.PADDING = 10
+tips.LINE_GAP = 3
+tips.ICON_SIZE = 32
+tips.ICON_GAP = 4
+tips.ICON_X = (tips.ICON_SIZE + 24) / 240
+tips.HEADER_ASPECT = 69 / 304
+tips.BADGE_W = 37
+tips.BADGE_H = 38
+tips.BADGE_GAP = 6
+tips.BADGE_X = tips.BADGE_W / 240
+tips.QUEST_ICON_SIZE = 14
+tips.QUEST_ICON_GAP = 4
 
 --#endregion
 
---#region ── Ghost frame (position drag handle) ───────────────────────────────
+--#region ── Ghost frame ──────────────────────────────────────────────────────
 
 local function buildGhostFrame()
     local f = CreateFrame("Frame", nil, UIParent)
@@ -160,13 +102,10 @@ local function buildGhostFrame()
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        local db  = tips.tipsDB()
-        local uiW = UIParent:GetWidth()
-        local uiH = UIParent:GetHeight()
-        db.x      = math.floor(self:GetLeft() + self:GetWidth() / 2 - uiW / 2 + 0.5)
-        db.y      = math.floor(self:GetBottom() + self:GetHeight() / 2 - uiH / 2 + 0.5)
+        saveAnchor(self)
+        local db = tips.tipsDB()
         self:ClearAllPoints()
-        self:SetPoint("CENTER", UIParent, "CENTER", db.x, db.y)
+        self:SetPoint(db.anchor, UIParent, db.anchor, db.x, db.y)
     end)
 
     f:Hide()
@@ -178,11 +117,12 @@ function tips.showGhostFrame()
         tips.ghostFrame = buildGhostFrame()
     end
     local db = tips.tipsDB()
-    local f  = tips.ghostFrame
+    local f = tips.ghostFrame
     f:SetWidth(tips.TIP_W + 4)
     f:SetHeight(math.floor(tips.TIP_W * tips.HEADER_ASPECT) + 8)
+    local anchor = db.anchor or "TOP"
     f:ClearAllPoints()
-    f:SetPoint("CENTER", UIParent, "CENTER", db.x or 0, db.y or -200)
+    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
     f:Show()
 end
 
@@ -194,83 +134,117 @@ end
 
 --#endregion
 
+--#region ── Outer frame build ────────────────────────────────────────────────
+
+---@return TipsFrame
+local function buildContainer()
+    local TIP_W = tips.TIP_W
+
+    ---@type TipsFrame
+    local container = addon.Layout:VStack(UIParent, {
+        spacing = 0,
+        frameStrata = "TOOLTIP",
+        frameLevel = 100,
+        width = TIP_W + 4,
+    })
+
+    local function onDragStart(self) if not tips.tipsDB().locked then self:StartMoving() end end
+    local function onDragStop(self)
+        self:StopMovingOrSizing()
+        saveAnchor(self)
+        tips.applyAnchor(container)
+    end
+
+    container:Movable(onDragStart, onDragStop)
+
+    container.bg = container:AddBackground("UI-Frame-Alliance-CardParchmentWider", {
+        -- alpha = 0.75,
+        insets = { left = -6, top = 6, right = -4, bottom = -4 },
+        vertexColor = { 0, 0, 0, .75 }
+    })
+
+    return container
+end
+
+--#endregion
+
+--#region ── Section pool helpers ─────────────────────────────────────────────
+
+local function resetSection(s)
+    s:reset()
+    s:Hide()
+    s.frame:SetParent(UIParent)
+end
+
+local unitInfoPool = addon.Utils.CreatePool(tips.buildUnitInfo, resetSection)
+local charPool = addon.Utils.CreatePool(tips.buildCharacteristics, resetSection)
+local mountPool = addon.Utils.CreatePool(tips.buildMountInfo, resetSection)
+local questPool = addon.Utils.CreatePool(tips.buildQuestInfo, resetSection)
+
+---@param f TipsFrame
+local function releaseSections(f)
+    if f.unitInfo then
+        unitInfoPool.release(f.unitInfo); f.unitInfo = nil
+    end
+    if f.chars then
+        charPool.release(f.chars); f.chars = nil
+    end
+    if f.mount then
+        mountPool.release(f.mount); f.mount = nil
+    end
+    if f.quest then
+        questPool.release(f.quest); f.quest = nil
+    end
+end
+
+--#endregion
+
 --#region ── Frame pool ───────────────────────────────────────────────────────
 
-local pool = {}
+---@param f TipsFrame
+local reset = function(f)
+    f:Hide()
+    f:ClearAllPoints()
+    f.frame:SetParent(nil)
+    releaseSections(f)
+end
 
-local function acquire()
-    local f = table.remove(pool) or buildFrame()
-    f:SetParent(UIParent)
+local containerPool = addon.Utils.CreatePool(buildContainer, reset)
+
+tips.acquire = function()
+    ---@type TipsFrame
+    local f = containerPool.acquire()
+    f.frame:SetParent(UIParent)
     f:ClearAllPoints()
     return f
 end
 
-local function release(f)
-    f:Hide()
-    f:ClearAllPoints()
-    f:SetParent(nil)
-    f._rawName   = nil
-    f._nameColor = nil
-    f.pretitle:SetText("")
-    f.name:SetText("")
-    f.posttitle:SetText("")
-    f.subtitle:SetText("")
-    f.level:SetText("")
-    f.levelBadge:Hide()
-    f.classificationIcon:Hide()
-    f.faction:SetText("")
-    f.classIcon:Hide()
-    f.classIconBorder:Hide()
-    f.info:SetText("")
-    f.hasInfo = false
-    f.mountDivider:Hide()
-    f.mountIconBorder:Hide()
-    f.mountIcon:Hide()
-    f.mountName:SetText("")
-    f.mountSource:SetText("")
-    f.mountCollected:Hide()
-    f.questDivider:Hide()
-    for i, ql in ipairs(f.questLines) do
-        ql:SetText("")
-        ql:Hide()
-        f.questIcons[i]:Hide()
-        for _, obj in ipairs(f.questObjectives[i]) do
-            obj:SetText("")
-            obj:Hide()
-        end
-    end
-    pool[#pool + 1] = f
-end
-
-tips.acquire = acquire
-tips.release = release
+tips.release = containerPool.release
 
 --#endregion
 
 --#region ── Layout ───────────────────────────────────────────────────────────
 
+---@param f TipsFrame
 local function buildLayout(f)
-    local fontPath, baseSize, fontFlag = tips.currentFont()
-    local fonts                        = {
-        path      = fontPath,
-        baseSize  = baseSize,
-        flag      = fontFlag,
-        titleSize = math.max(8, math.floor(baseSize * 0.75)),
-        guildSize = math.max(8, math.floor(baseSize * 0.60)),
-    }
+    -- Register only the sections that were acquired
+    f:ClearChildren()
+    f:AddChild(f.unitInfo)
+    if f.chars then f:AddChild(f.chars) end
+    if f.mount then f:AddChild(f.mount) end
+    if f.quest then f:AddChild(f.quest) end
 
-    local baseHeight                   = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
-    local y, height                    = tips.layoutUnitInfo(f, fonts)
-    y, height                          = tips.layoutCharacteristics(f, y, height, fonts)
-    y, height                          = tips.layoutMountInfo(f, y, height, fonts)
-    y, height                          = tips.layoutQuestInfo(f, y, height, fonts)
+    -- Draw each section (sets its container height)
+    f.unitInfo:draw()
+    if f.chars then f.chars:draw() end
+    if f.mount then f.mount:draw() end
+    if f.quest then f.quest:draw() end
 
-    local totalHeight                  = math.max(-y + tips.PADDING, 30)
-    f:SetHeight(totalHeight)
+    local totalH, _ = f:Layout()
+    f:SetHeight(math.max(totalH + tips.PADDING, 30))
 
-    f.bg:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 6, -4)
-
-    if baseHeight == height then
+    local baseHeight = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
+    if f:GetHeight() <= baseHeight then
         f.bg:Hide()
     else
         f.bg:Show()
@@ -281,33 +255,11 @@ end
 
 --#region ── Frame population ─────────────────────────────────────────────────
 
-function tips.updateFrameForObject(f, name, questData)
-    f.headerBg:SetAtlas("StoryHeader-BG", true)
-    f._rawName   = name
-    f._nameColor = "|cFFFFFFFF"
-    f.name:SetText("|cFFFFFFFF" .. name .. "|r")
-    f.pretitle:SetText("")
-    f.posttitle:SetText("")
-    f.subtitle:SetText("")
-    f.faction:SetText("")
-    f.level:SetText("")
-    f.levelBadge:Hide()
-    f.classificationIcon:Hide()
-    f.classIcon:Hide()
-    f.classIconBorder:Hide()
-    f.info:SetText("")
-    f.mountDivider:Hide()
-    f.mountIconBorder:Hide()
-    f.mountIcon:Hide()
-    f.mountName:SetText("")
-    f.mountSource:SetText("")
-    f.mountCollected:Hide()
-    tips.populateQuestSection(f, questData)
-    buildLayout(f)
-    tips.applyAnchor(f)
-end
-
+---@param f TipsFrame
+---@param unit string|nil
 function tips.updateFrame(f, unit)
+    releaseSections(f)
+
     local headerAtlas = "StoryHeader-BG"
     if UnitCanAttack("player", unit) then
         headerAtlas = "Campaign_Fist"
@@ -319,12 +271,71 @@ function tips.updateFrame(f, unit)
             headerAtlas = "Campaign_Alliance"
         end
     end
-    f.headerBg:SetAtlas(headerAtlas, true)
 
-    tips.populateUnitInfo(f, unit)
-    tips.populateCharacteristics(f, unit)
-    tips.populateMountInfo(f, unit)
-    tips.populateQuestInfo(f, unit)
+    -- UnitInfo: always present
+    f.unitInfo = unitInfoPool.acquire()
+    f.unitInfo.frame:SetParent(f.frame)
+    f.unitInfo.frame:Show()
+    f.unitInfo:populate(unit, nil, headerAtlas)
+
+    -- Characteristics: only if unit has class / creature-type data
+    local ch = charPool.acquire()
+    ch:populate(unit)
+    if ch.hasData then
+        ch.frame:SetParent(f.frame)
+        ch.frame:Show()
+        f.chars = ch
+    else
+        charPool.release(ch)
+    end
+
+    -- MountInfo: only if unit is mounted
+    local mo = mountPool.acquire()
+    mo:populate(unit)
+    if mo.hasData then
+        mo.frame:SetParent(f.frame)
+        mo.frame:Show()
+        f.mount = mo
+    else
+        mountPool.release(mo)
+    end
+
+    -- QuestInfo: only for NPCs with active quests
+    local qu = questPool.acquire()
+    qu:populate(unit)
+    if qu.hasData then
+        qu.frame:SetParent(f.frame)
+        qu.frame:Show()
+        f.quest = qu
+    else
+        questPool.release(qu)
+    end
+
+    buildLayout(f)
+    tips.applyAnchor(f)
+end
+
+function tips.updateFrameForObject(f, name, questData)
+    releaseSections(f)
+
+    -- UnitInfo: always present
+    f.unitInfo = unitInfoPool.acquire()
+    f.unitInfo.frame:SetParent(f.frame)
+    f.unitInfo.frame:Show()
+    f.unitInfo:populate(nil, name, "StoryHeader-BG")
+
+    -- QuestInfo: only if quest data was parsed from world cursor
+    if questData then
+        local qu = questPool.acquire()
+        qu:populateFromData(questData)
+        if qu.hasData then
+            qu.frame:SetParent(f.frame)
+            qu.frame:Show()
+            f.quest = qu
+        else
+            questPool.release(qu)
+        end
+    end
 
     buildLayout(f)
     tips.applyAnchor(f)
@@ -332,27 +343,77 @@ end
 
 --#endregion
 
---#region ── Font refresh ─────────────────────────────────────────────────────
+--#region ── Font / width refresh ─────────────────────────────────────────────
 
 function tips.applyFonts()
+    -- Wipe all pools so new builds pick up the updated fonts.
+    containerPool.flush()
+    unitInfoPool.flush()
+    charPool.flush()
+    mountPool.flush()
+    questPool.flush()
+
     local f = tips.activeFrame
     if not f then return end
-    f.level:SetFont(tips.currentSubFont())
+
+    -- Directly update fontstrings on the active frame's sections.
+    local fontPath, baseSize, fontFlag = tips.currentFont()
+    local titleSize = math.max(8, math.floor(baseSize * 0.75))
+    local guildSize = math.max(8, math.floor(baseSize * 0.60))
+
+    -- UnitInfo
+    f.unitInfo.name:SetFont(fontPath, baseSize, fontFlag)
+    f.unitInfo.pretitle:SetFont(fontPath, titleSize, fontFlag)
+    f.unitInfo.posttitle:SetFont(fontPath, titleSize, fontFlag)
+    f.unitInfo.subtitle:SetFont(fontPath, guildSize, fontFlag)
+    f.unitInfo.faction:SetFont(fontPath, guildSize, fontFlag)
+    f.unitInfo.level:SetFont(tips.currentSubFont())
+
+    -- Characteristics (may be absent)
+    if f.chars then
+        f.chars.charFontSize = baseSize
+        f.chars.info:SetFont(fontPath, baseSize, fontFlag)
+    end
+
+    -- MountInfo (may be absent)
+    if f.mount then
+        f.mount.mountFontSize = guildSize
+        f.mount.mountName:SetFont(fontPath, guildSize, fontFlag)
+        f.mount.mountSource:SetFont(fontPath, guildSize, fontFlag)
+    end
+
+    -- QuestInfo (may be absent)
+    if f.quest then
+        for i = 1, tips.MAX_QUEST_LINES do
+            f.quest.questLines[i]:SetFont(fontPath, guildSize, fontFlag)
+            for j = 1, tips.MAX_OBJECTIVES do
+                f.quest.questObjectives[i][j]:SetFont(fontPath, guildSize, fontFlag)
+            end
+        end
+    end
+
     buildLayout(f)
 end
 
 function tips.applyWidth()
     tips.TIP_W = tips.tipsDB().width or 240
-    wipe(pool)
+    containerPool.flush()
+    unitInfoPool.flush()
+    charPool.flush()
+    mountPool.flush()
+    questPool.flush()
+
     local gf = tips.ghostFrame
     if gf and gf:IsShown() then
         gf:SetWidth(tips.TIP_W + 4)
         gf:SetHeight(math.floor(tips.TIP_W * tips.HEADER_ASPECT) + 8)
     end
+
     local f = tips.activeFrame
     if not f then return end
+
     f:SetWidth(tips.TIP_W + 4)
-    f.headerFrame:SetSize(tips.TIP_W, math.floor(tips.TIP_W * tips.HEADER_ASPECT))
+    f.unitInfo:SetSize(tips.TIP_W, math.floor(tips.TIP_W * tips.HEADER_ASPECT))
     tips.applyFonts()
 end
 

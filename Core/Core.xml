@@ -1,6 +1,7 @@
 <UI xmlns='http://www.blizzard.com/wow/ui/'   xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'   xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
     <Include file = 'Init.lua' />
     <Include file = 'Utils.lua' />
+    <Include file = 'Layout.lua' />
     <Include file = 'QuestUtils.lua' />
     <Include file = 'TRPUtils.lua' />
     <Include file = 'Options.lua' />

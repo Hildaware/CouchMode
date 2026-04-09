@@ -1,12 +1,12 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class TipsModule: AceModule
-local tips       = addon:GetModule('Tips')
+local tips = addon:GetModule('Tips')
 
-local hexColor   = addon.Utils.hexColor
+local hexColor = addon.Utils.hexColor
 
 function tips.nameColor(unit)
     if UnitIsPlayer(unit) then
@@ -27,9 +27,9 @@ function tips.nameColor(unit)
 end
 
 tips.CLASSIFICATION_ATLAS = {
-    elite     = "nameplates-icon-elite-gold",
+    elite = "nameplates-icon-elite-gold",
     rareelite = "nameplates-icon-rareelite",
-    rare      = "nameplates-icon-elite-silver",
+    rare = "nameplates-icon-elite-silver",
     worldboss = "nameplates-icon-elite-gold",
 }
 
@@ -47,8 +47,6 @@ function tips.getSubtitle(unit)
         return GetGuildInfo(unit)
     end
 
-    -- GUIDs and tooltip text are secret strings in instances; pattern matching and
-    -- table indexing on them are forbidden there.
     local _, instanceType = IsInInstance()
     if instanceType ~= "none" then return nil end
 
@@ -100,264 +98,254 @@ function tips.getFaction(unit)
     return faction
 end
 
-function tips.populateUnitInfo(f, unit)
-    local isPlayer  = UnitIsPlayer(unit)
-    local baseName  = UnitName(unit) or ""
-    local nameColor = tips.nameColor(unit)
-    f._nameColor    = nameColor
-    f._rawName      = baseName
-    f.name:SetText(nameColor .. baseName .. "|r")
+--#region ── Section build ────────────────────────────────────────────────────
 
-    if isPlayer then
-        local rpFullName = addon.TRPUtils.getRPFullName(unit)
+function tips.buildUnitInfo()
+    ---@type UnitInfoSection
+    local container = addon.Layout:HStack(UIParent, {
+        spacing = 4,
+        height = math.floor(tips.TIP_W * tips.HEADER_ASPECT),
+    })
 
-        if rpFullName then
-            -- TRP3: First+Last as the main name; short title (TI) as pretitle.
-            f._rawName = rpFullName
-            f.name:SetText(nameColor .. rpFullName .. "|r")
-            local rpTitle = addon.TRPUtils.getRPTitle(unit)
-            f.pretitle:SetText(rpTitle or "")
-            f.posttitle:SetText("")
-        else
-            -- No TRP3 data — existing WoW PvP title path.
-            -- UnitName/UnitPVPName are secret strings in instances; string operations forbidden there.
-            local _, instanceType = IsInInstance()
-            local pvpName = UnitPVPName(unit) or baseName
-            if pvpName ~= baseName and instanceType == "none" then
-                local s, e = pvpName:find(baseName, 1, true)
-                f.pretitle:SetText(s and s > 1 and pvpName:sub(1, s - 1):match("^%s*(.-)%s*$") or "")
-                f.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
+    container.headerBg = container:AddBackground("StoryHeader-BG")
+
+    container.badgeContainer = addon.Layout:Container(container)
+
+    local levelBadge = container.badgeContainer:Texture("OVERLAY", 0,
+        { atlas = "housing-dashboard-tasks-listitem-flag", size = { w = tips.BADGE_W, h = tips.BADGE_H } })
+    levelBadge:SetAllPoints(container.badgeContainer)
+    levelBadge:Hide()
+    container.levelBadge = levelBadge
+
+    local level = container.badgeContainer:FontString(
+        { font = tips.currentSubFont, justifyH = "CENTER", justifyV = "MIDDLE", wordWrap = false })
+    level:SetWidth(tips.BADGE_W)
+    level:SetPoint("CENTER", container.levelBadge, "CENTER", -1, 2)
+    container.level = level
+
+    container:AddChild(container.badgeContainer, { valign = "TOP" })
+
+    container.nameBlock = addon.Layout:VStack(container, { spacing = 1 })
+
+    local fontPath, baseSize, fontFlag = tips.currentFont()
+    local titleSize = math.max(8, math.floor(baseSize * 0.75))
+    local guildSize = math.max(8, math.floor(baseSize * 0.60))
+    local titleFont = function() return fontPath, titleSize, fontFlag end
+    local guildFont = function() return fontPath, guildSize, fontFlag end
+
+    local c = FACTION_BAR_COLORS[4]
+    container.pretitle = container.nameBlock:FontString(
+        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT" })
+    container.name = container.nameBlock:FontString(
+        { font = tips.currentFont, maxLines = 1, justifyH = "LEFT" })
+    container.posttitle = container.nameBlock:FontString(
+        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT" })
+    container.subtitle = container.nameBlock:FontString(
+        { font = guildFont, color = { 0.7, 0.7, 0.7 }, wrap = false, maxLines = 1, justifyH = "LEFT" })
+    container.faction = container.nameBlock:FontString({ font = guildFont, justifyH = "LEFT" })
+
+    container.nameBlock:AddChild(container.pretitle)
+    container.nameBlock:AddChild(container.name)
+    container.nameBlock:AddChild(container.posttitle)
+    container.nameBlock:AddChild(container.subtitle)
+    container.nameBlock:AddChild(container.faction)
+
+    container:AddChild(container.nameBlock, { valign = "CENTER" })
+
+    container.classIconContainer = addon.Layout:Container(container)
+    container.classIconContainer.frame:SetSize(24, 24)
+    container.classificationIcon = container.classIconContainer.frame:CreateTexture(nil, "OVERLAY")
+    container.classificationIcon:SetAllPoints(container.classIconContainer.frame)
+    container.classificationIcon:Hide()
+
+    container:AddChild(container.classIconContainer, { valign = "CENTER" })
+
+    -- Data fields
+    container.rawName = nil
+    container.nameColor = nil
+
+    --#region populate
+
+    function container:populate(unit, name, headerAtlas)
+        self.headerBg:SetAtlas(headerAtlas, true)
+
+        if unit then
+            -- Unit path
+            local isPlayer = UnitIsPlayer(unit)
+            local baseName = UnitName(unit) or ""
+            local nameColor = tips.nameColor(unit)
+            self.nameColor = nameColor
+            self.rawName = baseName
+            self.name:SetText(nameColor .. baseName .. "|r")
+
+            if isPlayer then
+                local rpFullName = addon.TRPUtils.getRPFullName(unit)
+                if rpFullName then
+                    self.rawName = rpFullName
+                    self.name:SetText(nameColor .. rpFullName .. "|r")
+                    local rpTitle = addon.TRPUtils.getRPTitle(unit)
+                    self.pretitle:SetText(rpTitle or "")
+                    self.posttitle:SetText("")
+                else
+                    local _, instanceType = IsInInstance()
+                    local pvpName = UnitPVPName(unit) or baseName
+                    if pvpName ~= baseName and instanceType == "none" then
+                        local s2, e = pvpName:find(baseName, 1, true)
+                        self.pretitle:SetText(s2 and s2 > 1 and pvpName:sub(1, s2 - 1):match("^%s*(.-)%s*$") or "")
+                        self.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
+                    else
+                        self.pretitle:SetText("")
+                        self.posttitle:SetText("")
+                    end
+                end
             else
-                f.pretitle:SetText("")
-                f.posttitle:SetText("")
+                self.pretitle:SetText("")
+                self.posttitle:SetText("")
             end
-        end
-    else
-        f.pretitle:SetText("")
-        f.posttitle:SetText("")
-    end
 
-    -- SUBTITLE: TRP3 full title (FT) > guild (players) or NPC sub-name
-    local subtitle = isPlayer
-        and (addon.TRPUtils.getRPFullTitle(unit) or tips.getSubtitle(unit))
-        or tips.getSubtitle(unit)
-    if subtitle then
-        f.subtitle:SetText(subtitle)
-        if isPlayer then
-            local gc = ChatTypeInfo["GUILD"]
-            f.subtitle:SetVertexColor(gc.r, gc.g, gc.b)
-        else
-            f.subtitle:SetVertexColor(0.7, 0.7, 0.7)
-        end
-    else
-        f.subtitle:SetText("")
-    end
-
-    -- LEVEL BADGE / FACTION
-    local isFriendlyNPC = not isPlayer and not UnitCanAttack("player", unit)
-    if isFriendlyNPC then
-        f.level:SetText("")
-        f.levelBadge:Hide()
-        f.classificationIcon:Hide()
-        local faction = tips.getFaction(unit)
-        if faction then
-            local reaction = UnitReaction(unit, "player")
-            local fc = reaction and FACTION_BAR_COLORS[reaction]
-            f.faction:SetVertexColor(fc and fc.r or 0.7, fc and fc.g or 0.7, fc and fc.b or 0.7)
-            f.faction:SetText(faction)
-        else
-            f.faction:SetText("")
-        end
-    else
-        local lvl    = UnitLevel(unit)
-        -- Just the number (or "??"), no "Level" prefix — badge provides the context.
-        local lvlStr = (lvl and lvl > 0) and tostring(lvl) or "??"
-        f.level:SetText(lvlStr)
-        f.levelBadge:Show()
-        f.faction:SetText("")
-        local cl    = UnitClassification(unit)
-        local atlas = cl and tips.CLASSIFICATION_ATLAS[cl]
-        if atlas then
-            f.classificationIcon:SetAtlas(atlas)
-            f.classificationIcon:Show()
-        else
-            f.classificationIcon:Hide()
-        end
-    end
-end
-
--- Truncates text to fit maxWidth pixels, appending "..." if needed.
--- Requires the fontstring to already have its font set.
-local function applyTruncatedText(fs, text, maxWidth)
-    if not text or text == "" then return end
-    fs:SetText(text)
-    if fs:GetStringWidth() <= maxWidth then return end
-    local lo, hi = 0, #text
-    while lo < hi do
-        local mid = math.ceil((lo + hi) / 2)
-        fs:SetText(text:sub(1, mid) .. "...")
-        if fs:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
-    end
-    fs:SetText(text:sub(1, lo) .. "...")
-end
-
-function tips.buildUnitInfo(f, headerOverlay, subfont)
-    local c     = FACTION_BAR_COLORS[4]
-    -- Pre-title (prefix before name, e.g. "Private ")
-    f.pretitle  = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
-    -- Name (large, class/faction colored)
-    f.name      = tips.makeFontString(headerOverlay, tips.currentFont)
-    -- Post-title (suffix after name, e.g. " the Explorer")
-    f.posttitle = tips.makeFontString(headerOverlay, subfont, { c.r, c.g, c.b })
-    -- Guild (players) or NPC sub-title
-    f.subtitle  = tips.makeFontString(headerOverlay, subfont, { 0.7, 0.7, 0.7 })
-    f.subtitle:SetWordWrap(false)
-    f.subtitle:SetMaxLines(1)
-
-    f.name:SetMaxLines(1)
-
-    -- Level badge texture (housing-dashboard-tasks-listitem-flag, 68x69)
-    f.levelBadge = headerOverlay:CreateTexture(nil, "OVERLAY")
-    f.levelBadge:SetAtlas("housing-dashboard-tasks-listitem-flag", true)
-    f.levelBadge:SetSize(tips.BADGE_W, tips.BADGE_H)
-    f.levelBadge:Hide()
-
-    -- Level number centered inside the badge
-    f.level = headerOverlay:CreateFontString(nil, "OVERLAY")
-    f.level:SetFont(tips.currentSubFont())
-    f.level:SetJustifyH("CENTER")
-    f.level:SetJustifyV("MIDDLE")
-    f.level:SetWordWrap(false)
-    f.level:SetWidth(tips.BADGE_W)
-
-    f.faction = tips.makeFontString(headerOverlay, subfont)
-
-    -- Classification icon (elite / rare / etc.) anchored to the right of the header
-    f.classificationIcon = headerOverlay:CreateTexture(nil, "OVERLAY")
-    f.classificationIcon:SetSize(24, 24)
-    f.classificationIcon:SetPoint("TOPRIGHT", f.headerFrame, "TOPRIGHT", -2, 2)
-    f.classificationIcon:Hide()
-end
-
-function tips.layoutUnitInfo(f, fonts)
-    -- Scaled badge dimensions
-    local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
-    local scaledBadgeH = math.floor(scaledBadgeW * tips.BADGE_H / tips.BADGE_W)
-
-    local badgeShown   = f.levelBadge:IsShown()
-    local textX        = (tips.PADDING / 2) + (badgeShown and (scaledBadgeW + tips.BADGE_GAP) or 8)
-    local headerH      = math.floor(tips.TIP_W * tips.HEADER_ASPECT)
-    local textW        = tips.TIP_W - textX - (tips.PADDING / 2)
-
-    -- Update badge to scaled size each layout
-    if badgeShown then
-        f.levelBadge:SetSize(scaledBadgeW, scaledBadgeH)
-        f.level:SetWidth(scaledBadgeW)
-    end
-
-    -- Fonts must be set before GetStringWidth calls below
-    f.name:SetFont(fonts.path, fonts.baseSize, fonts.flag)
-    f.pretitle:SetFont(fonts.path, fonts.titleSize, fonts.flag)
-    f.posttitle:SetFont(fonts.path, fonts.titleSize, fonts.flag)
-    f.subtitle:SetFont(fonts.path, fonts.guildSize, fonts.flag)
-    f.faction:SetFont(fonts.path, fonts.guildSize, fonts.flag)
-
-    -- Widths (dynamic — badge size changes textW at different TIP_W values)
-    f.name:SetWidth(textW)
-    f.pretitle:SetWidth(textW)
-    f.posttitle:SetWidth(textW)
-    f.subtitle:SetWidth(textW)
-    f.faction:SetWidth(textW)
-
-    -- Name truncation: raw text stored without color codes to avoid mangling escapes
-    if f._rawName then
-        local truncated = f._rawName
-        f.name:SetText(truncated)
-        if f.name:GetStringWidth() > textW then
-            local lo, hi = 0, #truncated
-            while lo < hi do
-                local mid = math.ceil((lo + hi) / 2)
-                f.name:SetText(truncated:sub(1, mid) .. "...")
-                if f.name:GetStringWidth() <= textW then lo = mid else hi = mid - 1 end
+            -- Subtitle
+            local subtitle = isPlayer
+                and (addon.TRPUtils.getRPFullTitle(unit) or tips.getSubtitle(unit))
+                or tips.getSubtitle(unit)
+            if subtitle then
+                self.subtitle:SetText(subtitle)
+                if isPlayer then
+                    local gc = ChatTypeInfo["GUILD"]
+                    self.subtitle:SetVertexColor(gc.r, gc.g, gc.b)
+                else
+                    self.subtitle:SetVertexColor(0.7, 0.7, 0.7)
+                end
+            else
+                self.subtitle:SetText("")
             end
-            truncated = truncated:sub(1, lo) .. "..."
+
+            -- Level badge / faction
+            local isFriendlyNPC = not isPlayer and not UnitCanAttack("player", unit)
+            if isFriendlyNPC then
+                self.level:SetText("")
+                self.levelBadge:Hide()
+                self.classificationIcon:Hide()
+                local faction = tips.getFaction(unit)
+                if faction then
+                    local reaction = UnitReaction(unit, "player")
+                    local fc = reaction and FACTION_BAR_COLORS[reaction]
+                    self.faction:SetVertexColor(fc and fc.r or 0.7, fc and fc.g or 0.7, fc and fc.b or 0.7)
+                    self.faction:SetText(faction)
+                else
+                    self.faction:SetText("")
+                end
+            else
+                local lvl = UnitLevel(unit)
+                local lvlStr = (lvl and lvl > 0) and tostring(lvl) or "??"
+                self.level:SetText(lvlStr)
+                self.levelBadge:Show()
+                self.faction:SetText("")
+                local cl = UnitClassification(unit)
+                local atlas = cl and tips.CLASSIFICATION_ATLAS[cl]
+                if atlas then
+                    self.classificationIcon:SetAtlas(atlas)
+                    self.classificationIcon:Show()
+                else
+                    self.classificationIcon:Hide()
+                end
+            end
+        else
+            -- Object path (name only, no unit token)
+            self.rawName = name
+            self.nameColor = "|cFFFFFFFF"
+            self.name:SetText("|cFFFFFFFF" .. (name or "") .. "|r")
+            self.pretitle:SetText("")
+            self.posttitle:SetText("")
+            self.subtitle:SetText("")
+            self.faction:SetText("")
+            self.level:SetText("")
+            self.levelBadge:Hide()
+            self.classificationIcon:Hide()
         end
-        f.name:SetText((f._nameColor or "") .. truncated .. "|r")
     end
 
-    -- Truncation for plain-text fields
-    applyTruncatedText(f.pretitle, f.pretitle:GetText(), textW)
-    applyTruncatedText(f.posttitle, f.posttitle:GetText(), textW)
-    applyTruncatedText(f.faction, f.faction:GetText(), textW)
+    --#endregion
 
-    -- Re-read after truncation for positioning decisions
-    local pretitle    = f.pretitle:GetText()
-    local posttitle   = f.posttitle:GetText()
-    local faction     = f.faction:GetText()
+    --#region draw
 
-    -- Subtitle: wrap up to 2 lines when no pre/posttitle; otherwise truncate to 1
-    local subtitleRaw = f.subtitle:GetText()
-    local subtitleLines
-    if pretitle or posttitle then
-        f.subtitle:SetWordWrap(false)
-        f.subtitle:SetMaxLines(1)
-        applyTruncatedText(f.subtitle, subtitleRaw, textW)
-        subtitleLines = subtitleRaw and subtitleRaw ~= "" and 1 or 0
-    else
-        f.subtitle:SetWordWrap(true)
-        f.subtitle:SetMaxLines(2)
-        f.subtitle:SetText(subtitleRaw or "")
-        subtitleLines = subtitleRaw and subtitleRaw ~= "" and 2 or 0
-    end
-    local subtitle   = f.subtitle:GetText()
+    function container:draw()
+        -- Badge sizing
+        local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
+        local scaledBadgeH = math.floor(scaledBadgeW * tips.BADGE_H / tips.BADGE_W)
+        local badgeShown = self.levelBadge:IsShown()
 
-    local cleanName  = not pretitle and not posttitle and not subtitle and not faction
-    local titleLineH = fonts.titleSize + tips.LINE_GAP
-    local guildLineH = fonts.guildSize + tips.LINE_GAP
-    local aboveH     = pretitle and titleLineH or 0
-    local belowH     = (posttitle and titleLineH or 0)
-        + (subtitle and guildLineH * subtitleLines or 0)
-        + (faction and guildLineH or 0)
+        if badgeShown then
+            self.badgeContainer:SetSize(scaledBadgeW, scaledBadgeH)
+            self.level:SetWidth(scaledBadgeW)
+        else
+            self.badgeContainer:SetSize(0, 0)
+        end
 
-    local nameY      = math.floor((belowH - aboveH) / 2) + 4
+        local classShown = self.classificationIcon:IsShown()
+        self.classIconContainer:SetSize(classShown and 24 or 0, classShown and 24 or 0)
 
-    if not badgeShown then
-        nameY = (cleanName and nameY - 1) or nameY - 8
-    end
+        local badgeW = badgeShown and scaledBadgeW or 0
+        local classW = classShown and 24 or 0
+        local startX = tips.PADDING / 2 + (badgeShown and 0 or 8)
+        local spacing = 4
+        local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
+        local textW = tips.TIP_W - startX - badgeW - classW - (numGaps * spacing) - 6
 
-    -- Clear and re-anchor everything
-    f.name:ClearAllPoints()
-    f.pretitle:ClearAllPoints()
-    f.posttitle:ClearAllPoints()
-    f.subtitle:ClearAllPoints()
-    f.faction:ClearAllPoints()
+        self.nameBlock:SetWidth(textW)
+        self.name:SetWidth(textW)
+        self.pretitle:SetWidth(textW)
+        self.posttitle:SetWidth(textW)
+        self.subtitle:SetWidth(textW)
+        self.faction:SetWidth(textW)
 
-    f.name:SetPoint("LEFT", f.headerFrame, "LEFT", textX, nameY)
+        self.name:SetTruncatedColorText(self.rawName, self.nameColor, textW)
+        self.pretitle:SetTruncatedText(self.pretitle:GetText(), textW)
+        self.posttitle:SetTruncatedText(self.posttitle:GetText(), textW)
+        self.faction:SetTruncatedText(self.faction:GetText(), textW)
 
-    if pretitle then
-        f.pretitle:SetPoint("BOTTOMLEFT", f.name, "TOPLEFT", 0, 1)
-    end
-    if posttitle then
-        f.posttitle:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -1)
-    end
+        local subtitleRaw = self.subtitle:GetText()
+        if (self.pretitle:GetText() or "") ~= "" or (self.posttitle:GetText() or "") ~= "" then
+            self.subtitle:SetWordWrap(false)
+            self.subtitle:SetMaxLines(1)
+            self.subtitle:SetTruncatedText(subtitleRaw, textW)
+        else
+            self.subtitle:SetWordWrap(true)
+            self.subtitle:SetMaxLines(2)
+            self.subtitle:SetText(subtitleRaw or "")
+        end
 
-    local guildParent = (posttitle and f.posttitle) or f.name
-    local isNpcTitled = subtitle and faction
-    if isNpcTitled then
-        f.subtitle:SetPoint("TOPLEFT", f.name, "BOTTOMLEFT", 0, -1)
-        f.faction:SetPoint("TOPLEFT", f.subtitle, "BOTTOMLEFT", 0, -1)
-    elseif subtitle then
-        f.subtitle:SetPoint("TOPLEFT", guildParent, "BOTTOMLEFT", 0, -1)
-    elseif faction then
-        f.faction:SetPoint("TOPLEFT", guildParent, "BOTTOMLEFT", 0, -1)
+        self.pretitle:SyncHeight()
+        self.name:SyncHeight()
+        self.posttitle:SyncHeight()
+        self.subtitle:SyncHeight()
+        self.faction:SyncHeight()
+
+        self.nameBlock:Layout()
+        self:Layout(startX, 0)
+        self:SetWidth(tips.TIP_W - 8)
     end
 
-    if badgeShown then
-        f.levelBadge:ClearAllPoints()
-        f.levelBadge:SetPoint("TOPLEFT", f.headerFrame, "TOPLEFT", tips.PADDING / 2, 2)
-        f.level:ClearAllPoints()
-        f.level:SetPoint("CENTER", f.levelBadge, "CENTER", -1, 2)
+    --#endregion
+
+    --#region reset
+
+    function container:reset()
+        self.rawName = nil
+        self.nameColor = nil
+        self.pretitle:SetText(""); self.pretitle:SetHeight(0)
+        self.name:SetText(""); self.name:SetHeight(0)
+        self.posttitle:SetText(""); self.posttitle:SetHeight(0)
+        self.subtitle:SetText(""); self.subtitle:SetHeight(0)
+        self.faction:SetText(""); self.faction:SetHeight(0)
+        self.level:SetText("")
+        self.levelBadge:Hide()
+        self.classificationIcon:Hide()
+        self:SetHeight(math.floor(tips.TIP_W * tips.HEADER_ASPECT))
     end
 
-    return -headerH, headerH
+    --#endregion
+
+    return container
 end
+
+--#endregion
