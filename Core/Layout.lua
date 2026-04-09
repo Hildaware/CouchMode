@@ -26,6 +26,29 @@ local function resolveAnchor(v)
     return v.tex or v.frame or v.region or v
 end
 
+local function setupForwarding(obj, targetKey)
+    setmetatable(obj, {
+        __index = function(t, k)
+            local target = rawget(t, targetKey)
+            local v = target and target[k]
+            if type(v) == "function" then
+                local bound = function(_, ...) return v(target, ...) end
+                rawset(t, k, bound)
+                return bound
+            end
+            return v
+        end,
+    })
+
+    function obj:SetPoint(point, relativeTo, relativePoint, x, y)
+        rawget(self, targetKey):SetPoint(point, resolveAnchor(relativeTo), relativePoint, x, y)
+    end
+
+    function obj:SetAllPoints(relativeTo)
+        rawget(self, targetKey):SetAllPoints(resolveAnchor(relativeTo))
+    end
+end
+
 --#region ── Container ────────────────────────────────────────────────────────
 -- Base class for all layout primitives. Creates a backing WoW Frame parented
 -- to `parent` (which can be a WoW Frame or another Container).
@@ -108,35 +131,7 @@ function Layout:Container(parent, opts)
         end
     end
 
-    -- Forward unknown keys/calls to the backing frame
-    setmetatable(obj, {
-        __index = function(t, k)
-            local frame = rawget(t, "frame")
-            local v = frame and frame[k]
-            if type(v) == "function" then
-                return function(_, ...) return v(frame, ...) end
-            end
-            return v
-        end,
-    })
-
-    function obj:SetPoint(point, relativeTo, relativePoint, x, y)
-        self.frame:SetPoint(point, resolveAnchor(relativeTo), relativePoint, x, y)
-    end
-
-    function obj:SetAllPoints(relativeTo)
-        self.frame:SetAllPoints(resolveAnchor(relativeTo))
-    end
-
-    function obj:Show() self.frame:Show() end
-
-    function obj:Hide() self.frame:Hide() end
-
-    function obj:SetSize(w, h) self.frame:SetSize(w, h) end
-
-    function obj:SetWidth(w) self.frame:SetWidth(w) end
-
-    function obj:SetHeight(h) self.frame:SetHeight(h) end
+    setupForwarding(obj, "frame")
 
     function obj:Movable(onDragStart, onDragStop)
         self.frame:SetMovable(true)
@@ -149,10 +144,6 @@ function Layout:Container(parent, opts)
     end
 
     -- Creates a texture anchored to this container's frame.
-    -- source: atlas name, or texture path (detected by presence of \ or /).
-    -- bgOpts: { layer, alpha, width, insets = { left, top, right, bottom } }
-    --   insets map directly to TOPLEFT / BOTTOMRIGHT SetPoint offsets.
-    --   Omitting insets uses SetAllPoints.
     function obj:AddBackground(source, bgOpts)
         local layer = bgOpts and bgOpts.layer or "BACKGROUND"
         local texture = self.frame:CreateTexture(nil, layer)
@@ -203,23 +194,7 @@ function Layout:Container(parent, opts)
             end
         end
         local wrapper = { tex = tex }
-        setmetatable(wrapper, {
-            __index = function(t, k)
-                local tx = rawget(t, "tex")
-                local v = tx and tx[k]
-                if type(v) == "function" then
-                    return function(_, ...) return v(tx, ...) end
-                end
-                return v
-            end,
-        })
-        function wrapper:SetPoint(point, relativeTo, relativePoint, x, y)
-            tex:SetPoint(point, resolveAnchor(relativeTo), relativePoint, x, y)
-        end
-
-        function wrapper:SetAllPoints(relativeTo)
-            tex:SetAllPoints(resolveAnchor(relativeTo))
-        end
+        setupForwarding(wrapper, "tex")
 
         return wrapper --[[@as LayoutTexture]]
     end
@@ -275,10 +250,10 @@ function Layout:VStack(parent, opts)
 
     function obj:AddChild(item, childOpts)
         children[#children + 1] = {
-            region      = resolve(item),
-            xOffset     = childOpts and childOpts.xOffset or 0,
-            yOffset     = childOpts and childOpts.yOffset or 0,
-            fillWidth   = childOpts and childOpts.fillWidth or false,
+            region = resolve(item),
+            xOffset = childOpts and childOpts.xOffset or 0,
+            yOffset = childOpts and childOpts.yOffset or 0,
+            fillWidth = childOpts and childOpts.fillWidth or false,
             widthOffset = childOpts and childOpts.widthOffset or 0,
         }
     end
@@ -464,31 +439,25 @@ function Layout:FontString(parent, opts)
     end
 
     local obj = { fs = fs, region = fs }
+    setupForwarding(obj, "fs")
 
-    setmetatable(obj, {
-        __index = function(t, k)
-            local fontstr = rawget(t, "fs")
-            local v = fontstr and fontstr[k]
-            if type(v) == "function" then
-                return function(_, ...) return v(fontstr, ...) end
-            end
-            return v
-        end,
-    })
+    local function truncate(text, maxWidth)
+        fs:SetText(text)
+        if fs:GetStringWidth() <= maxWidth then return text end
+        local lo, hi = 0, #text
+        while lo < hi do
+            local mid = math.ceil((lo + hi) / 2)
+            fs:SetText(text:sub(1, mid) .. "...")
+            if fs:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
+        end
+        return text:sub(1, lo) .. "..."
+    end
 
     -- Truncates text to fit maxWidth pixels, appending "..." if needed.
     -- Requires the fontstring to already have its font set.
     function obj:SetTruncatedText(text, maxWidth)
         if not text or text == "" then return end
-        self:SetText(text)
-        if self:GetStringWidth() <= maxWidth then return end
-        local lo, hi = 0, #text
-        while lo < hi do
-            local mid = math.ceil((lo + hi) / 2)
-            self:SetText(text:sub(1, mid) .. "...")
-            if self:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
-        end
-        self:SetText(text:sub(1, lo) .. "...")
+        self:SetText(truncate(text, maxWidth))
     end
 
     -- Like SetTruncatedText but wraps the result in colorPrefix...|r.
@@ -496,18 +465,7 @@ function Layout:FontString(parent, opts)
     -- measure string width without color escape overhead).
     function obj:SetTruncatedColorText(text, colorPrefix, maxWidth)
         if not text or text == "" then return end
-        local truncated = text
-        self:SetText(truncated)
-        if self:GetStringWidth() > maxWidth then
-            local lo, hi = 0, #text
-            while lo < hi do
-                local mid = math.ceil((lo + hi) / 2)
-                self:SetText(text:sub(1, mid) .. "...")
-                if self:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
-            end
-            truncated = text:sub(1, lo) .. "..."
-        end
-        self:SetText((colorPrefix or "") .. truncated .. "|r")
+        self:SetText((colorPrefix or "") .. truncate(text, maxWidth) .. "|r")
     end
 
     -- Sets height to the rendered string height when non-empty, or 0 when empty.
@@ -515,14 +473,6 @@ function Layout:FontString(parent, opts)
     function obj:SyncHeight()
         local t = self:GetText()
         self:SetHeight((t and t ~= "") and math.max(self:GetStringHeight(), 1) or 0)
-    end
-
-    function obj:SetPoint(point, relativeTo, relativePoint, x, y)
-        fs:SetPoint(point, resolveAnchor(relativeTo), relativePoint, x, y)
-    end
-
-    function obj:SetAllPoints(relativeTo)
-        fs:SetAllPoints(resolveAnchor(relativeTo))
     end
 
     return obj --[[@as LayoutFontString]]
