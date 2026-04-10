@@ -42,8 +42,13 @@ function options:OnInitialize()
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, settings)
     LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Couch Mode')
 
-    LibStub('AceConsole-3.0'):RegisterChatCommand('cm',
-        function() LibStub("AceConfigDialog-3.0"):Open(addonName) end)
+    LibStub('AceConsole-3.0'):RegisterChatCommand('cm', function(args)
+        if args == 'mv' then
+            LibModels.Open()
+        else
+            LibStub("AceConfigDialog-3.0"):Open(addonName)
+        end
+    end)
     LibStub('AceConsole-3.0'):RegisterChatCommand('couchmode',
         function() LibStub("AceConfigDialog-3.0"):Open(addonName) end)
 

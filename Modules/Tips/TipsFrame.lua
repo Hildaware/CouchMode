@@ -146,6 +146,7 @@ local function buildContainer()
         frameStrata = "TOOLTIP",
         frameLevel = 100,
         width = TIP_W + 4,
+        childAlign = "CENTER",
     })
 
     local function onDragStart(self) if not tips.tipsDB().locked then self:StartMoving() end end
@@ -157,10 +158,9 @@ local function buildContainer()
 
     container:Movable(onDragStart, onDragStop)
 
-    container.bg = container:AddBackground("UI-Frame-Alliance-CardParchmentWider", {
-        -- alpha = 0.75,
-        insets = { left = -6, top = 6, right = -4, bottom = -4 },
-        vertexColor = { 0, 0, 0, .75 }
+    container.bg = container:AddBackground("Interface\\Addons\\CouchMode\\Media\\parchment_bg", {
+        alpha = 0.85,
+        insets = { left = -16, right = 16, top = 12, bottom = -12 },
     })
 
     return container
@@ -250,7 +250,7 @@ local function buildLayout(f, fullWidth)
     f:SetWidth(w + 4)
 
     -- Draw each section at the resolved width
-    f.unitInfo:draw(w)
+    f.unitInfo:draw((w == tips.TIP_W) and w or w + 8)
     if f.chars then f.chars:draw(w) end
     if f.mount then f.mount:draw(w) end
     if f.quest then f.quest:draw(w) end
@@ -326,7 +326,7 @@ function tips.updateFrame(f, unit)
         questPool.release(qu)
     end
 
-    buildLayout(f)
+    buildLayout(f, UnitIsPlayer(unit))
     tips.applyAnchor(f)
 end
 

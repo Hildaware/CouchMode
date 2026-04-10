@@ -19,11 +19,11 @@ local function resolve(v)
     return (type(v) == "table" and v.frame) or v
 end
 
--- Unwraps LayoutTexture (.tex), LayoutContainer (.frame), LayoutFontString (.region),
--- or passes through raw regions.
+-- Unwraps LayoutTexture (.tex), LayoutStatusBar (.bar), LayoutContainer (.frame),
+-- LayoutFontString (.region), or passes through raw regions.
 local function resolveAnchor(v)
     if type(v) ~= "table" then return v end
-    return v.tex or v.frame or v.region or v
+    return v.tex or v.bar or v.frame or v.region or v
 end
 
 local function setupForwarding(obj, targetKey)
@@ -69,12 +69,14 @@ end
 ---@field enableMouse?     boolean
 ---@field registerForDrag? string|string[]
 ---@field spacing?         number
+---@field childAlign?      "LEFT"|"CENTER"  -- default horizontal alignment for VStack children
 
 ---@class LayoutBackgroundOpts
----@field layer?  DrawLayer
----@field alpha?  number
----@field width?  number
----@field insets? { left?: number, top?: number, right?: number, bottom?: number }
+---@field layer?    DrawLayer
+---@field alpha?    number
+---@field width?    number
+---@field flipH?    boolean  -- mirror the texture horizontally
+---@field insets?   { left?: number, top?: number, right?: number, bottom?: number }
 
 ---@class LayoutTextureOpts
 ---@field atlas?   string
@@ -90,6 +92,16 @@ end
 ---@class LayoutTexture: Texture
 ---@field tex Texture
 
+---@class LayoutStatusBarOpts
+---@field texture?    string   -- texture path for SetStatusBarTexture
+---@field atlas?      string   -- atlas applied to the bar texture (can combine with texture)
+---@field desaturate? boolean  -- desaturate the bar texture to strip baked-in tint
+---@field minValue?   number   -- default 0
+---@field maxValue?   number   -- default 1
+
+---@class LayoutStatusBar: StatusBar
+---@field bar StatusBar
+
 ---@class LayoutContainer: Frame
 ---@field frame         Frame
 ---@field Show          fun(self: LayoutContainer)
@@ -101,9 +113,11 @@ end
 ---@field AddBackground fun(self: LayoutContainer, source: string, bgOpts?: LayoutBackgroundOpts): Texture
 ---@field SetPoint      fun(self: LayoutContainer, point: FramePoint, relativeTo: any, relativePoint: FramePoint, x?: number, y?: number)
 ---@field SetAllPoints  fun(self: LayoutContainer, relativeTo?: any)
+---@field Container     fun(self: LayoutContainer, opts?: LayoutContainerOpts): LayoutContainer
 ---@field FontString    fun(self: LayoutContainer, opts?: LayoutFontStringOpts): LayoutFontString
 ---@field Texture       fun(self: LayoutContainer, drawLayer: DrawLayer, subLevel?: integer|LayoutTextureOpts, opts?: LayoutTextureOpts): LayoutTexture
 ---@field Mask          fun(self: LayoutContainer, textureToMask: Texture|LayoutTexture, opts: LayoutMaskOpts)
+---@field StatusBar     fun(self: LayoutContainer, opts?: LayoutStatusBarOpts): LayoutStatusBar
 
 ---@param parent LayoutParent
 ---@param opts?  LayoutContainerOpts
@@ -146,7 +160,8 @@ function Layout:Container(parent, opts)
     -- Creates a texture anchored to this container's frame.
     function obj:AddBackground(source, bgOpts)
         local layer = bgOpts and bgOpts.layer or "BACKGROUND"
-        local texture = self.frame:CreateTexture(nil, layer)
+        local level = bgOpts and bgOpts.subLevel or nil
+        local texture = self.frame:CreateTexture(nil, layer, nil, level)
 
         if source:find("[/\\]") then
             texture:SetTexture(source)
@@ -157,6 +172,7 @@ function Layout:Container(parent, opts)
         if bgOpts then
             if bgOpts.alpha then texture:SetAlpha(bgOpts.alpha) end
             if bgOpts.width then texture:SetWidth(bgOpts.width) end
+            if bgOpts.flipH then texture:SetTexCoord(1, 0, 0, 1) end
             if bgOpts.vertexColor then texture:SetVertexColor(unpack(bgOpts.vertexColor)) end
             local ins = bgOpts.insets
             if ins then
@@ -172,6 +188,10 @@ function Layout:Container(parent, opts)
         end
 
         return texture
+    end
+
+    function obj:Container(containerOpts)
+        return Layout:Container(self, containerOpts)
     end
 
     function obj:FontString(fontOpts)
@@ -212,6 +232,27 @@ function Layout:Container(parent, opts)
         target:AddMaskTexture(mask)
     end
 
+    function obj:StatusBar(sbOpts)
+        local bar = CreateFrame("StatusBar", nil, self.frame)
+        if sbOpts and sbOpts.texture then
+            bar:SetStatusBarTexture(sbOpts.texture)
+        end
+        if sbOpts and sbOpts.atlas then
+            bar:GetStatusBarTexture():SetAtlas(sbOpts.atlas)
+        end
+        if sbOpts and sbOpts.desaturate then
+            bar:GetStatusBarTexture():SetDesaturated(true)
+        end
+        bar:SetMinMaxValues(
+            sbOpts and sbOpts.minValue or 0,
+            sbOpts and sbOpts.maxValue or 1
+        )
+        bar:SetValue(0)
+        local wrapper = { bar = bar }
+        setupForwarding(wrapper, "bar")
+        return wrapper --[[@as LayoutStatusBar]]
+    end
+
     return obj --[[@as LayoutContainer]]
 end
 
@@ -231,8 +272,9 @@ end
 ---@class LayoutChildOpts
 ---@field xOffset?      number
 ---@field yOffset?      number
----@field fillWidth?    boolean  -- stretch child to stack width
----@field widthOffset?  number   -- subtracted from stack width when fillWidth=true
+---@field fillWidth?    boolean           -- stretch child to stack width
+---@field widthOffset?  number            -- subtracted from stack width when fillWidth=true
+---@field halign?       "LEFT"|"CENTER"   -- horizontal alignment within the stack (overrides childAlign)
 
 ---@class LayoutVStack: LayoutContainer
 ---@field AddChild       fun(self: LayoutVStack, item: LayoutParent, childOpts?: LayoutChildOpts)
@@ -246,6 +288,7 @@ end
 function Layout:VStack(parent, opts)
     local obj = self:Container(parent, opts) --[[@as LayoutVStack]]
     local spacing = (opts and opts.spacing) or 0
+    local stackAlign = opts and opts.childAlign -- "LEFT"|"CENTER", default LEFT
     local children = {}
 
     function obj:AddChild(item, childOpts)
@@ -255,6 +298,7 @@ function Layout:VStack(parent, opts)
             yOffset = childOpts and childOpts.yOffset or 0,
             fillWidth = childOpts and childOpts.fillWidth or false,
             widthOffset = childOpts and childOpts.widthOffset or 0,
+            halign = childOpts and childOpts.halign or stackAlign,
         }
     end
 

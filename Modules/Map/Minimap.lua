@@ -1,27 +1,27 @@
-local addon_name       = ...
+local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon            = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map              = addon:GetModule('Minimap')
+local map = addon:GetModule('Minimap')
 
-local _G               = _G
-local math_min         = math.min
-local math_max         = math.max
-local math_ceil        = math.ceil
+local _G = _G
+local math_min = math.min
+local math_max = math.max
+local math_ceil = math.ceil
 
-local CreateFrame      = _G.CreateFrame
-local Minimap          = _G.Minimap
-local UIParent         = _G.UIParent
+local CreateFrame = _G.CreateFrame
+local Minimap = _G.Minimap
+local UIParent = _G.UIParent
 local InCombatLockdown = _G.InCombatLockdown
-local MinimapCluster   = _G.MinimapCluster ---@type Frame
+local MinimapCluster = _G.MinimapCluster ---@type Frame
 
-local ConsolePort      = _G['ConsolePort'] ---@type any
+local ConsolePort = _G['ConsolePort'] ---@type any
 
-local GROW_DURATION    = 0.5
+local GROW_DURATION = 0.5
 
-local RECT_MASK        = "Interface\\AddOns\\CouchMode\\Media\\3-2.blp"
+local RECT_MASK = "Interface\\AddOns\\CouchMode\\Media\\3-2.blp"
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 
@@ -115,10 +115,10 @@ end
 
 function map.applySettings()
     if not map.container then return end
-    local db    = addon.db.profile.minimap ---@type MinimapDB
-    local size  = map.grown and db.growSize or db.size
+    local db = addon.db.profile.minimap ---@type MinimapDB
+    local size = map.grown and db.growSize or db.size
     local shape = map.grown and db.growShape or db.shape
-    local w, h  = map.MapUtils.size_for_shape(shape, size)
+    local w, h = map.MapUtils.size_for_shape(shape, size)
 
     map.container:SetSize(w, h)
     map.container:SetAlpha(db.alpha)
@@ -138,11 +138,11 @@ function map.updateGrowTransition(elapsed)
     if not gt.active then return end
 
     gt.elapsed = gt.elapsed + elapsed
-    local t    = math_min(1, gt.elapsed / GROW_DURATION)
-    local ts   = t * t * (3 - 2 * t) -- smoothstep easing
-    local cw   = gt.fromW + (gt.toW - gt.fromW) * ts
-    local ch   = gt.fromH + (gt.toH - gt.fromH) * ts
-    local off  = math_ceil((cw - ch) / 2)
+    local t = math_min(1, gt.elapsed / GROW_DURATION)
+    local ts = t * t * (3 - 2 * t) -- smoothstep easing
+    local cw = gt.fromW + (gt.toW - gt.fromW) * ts
+    local ch = gt.fromH + (gt.toH - gt.fromH) * ts
+    local off = math_ceil((cw - ch) / 2)
     map.container:SetSize(cw, ch)
     map.container:SetClampRectInsets(0, 0, off, off)
     Minimap:ClearAllPoints()
@@ -178,7 +178,7 @@ function map.updateGrowTransition(elapsed)
 end
 
 function map.zoomMinimap(delta)
-    local zoom     = Minimap:GetZoom()
+    local zoom = Minimap:GetZoom()
     local max_zoom = Minimap:GetZoomLevels() - 1
     if delta > 0 then
         Minimap:SetZoom(math_min(zoom + 1, max_zoom))
@@ -237,6 +237,18 @@ function map.createFrame()
     Minimap:SetSize(w, w)
     apply_minimap_shape(db.shape, w, h)
     Minimap:Show()
+
+    local qsb = _G.QueueStatusButton ---@diagnostic disable-line: undefined-global
+    if qsb then
+        qsb:SetParent(map.container)
+        qsb:ClearAllPoints()
+        qsb:SetPoint("TOPLEFT", map.container, "TOPLEFT", 2, -2)
+        hooksecurefunc(qsb, "UpdatePosition", function(self)
+            self:ClearAllPoints()
+            self:SetPoint("TOPLEFT", map.container, "TOPLEFT", 2, -2)
+            qsb:SetFrameLevel(map.container:GetFrameLevel() + 2)
+        end)
+    end
 
     -- Rescue tracking button before hiding MinimapCluster so its menu stays functional
     map.blizzTracking = MinimapCluster.Tracking ---@diagnostic disable-line: undefined-field
@@ -321,7 +333,7 @@ function map.createFrame()
                 return
             end
 
-            local zoom_in  = key == 'PADRSHOULDER'
+            local zoom_in = key == 'PADRSHOULDER'
             local zoom_out = key == 'PADLSHOULDER'
 
             if not zoom_in and not zoom_out then
