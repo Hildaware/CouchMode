@@ -472,6 +472,7 @@ end
 ---@field justifyV? "TOP"|"MIDDLE"|"BOTTOM"
 ---@field wrap?     boolean
 ---@field maxLines? integer
+---@field shadow?   boolean
 
 ---@class LayoutFontString: FontString
 ---@field fs                    FontString
@@ -494,6 +495,10 @@ function Layout:FontString(parent, opts)
         if opts.justifyV then fs:SetJustifyV(opts.justifyV) end
         if opts.wrap ~= nil then fs:SetWordWrap(opts.wrap) end
         if opts.maxLines then fs:SetMaxLines(opts.maxLines) end
+        if opts.shadow then
+            fs:SetShadowOffset(1, -1)
+            fs:SetShadowColor(0, 0, 0, 1)
+        end
     end
 
     local safeLineH = fs:GetLineHeight()

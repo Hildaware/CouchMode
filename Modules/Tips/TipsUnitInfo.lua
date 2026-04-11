@@ -119,7 +119,8 @@ function tips.buildUnitInfo()
     container.levelBadge = levelBadge
 
     local level = container.badgeContainer:FontString(
-        { font = tips.currentSubFont, justifyH = "CENTER", justifyV = "MIDDLE", wordWrap = false })
+        { font = tips.currentSubFont, justifyH = "CENTER", justifyV = "MIDDLE", wordWrap = false,
+          shadow = tips.tipsDB().shadowEnabled })
     level:SetWidth(tips.BADGE_W)
     level:SetPoint("CENTER", container.levelBadge, "CENTER", -1, 2)
     container.level = level
@@ -135,15 +136,16 @@ function tips.buildUnitInfo()
     local guildFont = function() return fontPath, guildSize, fontFlag end
 
     local c = FACTION_BAR_COLORS[4]
+    local shadow = tips.tipsDB().shadowEnabled
     container.pretitle = container.nameBlock:FontString(
-        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT" })
+        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT", shadow = shadow })
     container.name = container.nameBlock:FontString(
-        { font = tips.currentFont, maxLines = 1, justifyH = "LEFT" })
+        { font = tips.currentFont, maxLines = 1, justifyH = "LEFT", shadow = shadow })
     container.posttitle = container.nameBlock:FontString(
-        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT" })
+        { font = titleFont, color = { c.r, c.g, c.b }, justifyH = "LEFT", shadow = shadow })
     container.subtitle = container.nameBlock:FontString(
-        { font = guildFont, color = { 0.7, 0.7, 0.7 }, wrap = false, maxLines = 1, justifyH = "LEFT" })
-    container.faction = container.nameBlock:FontString({ font = guildFont, justifyH = "LEFT" })
+        { font = guildFont, color = { 0.7, 0.7, 0.7 }, wrap = false, maxLines = 1, justifyH = "LEFT", shadow = shadow })
+    container.faction = container.nameBlock:FontString({ font = guildFont, justifyH = "LEFT", shadow = shadow })
 
     container.nameBlock:AddChild(container.pretitle)
     container.nameBlock:AddChild(container.name)

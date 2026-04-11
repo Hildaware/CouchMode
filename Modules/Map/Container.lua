@@ -307,6 +307,7 @@ function map.setupContainerScripts()
     map.container:RegisterEvent("PLAYER_REGEN_DISABLED")
     map.container:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_REGEN_DISABLED" then
+            map.container:SetPropagateKeyboardInput(true)
             local ih = _G['ConsolePortInputHandler']
             if ih then ih:Release(map.container) end
             return

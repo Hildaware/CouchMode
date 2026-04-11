@@ -53,6 +53,7 @@ function tips:GetDefaults()
             showFriendlyNpcs = true,
             showEnemyNpcs = true,
             alwaysShowQuestObjectiveTips = true,
+            shadowEnabled = true,
             font = 'Arial Narrow',
             fontFlags = '',
             width = TIP_W_DEFAULT,
@@ -165,6 +166,17 @@ function tips:GetOptions()
                         set = function(_, value)
                             tipsDB().fontFlags = value
                             tips.applyFonts()
+                        end,
+                    },
+                    shadowEnabled = {
+                        name = 'Drop Shadow',
+                        desc = 'Add a drop shadow to all tip text.',
+                        type = 'toggle',
+                        order = 4,
+                        get = function() return tipsDB().shadowEnabled end,
+                        set = function(_, value)
+                            tipsDB().shadowEnabled = value
+                            tips.applyShadow()
                         end,
                     },
                     width = {

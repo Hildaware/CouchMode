@@ -58,7 +58,8 @@ function tips.buildCharacteristics()
     local _, baseSize = tips.currentFont()
     container.charFontSize = baseSize
     container.info = addon.Layout:FontString(container,
-        { font = tips.currentFont, color = { 0.6, 0.6, 0.6 }, wrap = true, maxLines = 2, justifyH = "LEFT" })
+        { font = tips.currentFont, color = { 0.6, 0.6, 0.6 }, wrap = true, maxLines = 2, justifyH = "LEFT",
+          shadow = tips.tipsDB().shadowEnabled })
 
     container:AddChild(container.info, { valign = "CENTER" })
 

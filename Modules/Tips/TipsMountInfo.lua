@@ -64,8 +64,9 @@ function tips.buildMountInfo()
     container.mountFontSize = guildSize
 
     local textStack = addon.Layout:VStack(contentRow, { spacing = tips.LINE_GAP })
-    container.mountName = textStack:FontString({ font = guildFont, color = { 0.9, 0.85, 0.7 }, justifyH = "LEFT" })
-    container.mountSource = textStack:FontString({ font = guildFont, color = { 0.5, 0.5, 0.5 }, justifyH = "LEFT" })
+    local shadow = tips.tipsDB().shadowEnabled
+    container.mountName = textStack:FontString({ font = guildFont, color = { 0.9, 0.85, 0.7 }, justifyH = "LEFT", shadow = shadow })
+    container.mountSource = textStack:FontString({ font = guildFont, color = { 0.5, 0.5, 0.5 }, justifyH = "LEFT", shadow = shadow })
     textStack:AddChild(container.mountName, { fillWidth = true, widthOffset = -(tips.ICON_SIZE + tips.ICON_GAP) })
     textStack:AddChild(container.mountSource, { fillWidth = true })
     contentRow:AddChild(textStack, { valign = "CENTER" })

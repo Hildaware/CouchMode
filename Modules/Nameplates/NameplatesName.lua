@@ -105,6 +105,11 @@ function nameplates.buildNameFrame(f, overlay)
     f.questIcon:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
     f.questIcon:Hide()
 
+    if addon.db.profile.nameplates.shadowEnabled then
+        f.name:SetShadowOffset(1, -1)
+        f.name:SetShadowColor(0, 0, 0, 1)
+    end
+
     f.guild = overlay:CreateFontString(nil, "OVERLAY")
     f.guild:SetFont(nameplates.currentGuildFont())
     f.guild:SetWidth(nameplates.BAR_W * 2)
@@ -113,6 +118,10 @@ function nameplates.buildNameFrame(f, overlay)
     f.guild:SetPoint("TOP", f.name, "BOTTOM", 0, -1)
     f.guild:SetJustifyH("CENTER")
     f.guild:Hide()
+    if addon.db.profile.nameplates.shadowEnabled then
+        f.guild:SetShadowOffset(1, -1)
+        f.guild:SetShadowColor(0, 0, 0, 1)
+    end
 
     f.musicIcon = overlay:CreateTexture(nil, "OVERLAY")
     f.musicIcon:SetSize(fontSize + 2, fontSize + 2)

@@ -131,13 +131,49 @@ local function updateHealth(f, unit)
     f.bar.fill:SetValue(UnitHealth(unit), Enum.StatusBarInterpolation.ExponentialEaseOut)
 end
 
+local function setShadow(fs, enabled)
+    if enabled then
+        fs:SetShadowOffset(1, -1)
+        fs:SetShadowColor(0, 0, 0, 1)
+    else
+        fs:SetShadowOffset(0, 0)
+    end
+end
+
+local function applyFrameShadow(f, enabled)
+    setShadow(f.name,  enabled)
+    setShadow(f.guild, enabled)
+    if f.cast and f.cast.spellName then setShadow(f.cast.spellName, enabled) end
+    if f.auras then
+        for i = 1, nameplates.AURA_MAX do
+            local icon = f.auras.icons[i]
+            if icon then
+                if icon.count then setShadow(icon.count, enabled) end
+                if icon.timer then setShadow(icon.timer, enabled) end
+            end
+        end
+    end
+    if f.cc and f.cc.timer then setShadow(f.cc.timer, enabled) end
+end
+
 local function applyFontToAll()
+    local shadow = addon.db.profile.nameplates.shadowEnabled
     for _, f in pairs(active) do
         f.name:SetFont(nameplates.currentFont())
         f.guild:SetFont(nameplates.currentGuildFont())
+        applyFrameShadow(f, shadow)
     end
 end
-nameplates.applyFontToAll = applyFontToAll
+
+local function applyShadowToAll()
+    local shadow = addon.db.profile.nameplates.shadowEnabled
+    for _, f in pairs(active) do
+        applyFrameShadow(f, shadow)
+    end
+end
+
+nameplates.applyFontToAll   = applyFontToAll
+nameplates.applyShadowToAll = applyShadowToAll
 
 --#endregion
 

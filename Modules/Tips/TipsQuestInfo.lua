@@ -42,7 +42,8 @@ function tips.buildQuestInfo()
         container.questIcons[i] = icon
         questRow:AddChild(icon, { valign = "TOP" })
 
-        local ql = questRow:FontString({ font = guildFont, color = { 1, 0.82, 0 }, justifyH = "LEFT", wrap = false })
+        local shadow = tips.tipsDB().shadowEnabled
+        local ql = questRow:FontString({ font = guildFont, color = { 1, 0.82, 0 }, justifyH = "LEFT", wrap = false, shadow = shadow })
         container.questLines[i] = ql
         questRow:AddChild(ql, { valign = "TOP" })
 
@@ -51,7 +52,7 @@ function tips.buildQuestInfo()
         -- Objectives
         container.questObjectives[i] = {}
         for j = 1, tips.MAX_OBJECTIVES do
-            local obj = questStack:FontString({ font = guildFont, color = { 0.6, 0.6, 0.6 }, justifyH = "LEFT", wrap = false })
+            local obj = questStack:FontString({ font = guildFont, color = { 0.6, 0.6, 0.6 }, justifyH = "LEFT", wrap = false, shadow = shadow })
             container.questObjectives[i][j] = obj
             questStack:AddChild(obj, {
                 xOffset = tips.PADDING + 10,

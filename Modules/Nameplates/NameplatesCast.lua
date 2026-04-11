@@ -38,6 +38,10 @@ function nameplates.buildCastFrame(f, overlay)
     f.cast.spellName:SetPoint("CENTER", f.cast, "CENTER", 0, -1)
     f.cast.spellName:SetJustifyH("CENTER")
     f.cast.spellName:Hide()
+    if addon.db.profile.nameplates.shadowEnabled then
+        f.cast.spellName:SetShadowOffset(1, -1)
+        f.cast.spellName:SetShadowColor(0, 0, 0, 1)
+    end
 
     f.cast.shield = overlay:CreateTexture(nil, "OVERLAY")
     f.cast.shield:SetAtlas("UI-CastingBar-Shield", false)

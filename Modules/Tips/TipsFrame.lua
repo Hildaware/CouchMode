@@ -412,7 +412,52 @@ function tips.applyFonts()
         end
     end
 
+    tips.applyShadow()
     buildLayout(f)
+end
+
+local function setShadow(fs, enabled)
+    if enabled then
+        fs:SetShadowOffset(1, -1)
+        fs:SetShadowColor(0, 0, 0, 1)
+    else
+        fs:SetShadowOffset(0, 0)
+    end
+end
+
+function tips.applyShadow()
+    containerPool.flush()
+    unitInfoPool.flush()
+    charPool.flush()
+    mountPool.flush()
+    questPool.flush()
+
+    local f = tips.activeFrame
+    if not f then return end
+    local enabled = tips.tipsDB().shadowEnabled
+
+    setShadow(f.unitInfo.name.fs,      enabled)
+    setShadow(f.unitInfo.pretitle.fs,  enabled)
+    setShadow(f.unitInfo.posttitle.fs, enabled)
+    setShadow(f.unitInfo.subtitle.fs,  enabled)
+    setShadow(f.unitInfo.faction.fs,   enabled)
+    setShadow(f.unitInfo.level.fs,     enabled)
+
+    if f.chars then setShadow(f.chars.info.fs, enabled) end
+
+    if f.mount then
+        setShadow(f.mount.mountName.fs,   enabled)
+        setShadow(f.mount.mountSource.fs, enabled)
+    end
+
+    if f.quest then
+        for i = 1, tips.MAX_QUEST_LINES do
+            setShadow(f.quest.questLines[i].fs, enabled)
+            for j = 1, tips.MAX_OBJECTIVES do
+                setShadow(f.quest.questObjectives[i][j].fs, enabled)
+            end
+        end
+    end
 end
 
 function tips.applyWidth()

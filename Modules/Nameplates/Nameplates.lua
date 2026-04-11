@@ -88,6 +88,7 @@ function nameplates:GetDefaults()
             font            = 'Arial Narrow',
             fontSize        = 16,
             fontFlag        = 'OUTLINE',
+            shadowEnabled   = true,
             alwaysShowParty = false,
             occludedAlpha   = 0,
         },
@@ -156,6 +157,17 @@ function nameplates:GetOptions()
                         set    = function(_, value)
                             npDB().fontFlag = value
                             nameplates.applyFontToAll()
+                        end,
+                    },
+                    shadowEnabled = {
+                        name  = 'Drop Shadow',
+                        desc  = 'Add a drop shadow to all nameplate text.',
+                        type  = 'toggle',
+                        order = 4,
+                        get   = function() return npDB().shadowEnabled end,
+                        set   = function(_, value)
+                            npDB().shadowEnabled = value
+                            nameplates.applyShadowToAll()
                         end,
                     },
                 },

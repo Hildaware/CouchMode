@@ -42,6 +42,10 @@ function nameplates.buildAurasFrame(f)
         icon.timer:SetFont(nameplates.currentCastFont())
         icon.timer:SetPoint("CENTER", icon, "CENTER")
         icon.timer:SetJustifyH("CENTER")
+        if addon.db.profile.nameplates.shadowEnabled then
+            icon.count:SetShadowOffset(1, -1); icon.count:SetShadowColor(0, 0, 0, 1)
+            icon.timer:SetShadowOffset(1, -1); icon.timer:SetShadowColor(0, 0, 0, 1)
+        end
         icon:Hide()
         f.auras.icons[i] = icon
     end
@@ -71,6 +75,10 @@ function nameplates.buildAurasFrame(f)
     f.cc.timer:SetPoint("BOTTOM", f.cc, "BOTTOM", 0, 1)
     f.cc.timer:SetJustifyH("CENTER")
     f.cc.timer:Hide()
+    if addon.db.profile.nameplates.shadowEnabled then
+        f.cc.timer:SetShadowOffset(1, -1)
+        f.cc.timer:SetShadowColor(0, 0, 0, 1)
+    end
 
     f.cc:SetScript("OnUpdate", function(self)
         if self.duration then
