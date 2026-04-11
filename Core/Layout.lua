@@ -307,6 +307,7 @@ function Layout:VStack(parent, opts)
         local first = true
         for _, child in ipairs(children) do
             local h = child.region:GetHeight()
+            if h and issecretvalue(h) then h = child.region.safeLineH end
             if h and h > 0 then
                 if not first then total = total + spacing end
                 total = total + h
@@ -334,14 +335,22 @@ function Layout:VStack(parent, opts)
                 child.region:SetWidth(math.max(frameW + (child.widthOffset or 0), 1))
             end
             local h = child.region:GetHeight()
+            if h and issecretvalue(h) then h = child.region.safeLineH end
             child.region:ClearAllPoints()
             if h and h > 0 then
                 if not first then
                     y = y - spacing
                     totalH = totalH + spacing
                 end
-                child.region:SetPoint("TOPLEFT", self.frame, "TOPLEFT",
-                    (x or 0) + child.xOffset, y + child.yOffset)
+                local xOff = (x or 0) + child.xOffset
+                if child.halign == "CENTER" and frameW and frameW > 0 then
+                    local childW = child.region:GetWidth()
+                    if childW and issecretvalue(childW) then childW = nil end
+                    if childW then
+                        xOff = math.floor((frameW - childW) / 2) + child.xOffset
+                    end
+                end
+                child.region:SetPoint("TOPLEFT", self.frame, "TOPLEFT", xOff, y + child.yOffset)
                 y = y - h
                 totalH = totalH + h
                 first = false
@@ -406,6 +415,7 @@ function Layout:HStack(parent, opts)
         local frameH = self.frame:GetHeight()
         for _, child in ipairs(children) do
             local w = child.region:GetWidth()
+            if w and issecretvalue(w) then w = child.region.safeLineH end
             child.region:ClearAllPoints()
             if w and w > 0 then
                 if not first then
@@ -413,9 +423,13 @@ function Layout:HStack(parent, opts)
                     totalW = totalW + spacing
                 end
                 local autoY = 0
-                if child.valign == "CENTER" and frameH and frameH > 0 then
+                local frameH_safe = frameH and not issecretvalue(frameH) and frameH
+                if child.valign == "CENTER" and frameH_safe and frameH_safe > 0 then
                     local h = child.region:GetHeight()
-                    autoY = -math.floor((frameH - (h or 0)) / 2)
+                    if h and issecretvalue(h) then h = child.region.safeLineH end
+                    if h then
+                        autoY = -math.floor((frameH_safe - h) / 2)
+                    end
                 end
                 child.region:SetPoint("TOPLEFT", self.frame, "TOPLEFT",
                     x + child.xOffset, (y or 0) + child.yOffset + autoY)
@@ -482,17 +496,24 @@ function Layout:FontString(parent, opts)
         if opts.maxLines then fs:SetMaxLines(opts.maxLines) end
     end
 
-    local obj = { fs = fs, region = fs }
+    local safeLineH = fs:GetLineHeight()
+
+    local obj = { fs = fs, region = fs, safeLineH = safeLineH }
     setupForwarding(obj, "fs")
 
     local function truncate(text, maxWidth)
+        if issecretvalue(text) then return text end
         fs:SetText(text)
-        if fs:GetStringWidth() <= maxWidth then return text end
+        local sw = fs:GetStringWidth()
+        if issecretvalue(sw) then return text end
+        if sw <= maxWidth then return text end
         local lo, hi = 0, #text
         while lo < hi do
             local mid = math.ceil((lo + hi) / 2)
             fs:SetText(text:sub(1, mid) .. "...")
-            if fs:GetStringWidth() <= maxWidth then lo = mid else hi = mid - 1 end
+            local sw2 = fs:GetStringWidth()
+            if issecretvalue(sw2) then return text end
+            if sw2 <= maxWidth then lo = mid else hi = mid - 1 end
         end
         return text:sub(1, lo) .. "..."
     end
@@ -500,7 +521,7 @@ function Layout:FontString(parent, opts)
     -- Truncates text to fit maxWidth pixels, appending "..." if needed.
     -- Requires the fontstring to already have its font set.
     function obj:SetTruncatedText(text, maxWidth)
-        if not text or text == "" then return end
+        if not text then return end
         self:SetText(truncate(text, maxWidth))
     end
 
@@ -508,7 +529,7 @@ function Layout:FontString(parent, opts)
     -- Use when the raw text must be stored separately from its color code (e.g. to
     -- measure string width without color escape overhead).
     function obj:SetTruncatedColorText(text, colorPrefix, maxWidth)
-        if not text or text == "" then return end
+        if not text then return end
         self:SetText((colorPrefix or "") .. truncate(text, maxWidth) .. "|r")
     end
 
@@ -516,7 +537,15 @@ function Layout:FontString(parent, opts)
     -- Keeps VStack measurement accurate for fontstrings that may have no text.
     function obj:SyncHeight()
         local t = self:GetText()
-        self:SetHeight((t and t ~= "") and math.max(self:GetStringHeight(), 1) or 0)
+        if not t then
+            self:SetHeight(0)
+            return
+        end
+        if issecretvalue(t) then
+            self:SetHeight(safeLineH)
+            return
+        end -- can't measure secret strings; use pre-captured line height
+        self:SetHeight((t ~= "") and math.max(self:GetStringHeight(), 1) or 0)
     end
 
     return obj --[[@as LayoutFontString]]

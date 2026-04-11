@@ -7,6 +7,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 local tips = addon:GetModule('Tips')
 
 local hexColor = addon.Utils.hexColor
+local measureWidth = addon.TipsUtils.measureWidth
 
 function tips.nameColor(unit)
     if UnitIsPlayer(unit) then
@@ -153,9 +154,9 @@ function tips.buildUnitInfo()
     container:AddChild(container.nameBlock, { valign = "CENTER" })
 
     container.classIconContainer = addon.Layout:Container(container)
-    container.classIconContainer.frame:SetSize(24, 24)
-    container.classificationIcon = container.classIconContainer.frame:CreateTexture(nil, "OVERLAY")
-    container.classificationIcon:SetAllPoints(container.classIconContainer.frame)
+    container.classIconContainer.frame:SetSize(30, 30)
+    container.classificationIcon = container.classIconContainer:Texture("OVERLAY", 0, { size = { w = 30, h = 30 } })
+    container.classificationIcon:SetPoint("LEFT", container.classIconContainer, "LEFT", -8, 8)
     container.classificationIcon:Hide()
 
     container:AddChild(container.classIconContainer, { valign = "CENTER" })
@@ -269,20 +270,20 @@ function tips.buildUnitInfo()
     --#region draw
 
     function container:naturalWidth()
-        local badgeShown   = self.levelBadge:IsShown()
-        local classShown   = self.classificationIcon:IsShown()
+        local badgeShown = self.levelBadge:IsShown()
+        local classShown = self.classificationIcon:IsShown()
         local scaledBadgeW = math.floor(tips.TIP_W * tips.BADGE_X)
-        local badgeW  = badgeShown and scaledBadgeW or 0
-        local classW  = classShown and 24 or 0
-        local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
+        local badgeW = badgeShown and scaledBadgeW or 0
+        local classW = classShown and 24 or 0
+        local startX = tips.PADDING / 2 + (badgeShown and 0 or 8)
         local spacing = 4
         local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
         local textW = math.max(
-            self.pretitle:GetStringWidth(),
-            self.name:GetStringWidth(),
-            self.posttitle:GetStringWidth(),
-            self.subtitle:GetStringWidth(),
-            self.faction:GetStringWidth()
+            measureWidth(self.pretitle),
+            measureWidth(self.name),
+            measureWidth(self.posttitle),
+            measureWidth(self.subtitle),
+            measureWidth(self.faction)
         )
         return math.ceil(startX + badgeW + classW + (numGaps * spacing) + textW + startX)
     end
@@ -303,12 +304,12 @@ function tips.buildUnitInfo()
         local classShown = self.classificationIcon:IsShown()
         self.classIconContainer:SetSize(classShown and 24 or 0, classShown and 24 or 0)
 
-        local badgeW  = badgeShown and scaledBadgeW or 0
-        local classW  = classShown and 24 or 0
-        local startX  = tips.PADDING / 2 + (badgeShown and 0 or 8)
+        local badgeW = badgeShown and scaledBadgeW or 0
+        local classW = classShown and 24 or 0
+        local startX = tips.PADDING / 2 + (badgeShown and 0 or 8)
         local spacing = 4
         local numGaps = (badgeShown and 1 or 0) + (classShown and 1 or 0)
-        local textW   = w - startX - badgeW - classW - (numGaps * spacing) - startX
+        local textW = w - startX - badgeW - classW - (numGaps * spacing) - startX
 
         self.nameBlock:SetWidth(textW)
         self.name:SetWidth(textW)
@@ -351,11 +352,11 @@ function tips.buildUnitInfo()
     function container:reset()
         self.rawName = nil
         self.nameColor = nil
-        self.pretitle:SetText("");  self.pretitle:SetWidth(0);  self.pretitle:SetHeight(0)
-        self.name:SetText("");      self.name:SetWidth(0);      self.name:SetHeight(0)
+        self.pretitle:SetText(""); self.pretitle:SetWidth(0); self.pretitle:SetHeight(0)
+        self.name:SetText(""); self.name:SetWidth(0); self.name:SetHeight(0)
         self.posttitle:SetText(""); self.posttitle:SetWidth(0); self.posttitle:SetHeight(0)
-        self.subtitle:SetText("");  self.subtitle:SetWidth(0);  self.subtitle:SetHeight(0)
-        self.faction:SetText("");   self.faction:SetWidth(0);   self.faction:SetHeight(0)
+        self.subtitle:SetText(""); self.subtitle:SetWidth(0); self.subtitle:SetHeight(0)
+        self.faction:SetText(""); self.faction:SetWidth(0); self.faction:SetHeight(0)
         self.level:SetText("")
         self.levelBadge:Hide()
         self.classificationIcon:Hide()

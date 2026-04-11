@@ -242,10 +242,10 @@ function map.createFrame()
     if qsb then
         qsb:SetParent(map.container)
         qsb:ClearAllPoints()
-        qsb:SetPoint("TOPLEFT", map.container, "TOPLEFT", 2, -2)
+        qsb:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", -2, -2)
         hooksecurefunc(qsb, "UpdatePosition", function(self)
             self:ClearAllPoints()
-            self:SetPoint("TOPLEFT", map.container, "TOPLEFT", 2, -2)
+            self:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", -2, -2)
             qsb:SetFrameLevel(map.container:GetFrameLevel() + 2)
         end)
     end
@@ -328,7 +328,8 @@ function map.createFrame()
         end)
 
         map.container:SetScript('OnGamePadButtonDown', function(self, key)
-            if not map.grown or InCombatLockdown() then
+            if InCombatLockdown() then return end
+            if not map.grown then
                 self:SetPropagateKeyboardInput(true)
                 return
             end

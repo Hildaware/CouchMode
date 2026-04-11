@@ -52,6 +52,7 @@ function tips:GetDefaults()
             enabled = true,
             showFriendlyNpcs = true,
             showEnemyNpcs = true,
+            alwaysShowQuestObjectiveTips = true,
             font = 'Arial Narrow',
             fontFlags = '',
             width = TIP_W_DEFAULT,
@@ -84,27 +85,44 @@ function tips:GetOptions()
                     if value then tips:Enable() else tips:Disable() end
                 end,
             },
-            showFriendlyNpcs = {
-                name = 'Show Friendly NPC Tips',
-                desc = 'Show tooltip for friendly (non-attackable) NPCs.',
-                type = 'toggle',
+            visibility = {
+                name = 'Visibility',
+                type = 'group',
+                inline = true,
                 order = 3,
-                get = function() return tipsDB().showFriendlyNpcs end,
-                set = function(_, value) tipsDB().showFriendlyNpcs = value end,
-            },
-            showEnemyNpcs = {
-                name = 'Show Enemy NPC Tips',
-                desc = 'Show tooltip for attackable NPCs.',
-                type = 'toggle',
-                order = 4,
-                get = function() return tipsDB().showEnemyNpcs end,
-                set = function(_, value) tipsDB().showEnemyNpcs = value end,
+                args = {
+                    showFriendlyNpcs = {
+                        name = 'Show Friendly NPC Tips',
+                        desc = 'Show tooltip for friendly (non-attackable) NPCs.',
+                        type = 'toggle',
+                        order = 1,
+                        get = function() return tipsDB().showFriendlyNpcs end,
+                        set = function(_, value) tipsDB().showFriendlyNpcs = value end,
+                    },
+                    showEnemyNpcs = {
+                        name = 'Show Enemy NPC Tips',
+                        desc = 'Show tooltip for attackable NPCs.',
+                        type = 'toggle',
+                        order = 2,
+                        get = function() return tipsDB().showEnemyNpcs end,
+                        set = function(_, value) tipsDB().showEnemyNpcs = value end,
+                    },
+                    alwaysShowQuestObjectiveTips = {
+                        name = 'Always Show Quest Objective Tips',
+                        desc = 'Show tooltip for quest objective NPCs even when friendly or enemy tips are disabled.',
+                        type = 'toggle',
+                        width = 'full',
+                        order = 3,
+                        get = function() return tipsDB().alwaysShowQuestObjectiveTips end,
+                        set = function(_, value) tipsDB().alwaysShowQuestObjectiveTips = value end,
+                    },
+                },
             },
             position = {
                 name = 'Position',
                 type = 'group',
                 inline = true,
-                order = 5,
+                order = 6,
                 args = {
                     lockToggle = {
                         name = function() return tipsDB().locked and 'Unlock Position' or 'Lock Position' end,
@@ -124,7 +142,7 @@ function tips:GetOptions()
                 name = 'Appearance',
                 type = 'group',
                 inline = true,
-                order = 6,
+                order = 7,
                 args = {
                     font = {
                         name = 'Font',

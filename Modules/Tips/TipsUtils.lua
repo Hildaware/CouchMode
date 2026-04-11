@@ -63,10 +63,26 @@ local function onInspectReady(guid, unit)
     pruneCache()
 end
 
+-- Shared measurement FontString parented to UIParent, never shown.
+-- Using a dedicated fs keeps taint from display FontStrings out of measurements.
+local measureFs = UIParent:CreateFontString(nil, "ARTWORK")
+measureFs:Hide()
+
+local function measureWidth(fs)
+    local text = fs:GetText()
+    if not text or issecretvalue(text) then return 0 end
+    local fontPath, fontSize, fontFlags = fs:GetFont()
+    if fontPath then measureFs:SetFont(fontPath, fontSize, fontFlags) end
+    measureFs:SetText(text)
+    local w = measureFs:GetStringWidth()
+    return (not issecretvalue(w)) and w or 0
+end
+
 addon.TipsUtils = {
     getSpecData    = getSpecData,
     requestInspect = requestInspect,
     onInspectReady = onInspectReady,
+    measureWidth   = measureWidth,
 }
 
 --#endregion

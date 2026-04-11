@@ -6,6 +6,8 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class TipsModule: AceModule
 local tips = addon:GetModule('Tips')
 
+local measureWidth = addon.TipsUtils.measureWidth
+
 tips.CREATURE_TYPE_SET = {
     ["Beast"] = true,
     ["Dragonkin"] = true,
@@ -126,7 +128,7 @@ function tips.buildCharacteristics()
     function container:naturalWidth()
         local borderShown    = self.classIconBorder:IsShown()
         local scaledBorderSz = math.floor(tips.TIP_W * tips.ICON_X)
-        return math.ceil((borderShown and scaledBorderSz + 4 or 0) + self.info:GetStringWidth() + tips.PADDING)
+        return math.ceil((borderShown and scaledBorderSz + 4 or 0) + measureWidth(self.info) + tips.PADDING)
     end
 
     function container:draw(w)

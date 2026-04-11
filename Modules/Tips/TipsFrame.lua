@@ -240,11 +240,16 @@ local function buildLayout(f, fullWidth)
     if fullWidth then
         w = tips.TIP_W
     else
-        w = f.unitInfo:naturalWidth()
-        if f.chars then w = math.max(w, f.chars:naturalWidth()) end
-        if f.mount then w = math.max(w, f.mount:naturalWidth()) end
-        if f.quest then w = math.max(w, f.quest:naturalWidth()) end
-        w = math.max(math.min(w, tips.TIP_W), 140)
+        local inInstance = IsInInstance()
+        if inInstance then
+            w = tips.TIP_W  -- skip naturalWidth(); GetStringWidth on secret strings is forbidden in instances
+        else
+            w = f.unitInfo:naturalWidth()
+            if f.chars then w = math.max(w, f.chars:naturalWidth()) end
+            if f.mount then w = math.max(w, f.mount:naturalWidth()) end
+            if f.quest then w = math.max(w, f.quest:naturalWidth()) end
+            w = math.max(math.min(w, tips.TIP_W), 140)
+        end
     end
 
     f:SetWidth(w + 4)

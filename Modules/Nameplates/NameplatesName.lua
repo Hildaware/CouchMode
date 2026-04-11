@@ -1,17 +1,17 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
 local nameplates = addon:GetModule('Nameplates')
 
 --#region ── Name colors ──────────────────────────────────────────────────────
 
-local COLOR_END  = "|r"
+local COLOR_END = "|r"
 local titleColorCache
 
-local hexColor   = addon.Utils.hexColor
+local hexColor = addon.Utils.hexColor
 
 local function titleColor()
     if not titleColorCache then
@@ -53,7 +53,7 @@ local partyGUIDs = {}
 
 function nameplates.rebuildPartyGUIDs()
     wipe(partyGUIDs)
-    local n      = GetNumGroupMembers()
+    local n = GetNumGroupMembers()
     local isRaid = IsInRaid()
     for i = 1, n do
         local unit = isRaid and ("raid" .. i) or ("party" .. i)
@@ -140,7 +140,7 @@ function nameplates.applyName(f, unit, plateType)
     if UnitIsPlayer(unit) then
         local rpFullName = addon.TRPUtils.getRPFullName(unit)
         if rpFullName and rpFullName ~= "" then
-            local nc      = nameColor(unit)
+            local nc = nameColor(unit)
             local rpTitle = addon.TRPUtils.getRPTitle(unit)
             if rpTitle then
                 text = titleColor() .. rpTitle .. " " .. COLOR_END .. nc .. rpFullName .. COLOR_END
@@ -149,8 +149,8 @@ function nameplates.applyName(f, unit, plateType)
             end
         else
             local fullStr = UnitPVPName(unit) or nameStr
-            local s, e    = fullStr:find(nameStr, 1, true)
-            local nc      = nameColor(unit)
+            local s, e = fullStr:find(nameStr, 1, true)
+            local nc = nameColor(unit)
 
             if s and s > 1 then
                 local prefix = fullStr:sub(1, s - 1)
@@ -188,7 +188,7 @@ local function getSubtitle(unitToken)
         local text = tooltipData.lines[2].leftText
         if text and text ~= "" and not text:match("^Level %d") then
             subtitle = text
-            isGuild  = false
+            isGuild = false
         end
     end
 
@@ -253,7 +253,7 @@ function nameplates.applyLayout(f, plateType)
         f.name:SetJustifyH("CENTER")
         f.name:SetWidth(0)
         f.questIcon:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
-        f.elite:SetPoint("LEFT", f.name, "RIGHT", 4, 1)
+        f.elite:SetPoint("RIGHT", f.name, "LEFT", -4, 1)
         f.mark:SetPoint("BOTTOM", f.name, "TOP", 0, 2)
     end
 

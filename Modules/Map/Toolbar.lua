@@ -29,7 +29,7 @@ local world_map_defs = {
     { btn = "wmBtnWQ",       atlas = "worldquest-tracker-questmarker", tooltip = "World Quests",   dps = { "wmDpWorldQuests" },                          db = "worldMapShowWorldQuests" },
     { btn = "wmBtnAQ",       atlas = "QuestNormal",                    tooltip = "Active Quests",  dps = { "wmDpActiveQuests" },                         db = "worldMapShowActiveQuests" },
     { btn = "wmBtnLS",       atlas = "questlog-storylineicon",         tooltip = "Local Stories",  dps = { "wmDpLocalStories" },                         db = "worldMapShowLocalStories" },
-    { btn = "wmBtnDungeons", atlas = "questlog-questtypeicon-heroic",  tooltip = "Dungeons/Raids", dps = { "wmDpDungeons" },                             db = "worldMapShowDungeons" },
+    { btn = "wmBtnDungeons", atlas = "questlog-questtypeicon-heroic",  tooltip = "Dungeons/Raids", dps = { "wmDpDungeons", "wmDpBosses" },               db = "worldMapShowDungeons" },
     { btn = "wmBtnDelves",   atlas = "questlog-questtypeicon-Delves",  tooltip = "Delves",         dps = { "wmDpDelves" },                               db = "worldMapShowDelves" },
     { btn = "wmBtnEvents",   atlas = "questlog-questtypeicon-story",   tooltip = "Events",         dps = { "wmDpEvents" },                               db = "worldMapShowEvents" },
     { btn = "wmBtnTravel",   atlas = "MagePortalAlliance",             tooltip = "Travel",         dps = { "wmDpTravel", "wmDpPortals", "wmDpAreaPOI" }, db = "worldMapShowTravel" },

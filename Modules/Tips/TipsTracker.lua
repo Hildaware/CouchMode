@@ -19,11 +19,18 @@ end
 
 local function getCurrentUnit()
     local db               = tips.tipsDB()
-    local showFriendlyNpcs = db.showFriendlyNpcs
-    local showEnemyNpcs    = db.showEnemyNpcs
+    local showFriendlyNpcs           = db.showFriendlyNpcs
+    local showEnemyNpcs              = db.showEnemyNpcs
+    local alwaysShowQuestObjectiveTips = db.alwaysShowQuestObjectiveTips
     local function allow(unit)
-        if not showFriendlyNpcs and isFriendlyNpc(unit) then return false end
-        if not showEnemyNpcs and isEnemyNpc(unit) then return false end
+        local wouldHide = (not showFriendlyNpcs and isFriendlyNpc(unit))
+                       or (not showEnemyNpcs and isEnemyNpc(unit))
+        if wouldHide then
+            if alwaysShowQuestObjectiveTips and addon.QuestUtils.isQuestUnit(unit) then
+                return true
+            end
+            return false
+        end
         return true
     end
 
