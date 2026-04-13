@@ -5,4 +5,5 @@
     <Include file = 'Nameplates/Nameplates.xml' />
     <Include file = 'Bags/Bags.xml' />
     <Include file = 'Tips/Tips.xml' />
+    <Include file = 'Banter/Banter.xml' />
 </UI>

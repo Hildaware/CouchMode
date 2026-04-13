@@ -227,3 +227,27 @@
 ---@field naturalWidth    fun(self: QuestSection): number
 ---@field draw            fun(self: QuestSection, w: number)
 ---@field reset           fun(self: QuestSection)
+
+--#region ── Banter ───────────────────────────────────────────────────────────
+
+---@class BantsData
+---@field id        number
+---@field displayId number
+---@field name      string
+---@field message   string
+---@field type      string   CHAT_MSG_MONSTER_* event name
+---@field duration  number
+
+---@class BantsModule: AceModule
+---@field proto          { minimumHeight: number }
+---@field _pool          ObjectPoolMixin
+---@field _messagePool   ObjectPoolMixin
+---@field Create         fun(self: BantsModule): BantsMain
+---@field Release        fun(self: BantsModule, bant: BantsMain)
+
+---@class ObjectPoolMixin
+---@field Acquire              fun(self: ObjectPoolMixin): any, boolean
+---@field Release              fun(self: ObjectPoolMixin, obj: any)
+---@field SetResetDisallowedIfNew fun(self: ObjectPoolMixin)
+
+--#endregion
