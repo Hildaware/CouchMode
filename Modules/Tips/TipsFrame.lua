@@ -242,7 +242,7 @@ local function buildLayout(f, fullWidth)
     else
         local inInstance = IsInInstance()
         if inInstance then
-            w = tips.TIP_W  -- skip naturalWidth(); GetStringWidth on secret strings is forbidden in instances
+            w = tips.TIP_W -- skip naturalWidth(); GetStringWidth on secret strings is forbidden in instances
         else
             w = f.unitInfo:naturalWidth()
             if f.chars then w = math.max(w, f.chars:naturalWidth()) end
@@ -418,8 +418,7 @@ end
 
 local function setShadow(fs, enabled)
     if enabled then
-        fs:SetShadowOffset(1, -1)
-        fs:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(fs)
     else
         fs:SetShadowOffset(0, 0)
     end
@@ -436,17 +435,17 @@ function tips.applyShadow()
     if not f then return end
     local enabled = tips.tipsDB().shadowEnabled
 
-    setShadow(f.unitInfo.name.fs,      enabled)
-    setShadow(f.unitInfo.pretitle.fs,  enabled)
+    setShadow(f.unitInfo.name.fs, enabled)
+    setShadow(f.unitInfo.pretitle.fs, enabled)
     setShadow(f.unitInfo.posttitle.fs, enabled)
-    setShadow(f.unitInfo.subtitle.fs,  enabled)
-    setShadow(f.unitInfo.faction.fs,   enabled)
-    setShadow(f.unitInfo.level.fs,     enabled)
+    setShadow(f.unitInfo.subtitle.fs, enabled)
+    setShadow(f.unitInfo.faction.fs, enabled)
+    setShadow(f.unitInfo.level.fs, enabled)
 
     if f.chars then setShadow(f.chars.info.fs, enabled) end
 
     if f.mount then
-        setShadow(f.mount.mountName.fs,   enabled)
+        setShadow(f.mount.mountName.fs, enabled)
         setShadow(f.mount.mountSource.fs, enabled)
     end
 

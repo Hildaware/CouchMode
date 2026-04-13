@@ -53,6 +53,7 @@ function tips:GetDefaults()
             showFriendlyNpcs = true,
             showEnemyNpcs = true,
             alwaysShowQuestObjectiveTips = true,
+            alwaysShowImportant = false,
             shadowEnabled = true,
             font = 'Arial Narrow',
             fontFlags = '',
@@ -90,7 +91,7 @@ function tips:GetOptions()
                 name = 'Visibility',
                 type = 'group',
                 inline = true,
-                order = 3,
+                order = 4,
                 args = {
                     showFriendlyNpcs = {
                         name = 'Show Friendly NPC Tips',
@@ -117,25 +118,14 @@ function tips:GetOptions()
                         get = function() return tipsDB().alwaysShowQuestObjectiveTips end,
                         set = function(_, value) tipsDB().alwaysShowQuestObjectiveTips = value end,
                     },
-                },
-            },
-            position = {
-                name = 'Position',
-                type = 'group',
-                inline = true,
-                order = 6,
-                args = {
-                    lockToggle = {
-                        name = function() return tipsDB().locked and 'Unlock Position' or 'Lock Position' end,
-                        desc =
-                        'Toggle the drag handle. While unlocked, a green border marks the frame and it can be freely dragged.',
-                        type = 'execute',
-                        order = 1,
-                        func = function()
-                            local db = tipsDB()
-                            db.locked = not db.locked
-                            tips.applyDock()
-                        end,
+                    alwaysShowImportant = {
+                        name = 'Always Show Important',
+                        desc = 'Always show tips for rares and elite rares even when NPC tips are disabled.',
+                        type = 'toggle',
+                        width = 'full',
+                        order = 4,
+                        get = function() return tipsDB().alwaysShowImportant end,
+                        set = function(_, value) tipsDB().alwaysShowImportant = value end,
                     },
                 },
             },
@@ -143,8 +133,20 @@ function tips:GetOptions()
                 name = 'Appearance',
                 type = 'group',
                 inline = true,
-                order = 7,
+                order = 3,
                 args = {
+                    lockToggle = {
+                        name = function() return tipsDB().locked and 'Unlock Position' or 'Lock Position' end,
+                        desc =
+                        'Toggle the drag handle. While unlocked, a green border marks the frame and it can be freely dragged.',
+                        type = 'execute',
+                        order = 5,
+                        func = function()
+                            local db = tipsDB()
+                            db.locked = not db.locked
+                            tips.applyDock()
+                        end,
+                    },
                     font = {
                         name = 'Font',
                         type = 'select',

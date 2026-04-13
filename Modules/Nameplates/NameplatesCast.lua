@@ -39,8 +39,7 @@ function nameplates.buildCastFrame(f, overlay)
     f.cast.spellName:SetJustifyH("CENTER")
     f.cast.spellName:Hide()
     if addon.db.profile.nameplates.shadowEnabled then
-        f.cast.spellName:SetShadowOffset(1, -1)
-        f.cast.spellName:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(f.cast.spellName)
     end
 
     f.cast.shield = overlay:CreateTexture(nil, "OVERLAY")

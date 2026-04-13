@@ -8,7 +8,8 @@ local nameplates = addon:GetModule('Nameplates')
 
 --#region ── Name colors ──────────────────────────────────────────────────────
 
-local COLOR_END = "|r"
+local COLOR_END   = "|r"
+local COLOR_RARE  = "|cFFFFD200"
 local titleColorCache
 
 local hexColor = addon.Utils.hexColor
@@ -68,6 +69,13 @@ function nameplates.shouldShowName(unit)
         local guid = UnitGUID(unit)
         if guid and partyGUIDs[guid] then return true end
     end
+    local showPlayers = addon.db.profile.nameplates.alwaysShowPlayers
+    if showPlayers == 'always' and UnitIsPlayer(unit) then return true end
+    if showPlayers == 'cities' and UnitIsPlayer(unit) and nameplates.isInCity() then return true end
+    if addon.db.profile.nameplates.alwaysShowImportant then
+        local class = UnitClassification(unit)
+        if class == "rare" or class == "rareelite" or class == "worldboss" then return true end
+    end
     if UnitIsUnit(unit, "target") then return true end
     if UnitIsUnit(unit, "softtarget") then return true end
     if UnitIsUnit(unit, "mouseover") then return true end
@@ -81,6 +89,10 @@ end
 --#endregion
 
 --#region ── Name & guild display ─────────────────────────────────────────────
+
+function nameplates.isInCity()
+    return GetZonePVPInfo() == "sanctuary"
+end
 
 function nameplates.isInInstance()
     local inInstance, instanceType = IsInInstance()
@@ -106,8 +118,7 @@ function nameplates.buildNameFrame(f, overlay)
     f.questIcon:Hide()
 
     if addon.db.profile.nameplates.shadowEnabled then
-        f.name:SetShadowOffset(1, -1)
-        f.name:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(f.name)
     end
 
     f.guild = overlay:CreateFontString(nil, "OVERLAY")
@@ -119,8 +130,7 @@ function nameplates.buildNameFrame(f, overlay)
     f.guild:SetJustifyH("CENTER")
     f.guild:Hide()
     if addon.db.profile.nameplates.shadowEnabled then
-        f.guild:SetShadowOffset(1, -1)
-        f.guild:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(f.guild)
     end
 
     f.musicIcon = overlay:CreateTexture(nil, "OVERLAY")
@@ -134,9 +144,14 @@ function nameplates.applyName(f, unit, plateType)
     local PlateType = nameplates.PlateType
     local nameStr = UnitName(unit) or ""
 
+    local classification = UnitClassification(unit)
+    local isRare = classification == "rare" or classification == "rareelite"
+
     if plateType == PlateType.Full then
         if nameplates.isSelected(unit) then
             f.name:SetVertexColor(0.5, 0.8, 1.0)
+        elseif isRare then
+            f.name:SetVertexColor(1, 0.82, 0)
         else
             f.name:SetVertexColor(1, 1, 1)
         end
@@ -172,7 +187,8 @@ function nameplates.applyName(f, unit, plateType)
             end
         end
     else
-        text = nameColor(unit) .. nameStr .. COLOR_END
+        local nc = isRare and COLOR_RARE or nameColor(unit)
+        text = nc .. nameStr .. COLOR_END
     end
 
     f.name:SetVertexColor(1, 1, 1)

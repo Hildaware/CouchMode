@@ -496,7 +496,7 @@ function Layout:FontString(parent, opts)
         if opts.wrap ~= nil then fs:SetWordWrap(opts.wrap) end
         if opts.maxLines then fs:SetMaxLines(opts.maxLines) end
         if opts.shadow then
-            fs:SetShadowOffset(1, -1)
+            fs:SetShadowOffset(2, -2)
             fs:SetShadowColor(0, 0, 0, 1)
         end
     end

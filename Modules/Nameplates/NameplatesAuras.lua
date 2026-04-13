@@ -8,12 +8,12 @@ local nameplates = addon:GetModule('Nameplates')
 
 function nameplates.buildAurasFrame(f)
     local AURA_MAX = nameplates.AURA_MAX
-    local AURA_W   = nameplates.AURA_W
-    local AURA_H   = nameplates.AURA_H
+    local AURA_W = nameplates.AURA_W
+    local AURA_H = nameplates.AURA_H
     local AURA_GAP = nameplates.AURA_GAP
-    local BAR_W    = nameplates.BAR_W
+    local BAR_W = nameplates.BAR_W
 
-    f.auras        = CreateFrame("Frame", nil, f)
+    f.auras = CreateFrame("Frame", nil, f)
     f.auras:SetPoint("BOTTOM", f.bar, "TOP", 0, 12)
     f.auras:SetSize(BAR_W, AURA_H)
     f.auras:Hide()
@@ -43,8 +43,8 @@ function nameplates.buildAurasFrame(f)
         icon.timer:SetPoint("CENTER", icon, "CENTER")
         icon.timer:SetJustifyH("CENTER")
         if addon.db.profile.nameplates.shadowEnabled then
-            icon.count:SetShadowOffset(1, -1); icon.count:SetShadowColor(0, 0, 0, 1)
-            icon.timer:SetShadowOffset(1, -1); icon.timer:SetShadowColor(0, 0, 0, 1)
+            addon.Utils.apply_font_shadow(icon.count)
+            addon.Utils.apply_font_shadow(icon.timer)
         end
         icon:Hide()
         f.auras.icons[i] = icon
@@ -76,8 +76,7 @@ function nameplates.buildAurasFrame(f)
     f.cc.timer:SetJustifyH("CENTER")
     f.cc.timer:Hide()
     if addon.db.profile.nameplates.shadowEnabled then
-        f.cc.timer:SetShadowOffset(1, -1)
-        f.cc.timer:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(f.cc.timer)
     end
 
     f.cc:SetScript("OnUpdate", function(self)

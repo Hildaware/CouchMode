@@ -22,12 +22,17 @@ local function getCurrentUnit()
     local showFriendlyNpcs           = db.showFriendlyNpcs
     local showEnemyNpcs              = db.showEnemyNpcs
     local alwaysShowQuestObjectiveTips = db.alwaysShowQuestObjectiveTips
+    local alwaysShowImportant          = db.alwaysShowImportant
     local function allow(unit)
         local wouldHide = (not showFriendlyNpcs and isFriendlyNpc(unit))
                        or (not showEnemyNpcs and isEnemyNpc(unit))
         if wouldHide then
             if alwaysShowQuestObjectiveTips and addon.QuestUtils.isQuestUnit(unit) then
                 return true
+            end
+            if alwaysShowImportant and not UnitIsPlayer(unit) then
+                local class = UnitClassification(unit)
+                if class == "rare" or class == "rareelite" then return true end
             end
             return false
         end
@@ -227,7 +232,8 @@ end
 function tips:OnInspectReady(_, guid)
     if addon.TipsUtils then
         local unit = currentUnit
-        if unit and UnitGUID(unit) == guid then
+        local unitGUID = unit and UnitGUID(unit)
+        if unitGUID and not issecretvalue(unitGUID) and unitGUID == guid then
             addon.TipsUtils.onInspectReady(guid, unit)
             showTip(unit)
         end

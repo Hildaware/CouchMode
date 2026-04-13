@@ -89,8 +89,10 @@ function nameplates:GetDefaults()
             fontSize        = 16,
             fontFlag        = 'OUTLINE',
             shadowEnabled   = true,
-            alwaysShowParty = false,
-            occludedAlpha   = 0,
+            alwaysShowParty     = false,
+            alwaysShowPlayers   = 'never',
+            alwaysShowImportant = false,
+            occludedAlpha       = 0,
         },
     }
 end
@@ -172,11 +174,11 @@ function nameplates:GetOptions()
                     },
                 },
             },
-            visibility = {
-                name   = 'Visibility',
+            consoleVariables = {
+                name   = 'Console Variables',
                 type   = 'group',
                 inline = true,
-                order  = 4,
+                order  = 5,
                 args   = {
                     occludedAlpha = {
                         name  = 'Occluded Alpha',
@@ -192,79 +194,79 @@ function nameplates:GetOptions()
                             SetCVar("nameplateOccludedAlphaMult", value)
                         end,
                     },
-                },
-            },
-            softTargeting = {
-                name   = 'Soft-Targeting',
-                type   = 'group',
-                inline = true,
-                order  = 5,
-                args   = {
-                    friendly = {
-                        name   = 'Friendly',
-                        type   = 'group',
-                        inline = true,
-                        order  = 1,
-                        args   = {
-                            arc = {
-                                name   = 'Arc',
-                                desc   = 'Direction from which a friendly unit can be soft-targeted. |n|nRecommended: In Front',
-                                type   = 'select',
-                                order  = 1,
-                                values = { [0] = 'None', [1] = 'In Front', [2] = 'Anywhere' },
-                                sorting = { 0, 1, 2 },
-                                get    = function() return tonumber(GetCVar('SoftTargetFriendArc')) end,
-                                set    = function(_, value) SetCVar('SoftTargetFriendArc', value) end,
-                            },
-                            range = {
-                                name  = 'Range',
-                                desc  = 'Maximum yards at which a friendly unit can be soft-targeted. |n|nRecommended: 20',
-                                type  = 'range',
-                                order = 2,
-                                min   = 1,
-                                max   = 60,
-                                step  = 1,
-                                get   = function() return tonumber(GetCVar('SoftTargetFriendRange')) end,
-                                set   = function(_, value) SetCVar('SoftTargetFriendRange', value) end,
-                            },
-                        },
-                    },
-                    enemy = {
-                        name   = 'Enemy',
+                    softTargeting = {
+                        name   = 'Soft-Targeting',
                         type   = 'group',
                         inline = true,
                         order  = 2,
                         args   = {
-                            arc = {
-                                name   = 'Arc',
-                                desc   = 'Direction from which an enemy unit can be soft-targeted. |n|nRecommended: In Front',
-                                type   = 'select',
+                            friendly = {
+                                name   = 'Friendly',
+                                type   = 'group',
+                                inline = true,
                                 order  = 1,
-                                values = { [0] = 'None', [1] = 'In Front', [2] = 'Anywhere' },
-                                sorting = { 0, 1, 2 },
-                                get    = function() return tonumber(GetCVar('SoftTargetEnemyArc')) end,
-                                set    = function(_, value) SetCVar('SoftTargetEnemyArc', value) end,
+                                args   = {
+                                    arc = {
+                                        name    = 'Arc',
+                                        desc    = 'Direction from which a friendly unit can be soft-targeted. |n|nRecommended: In Front',
+                                        type    = 'select',
+                                        order   = 1,
+                                        values  = { [0] = 'None', [1] = 'In Front', [2] = 'Anywhere' },
+                                        sorting = { 0, 1, 2 },
+                                        get     = function() return tonumber(GetCVar('SoftTargetFriendArc')) end,
+                                        set     = function(_, value) SetCVar('SoftTargetFriendArc', value) end,
+                                    },
+                                    range = {
+                                        name  = 'Range',
+                                        desc  = 'Maximum yards at which a friendly unit can be soft-targeted. |n|nRecommended: 20',
+                                        type  = 'range',
+                                        order = 2,
+                                        min   = 1,
+                                        max   = 60,
+                                        step  = 1,
+                                        get   = function() return tonumber(GetCVar('SoftTargetFriendRange')) end,
+                                        set   = function(_, value) SetCVar('SoftTargetFriendRange', value) end,
+                                    },
+                                },
                             },
-                            range = {
-                                name  = 'Range',
-                                desc  = 'Maximum yards at which an enemy unit can be soft-targeted. |n|nRecommended: 35',
-                                type  = 'range',
-                                order = 2,
-                                min   = 1,
-                                max   = 60,
-                                step  = 1,
-                                get   = function() return tonumber(GetCVar('SoftTargetEnemyRange')) end,
-                                set   = function(_, value) SetCVar('SoftTargetEnemyRange', value) end,
+                            enemy = {
+                                name   = 'Enemy',
+                                type   = 'group',
+                                inline = true,
+                                order  = 2,
+                                args   = {
+                                    arc = {
+                                        name    = 'Arc',
+                                        desc    = 'Direction from which an enemy unit can be soft-targeted. |n|nRecommended: In Front',
+                                        type    = 'select',
+                                        order   = 1,
+                                        values  = { [0] = 'None', [1] = 'In Front', [2] = 'Anywhere' },
+                                        sorting = { 0, 1, 2 },
+                                        get     = function() return tonumber(GetCVar('SoftTargetEnemyArc')) end,
+                                        set     = function(_, value) SetCVar('SoftTargetEnemyArc', value) end,
+                                    },
+                                    range = {
+                                        name  = 'Range',
+                                        desc  = 'Maximum yards at which an enemy unit can be soft-targeted. |n|nRecommended: 35',
+                                        type  = 'range',
+                                        order = 2,
+                                        min   = 1,
+                                        max   = 60,
+                                        step  = 1,
+                                        get   = function() return tonumber(GetCVar('SoftTargetEnemyRange')) end,
+                                        set   = function(_, value) SetCVar('SoftTargetEnemyRange', value) end,
+                                    },
+                                },
                             },
                         },
                     },
                 },
             },
             automation = {
-                name   = 'Automation',
+                name   = 'Visibility',
                 type   = 'group',
                 inline = true,
-                order  = 6,
+                order  = 4,
                 args   = {
                     alwaysShowParty = {
                         name  = 'Always Show Party',
@@ -276,6 +278,30 @@ function nameplates:GetOptions()
                         set   = function(_, value)
                             npDB().alwaysShowParty = value
                             nameplates.rebuildPartyGUIDs()
+                            nameplates:OnInteractionChanged()
+                        end,
+                    },
+                    alwaysShowPlayers = {
+                        name    = 'Always Show Players',
+                        desc    = 'Always show names on player nameplates.',
+                        type    = 'select',
+                        order   = 2,
+                        values  = { never = 'Never', cities = 'Cities Only', always = 'Always' },
+                        sorting = { 'never', 'cities', 'always' },
+                        get     = function() return npDB().alwaysShowPlayers end,
+                        set     = function(_, value)
+                            npDB().alwaysShowPlayers = value
+                            nameplates:OnInteractionChanged()
+                        end,
+                    },
+                    alwaysShowImportant = {
+                        name  = 'Always Show Important',
+                        desc  = 'Always show nameplates for rares, elites, and other important enemies.',
+                        type  = 'toggle',
+                        order = 3,
+                        get   = function() return npDB().alwaysShowImportant end,
+                        set   = function(_, value)
+                            npDB().alwaysShowImportant = value
                             nameplates:OnInteractionChanged()
                         end,
                     },

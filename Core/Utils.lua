@@ -62,6 +62,11 @@ function addon.Utils.apply_border_textures(anchor, borders, show, size, r, g, b,
     borders.R:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", 0, size)
 end
 
+function addon.Utils.apply_font_shadow(fontString)
+    fontString:SetShadowOffset(2, -2)
+    fontString:SetShadowColor(0, 0, 0, 1)
+end
+
 ---@class CouchModePool
 ---@field acquire fun(...): any
 ---@field release fun(obj: any)

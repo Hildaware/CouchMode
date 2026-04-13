@@ -1,28 +1,28 @@
-local addon_name              = ...
+local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon                   = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
-local nameplates              = addon:GetModule('Nameplates')
+local nameplates = addon:GetModule('Nameplates')
 ---@cast nameplates +AceEvent-3.0
 
 --#region ── Plate constants ──────────────────────────────────────────────────
 
-local DIMMED_SCALE            = 0.6
+local DIMMED_SCALE = 0.6
 
-local THREAT_COLOR_WARNING    = { 0.9, 0.15, 0.15 }
+local THREAT_COLOR_WARNING = { 0.9, 0.15, 0.15 }
 local THREAT_COLOR_TRANSITION = { 1.0, 0.65, 0.2 }
-local THREAT_COLOR_SAFE       = { 0.25, 0.5, 0.9 }
-local THREAT_COLOR_OFFTANK    = { 0.5, 0.75, 1.0 }
+local THREAT_COLOR_SAFE = { 0.25, 0.5, 0.9 }
+local THREAT_COLOR_OFFTANK = { 0.5, 0.75, 1.0 }
 
-local PLAYER_CLASS            = select(2, UnitClass("player"))
-local playerIsDK              = (PLAYER_CLASS == "DEATHKNIGHT")
+local PLAYER_CLASS = select(2, UnitClass("player"))
+local playerIsDK = (PLAYER_CLASS == "DEATHKNIGHT")
 
 -- Shared table reference set by NameplatesFrame.lua — mutations are visible here.
-local active                  = nameplates.active
-local inCombat                = UnitAffectingCombat("player") == true
-nameplates.inCombat           = inCombat
+local active = nameplates.active
+local inCombat = UnitAffectingCombat("player") == true
+nameplates.inCombat = inCombat
 
 --#endregion
 
@@ -73,7 +73,7 @@ local function updateElite(f, unit)
     if c == "elite" or c == "worldboss" then
         f.elite:SetAtlas("nameplates-icon-elite-gold")
         f.elite:Show()
-    elseif c == "rareelite" then
+    elseif c == "rareelite" or c == "rare" then
         f.elite:SetAtlas("nameplates-icon-rareelite")
         f.elite:Show()
     else
@@ -105,7 +105,7 @@ local function updateBarColor(f, unit)
     -- Priority 2: threat level
     local threat = UnitThreatSituation("player", unit)
     if threat ~= nil then
-        local tank           = UnitGroupRolesAssigned("player") == "TANK"
+        local tank = UnitGroupRolesAssigned("player") == "TANK"
         local otherTankAggro = IsInRaid() and UnitGroupRolesAssigned(unit .. "target") == "TANK"
         local tc
         if (tank and threat <= 0 and not otherTankAggro) or (not tank and threat == 3) then
@@ -133,15 +133,14 @@ end
 
 local function setShadow(fs, enabled)
     if enabled then
-        fs:SetShadowOffset(1, -1)
-        fs:SetShadowColor(0, 0, 0, 1)
+        addon.Utils.apply_font_shadow(fs)
     else
         fs:SetShadowOffset(0, 0)
     end
 end
 
 local function applyFrameShadow(f, enabled)
-    setShadow(f.name,  enabled)
+    setShadow(f.name, enabled)
     setShadow(f.guild, enabled)
     if f.cast and f.cast.spellName then setShadow(f.cast.spellName, enabled) end
     if f.auras then
@@ -172,7 +171,7 @@ local function applyShadowToAll()
     end
 end
 
-nameplates.applyFontToAll   = applyFontToAll
+nameplates.applyFontToAll = applyFontToAll
 nameplates.applyShadowToAll = applyShadowToAll
 
 --#endregion
