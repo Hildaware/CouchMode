@@ -13,20 +13,13 @@ local castBar = addon:NewModule('PlayerCastBar', 'AceEvent-3.0')
 local CastUtil = addon.CastUtil
 
 local MEDIA = {
-    BAR         = 'Interface\\widgets\\CosmicEnergyBar',
-    BAR_ATLAS   = {
-        BG_CENTER     = 'cosmic-bar-bgcenter',
-        BG_LEFT       = 'cosmic-bar-bgleft',
-        BG_RIGHT      = 'cosmic-bar-bgright',
-        BORDER_CENTER = 'cosmic-bar-bordercenter',
-        BORDER_LEFT   = 'cosmic-bar-borderleft',
-        BORDER_RIGHT  = 'cosmic-bar-borderright',
-    },
-    FILL_LEFT   = "Interface\\AddOns\\CouchMode\\Media\\BarBgLeft",
-    FILL_RIGHT  = "Interface\\AddOns\\CouchMode\\Media\\BarBgRight",
-    SPARK_TEX   = "interface\\questframe\\objectivewidget",
+    TEXTURE = 'interface/hud/uiwowlabsactionbar',
+    BAR_ATLAS = 'plunderstorm-stormbar-fill',
+    BORDER_ATLAS = 'plunderstorm-stormbar-border',
+    BG_ATLAS = 'plunderstorm-stormbar-background',
+    SPARK_TEX = "interface\\questframe\\objectivewidget",
     SPARK_ATLAS = "objectivewidget-bar-spark-neutral",
-    ICON_MASK   = "Interface\\AddOns\\CouchMode\\Media\\IconMask",
+    ICON_MASK = "Interface\\AddOns\\CouchMode\\Media\\IconMask",
     ICON_BORDER = "Interface\\AddOns\\CouchMode\\Media\\IconBorder",
 }
 
@@ -45,11 +38,9 @@ local gui = {
 
 ---@class BarSide
 ---@field bg Texture
----@field endCap Texture
 ---@field bar Texture
 ---@field tex Texture
 ---@field border Texture
----@field borderEndcap Texture
 ---@field spark Texture
 ---@field latency Texture
 
@@ -65,26 +56,15 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
 
     local bg = parentFrame:CreateTexture(nil, "BACKGROUND")
     if isLeft then
-        bg:SetPoint("LEFT", parentFrame, "LEFT", h / 2, 0)
+        bg:SetPoint("LEFT", parentFrame, "LEFT")
         bg:SetPoint("RIGHT", iconFrm, "RIGHT")
     else
         bg:SetPoint("LEFT", iconFrm, "LEFT")
-        bg:SetPoint("RIGHT", parentFrame, "RIGHT", -h / 2, 0)
+        bg:SetPoint("RIGHT", parentFrame, "RIGHT")
     end
     bg:SetHeight(h)
-    bg:SetTexture(MEDIA.BAR)
-    bg:SetAtlas(MEDIA.BAR_ATLAS.BG_CENTER)
-
-    local endCap = parentFrame:CreateTexture(nil, "BACKGROUND")
-    endCap:SetTexture(MEDIA.BAR)
-
-    if isLeft then
-        endCap:SetPoint("RIGHT", bg, "LEFT")
-        endCap:SetAtlas(MEDIA.BAR_ATLAS.BG_LEFT)
-    else
-        endCap:SetPoint("LEFT", bg, "RIGHT")
-        endCap:SetAtlas(MEDIA.BAR_ATLAS.BG_RIGHT)
-    end
+    bg:SetTexture(MEDIA.TEXTURE)
+    bg:SetAtlas(MEDIA.BG_ATLAS)
 
     local fill = CreateFrame("Frame", nil, parentFrame)
     fill:SetFrameStrata("MEDIUM")
@@ -100,14 +80,14 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
     local fillTex = fill:CreateTexture(nil, "BACKGROUND")
     if isLeft then
         fillTex:SetPoint("RIGHT", iconFrm, "LEFT")
-        fillTex:SetPoint("LEFT", endCap, "LEFT")
-        fillTex:SetTexture(MEDIA.FILL_LEFT)
+        fillTex:SetPoint("LEFT", parentFrame, "LEFT")
     else
         fillTex:SetPoint("LEFT", iconFrm, "RIGHT")
-        fillTex:SetPoint("RIGHT", endCap, "RIGHT")
-        fillTex:SetTexture(MEDIA.FILL_RIGHT)
+        fillTex:SetPoint("RIGHT", parentFrame, "RIGHT")
     end
     fillTex:SetHeight(h)
+    fillTex:SetTexture(MEDIA.TEXTURE)
+    fillTex:SetAtlas(MEDIA.BAR_ATLAS)
 
     local borderFrm = CreateFrame("Frame", nil, parentFrame)
     borderFrm:SetFrameLevel(parentFrame:GetFrameLevel() + 1)
@@ -115,25 +95,14 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
     local borderCenter = borderFrm:CreateTexture(nil, "OVERLAY")
     if isLeft then
         borderCenter:SetPoint("RIGHT", iconFrm, "RIGHT")
-        borderCenter:SetPoint("LEFT", parentFrame, "LEFT", h / 2, 0)
+        borderCenter:SetPoint("LEFT", parentFrame, "LEFT")
     else
         borderCenter:SetPoint("LEFT", iconFrm, "LEFT")
-        borderCenter:SetPoint("RIGHT", parentFrame, "RIGHT", -h / 2, 0)
+        borderCenter:SetPoint("RIGHT", parentFrame, "RIGHT")
     end
     borderCenter:SetHeight(h)
-    borderCenter:SetTexture(MEDIA.BAR)
-    borderCenter:SetAtlas(MEDIA.BAR_ATLAS.BORDER_CENTER)
-
-    local borderEndcap = borderFrm:CreateTexture(nil, "OVERLAY")
-    borderEndcap:SetTexture(MEDIA.BAR)
-
-    if isLeft then
-        borderEndcap:SetPoint("RIGHT", borderCenter, "LEFT")
-        borderEndcap:SetAtlas(MEDIA.BAR_ATLAS.BORDER_LEFT)
-    else
-        borderEndcap:SetPoint("LEFT", borderCenter, "RIGHT")
-        borderEndcap:SetAtlas(MEDIA.BAR_ATLAS.BORDER_RIGHT)
-    end
+    borderCenter:SetTexture(MEDIA.TEXTURE)
+    borderCenter:SetAtlas(MEDIA.BORDER_ATLAS)
 
     local spark = borderFrm:CreateTexture(nil, "OVERLAY")
     spark:SetTexture(MEDIA.SPARK_TEX)
@@ -146,32 +115,26 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
 
     return {
         bg = bg,
-        endCap = endCap,
         bar = fill,
         tex = fillTex,
         border = borderCenter,
-        borderEndcap = borderEndcap,
-        spark =
-            spark
+        spark = spark,
     }
 end
 
 local function RefreshBarSide(cap, isLeft, t)
-    t.endCap:SetSize(cap + 2, cap)
-    t.borderEndcap:SetSize(cap + 6, cap)
-
     t.bg:ClearAllPoints()
     t.border:ClearAllPoints()
     if isLeft then
-        t.bg:SetPoint("LEFT", gui.frame, "LEFT", cap / 2, 0)
+        t.bg:SetPoint("LEFT", gui.frame, "LEFT")
         t.bg:SetPoint("RIGHT", gui.iconFrame, "RIGHT")
-        t.border:SetPoint("LEFT", gui.frame, "LEFT", cap / 2, 0)
+        t.border:SetPoint("LEFT", gui.frame, "LEFT")
         t.border:SetPoint("RIGHT", gui.iconFrame, "RIGHT")
     else
         t.bg:SetPoint("LEFT", gui.iconFrame, "LEFT")
-        t.bg:SetPoint("RIGHT", gui.frame, "RIGHT", -cap / 2, 0)
+        t.bg:SetPoint("RIGHT", gui.frame, "RIGHT")
         t.border:SetPoint("LEFT", gui.iconFrame, "LEFT")
-        t.border:SetPoint("RIGHT", gui.frame, "RIGHT", -cap / 2, 0)
+        t.border:SetPoint("RIGHT", gui.frame, "RIGHT")
     end
 
     t.bg:SetHeight(cap)
@@ -194,7 +157,7 @@ function castBar:Refresh()
     gui.frame:EnableMouse(not c.locked)
 
     if gui.iconFrame then
-        gui.iconFrame:SetSize(c.height * 2.5, c.height * 2)
+        gui.iconFrame:SetSize(c.height * 2, c.height * 1.6)
         gui.barFullWidth = (c.width - c.height * 2) / 2 + 2
     end
 
@@ -204,8 +167,6 @@ function castBar:Refresh()
         RefreshBarSide(cap, false, gui.rightBar)
         gui.leftBar.spark:SetShown(c.showSpark)
         gui.rightBar.spark:SetShown(c.showSpark)
-        gui.leftBar.latency:SetHeight(cap)
-        gui.rightBar.latency:SetHeight(cap)
         if not c.showLatency then
             gui.leftBar.latency:Hide()
             gui.rightBar.latency:Hide()
@@ -251,13 +212,21 @@ function castBar:CreateUI()
     latencyFrm:SetAllPoints()
 
     gui.leftBar.latency = latencyFrm:CreateTexture(nil, "OVERLAY")
-    gui.leftBar.latency:SetColorTexture(0.85, 0.25, 0.25, 0.6)
-    gui.leftBar.latency:SetPoint("LEFT", gui.leftBar.endCap, "LEFT")
+    gui.leftBar.latency:SetTexture(MEDIA.TEXTURE)
+    gui.leftBar.latency:SetAtlas(MEDIA.BAR_ATLAS)
+    gui.leftBar.latency:SetDesaturated(true)
+    gui.leftBar.latency:SetVertexColor(0.85, 0.25, 0.25, 0.85)
+    gui.leftBar.latency:SetPoint("TOPLEFT", gui.leftBar.bg, "TOPLEFT", 3, 0)
+    gui.leftBar.latency:SetPoint("BOTTOMLEFT", gui.leftBar.bg, "BOTTOMLEFT", 3, 0)
     gui.leftBar.latency:Hide()
 
     gui.rightBar.latency = latencyFrm:CreateTexture(nil, "OVERLAY")
-    gui.rightBar.latency:SetColorTexture(0.85, 0.25, 0.25, 0.6)
-    gui.rightBar.latency:SetPoint("RIGHT", gui.rightBar.endCap, "RIGHT")
+    gui.rightBar.latency:SetTexture(MEDIA.TEXTURE)
+    gui.rightBar.latency:SetAtlas(MEDIA.BAR_ATLAS)
+    gui.rightBar.latency:SetDesaturated(true)
+    gui.rightBar.latency:SetVertexColor(0.85, 0.25, 0.25, 0.85)
+    gui.rightBar.latency:SetPoint("TOPRIGHT", gui.rightBar.bg, "TOPRIGHT", -3, 0)
+    gui.rightBar.latency:SetPoint("BOTTOMRIGHT", gui.rightBar.bg, "BOTTOMRIGHT", -3, 0)
     gui.rightBar.latency:Hide()
 
     gui.spellName = gui.frame:CreateFontString(nil,
@@ -266,11 +235,13 @@ function castBar:CreateUI()
     gui.spellName:SetPoint("TOP", gui.iconFrame, "BOTTOM", 0, -2)
     gui.spellName:SetJustifyH("CENTER")
     gui.spellName:SetTextColor(1, 1, 1, 1)
+    addon.Utils.apply_font_shadow(gui.spellName)
 
     gui.castTimer = gui.frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     gui.castTimer:SetPoint("BOTTOM", gui.iconFrame, "TOP", 0, 1)
     gui.castTimer:SetJustifyH("CENTER")
     gui.castTimer:SetTextColor(1, 0.82, 0, 1)
+    addon.Utils.apply_font_shadow(gui.castTimer)
 
     gui.frame:SetScript("OnUpdate", function()
         if not castBar.castEndTime then return end
@@ -295,23 +266,23 @@ function castBar:StartCastInternal(isChannel)
     if not name or not startTimeMS or not endTimeMS then return end
 
     local startTime = startTimeMS / 1000
-    local endTime   = endTimeMS / 1000
-    local duration  = endTime - startTime
+    local endTime = endTimeMS / 1000
+    local duration = endTime - startTime
     if duration <= 0 then return end
 
-    self.castEndTime  = endTime
+    self.castEndTime = endTime
     self.castDuration = duration
-    self.isChannel    = isChannel
+    self.isChannel = isChannel
 
-    local c           = cfg()
-    local r, g, b, a  = CastUtil.ResolveColor(c, isChannel)
+    local c = cfg()
+    local r, g, b, a = CastUtil.ResolveColor(c, isChannel)
     gui.leftBar.tex:SetVertexColor(r, g, b, a)
     gui.rightBar.tex:SetVertexColor(r, g, b, a)
     gui.leftBar.spark:SetVertexColor(r, g, b, a)
     gui.rightBar.spark:SetVertexColor(r, g, b, a)
 
     if c.showLatency then
-        local latency      = CastUtil.GetLatency()
+        local latency = CastUtil.GetLatency()
         local latencyWidth = math.min((latency / duration) * gui.barFullWidth, gui.barFullWidth)
         gui.leftBar.latency:SetWidth(latencyWidth)
         gui.rightBar.latency:SetWidth(latencyWidth)
@@ -320,7 +291,7 @@ function castBar:StartCastInternal(isChannel)
     end
 
     local elapsed = GetTime() - startTime
-    local value   = isChannel and (1 - elapsed / duration) or (elapsed / duration)
+    local value = isChannel and (1 - elapsed / duration) or (elapsed / duration)
     gui.leftBar.bar:SetWidth(value * gui.barFullWidth)
     gui.rightBar.bar:SetWidth(value * gui.barFullWidth)
 
@@ -341,9 +312,9 @@ function castBar:StartCastInternal(isChannel)
 end
 
 function castBar:StopCastInternal()
-    self.castEndTime     = nil
-    self.castDuration    = nil
-    self.isChannel       = nil
+    self.castEndTime = nil
+    self.castDuration = nil
+    self.isChannel = nil
     self.currentCastGUID = nil
     gui.leftBar.bar:SetWidth(0)
     gui.rightBar.bar:SetWidth(0)
@@ -361,9 +332,9 @@ function castBar:UpdateCastInternal(isChannel)
         self:StopCastInternal()
         return
     end
-    local startTime   = startTimeMS / 1000
-    local endTime     = endTimeMS / 1000
-    self.castEndTime  = endTime
+    local startTime = startTimeMS / 1000
+    local endTime = endTimeMS / 1000
+    self.castEndTime = endTime
     self.castDuration = endTime - startTime
 end
 
@@ -384,9 +355,9 @@ end
 
 function castBar:HideFallback()
     if cfg().alwaysShow then return end
-    self.castEndTime  = nil
+    self.castEndTime = nil
     self.castDuration = nil
-    self.isChannel    = nil
+    self.isChannel = nil
     gui.leftBar.bar:SetWidth(0)
     gui.rightBar.bar:SetWidth(0)
     gui.leftBar.latency:Hide()
@@ -480,7 +451,7 @@ function castBar:OnEnable()
 end
 
 function castBar:OnDisable()
-    self.preview      = false
+    self.preview = false
     self.castRingMode = false
     self:UnregisterAllEvents()
     if gui.frame then

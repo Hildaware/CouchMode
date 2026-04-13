@@ -38,6 +38,10 @@ local function cfg()
     return addon.db.profile.castRing
 end
 
+local function isEnemyTarget()
+    return UnitExists("target") and UnitCanAttack("player", "target")
+end
+
 function castRing:ApplyCastBarHide()
     CastUtil.ConfigureBlizzardCastBar(cfg().hideBlizzardCastBar)
 end
@@ -217,7 +221,7 @@ function castRing:StartCast(isChannel)
 
     if cfg().attachToNameplate then
         ---@diagnostic disable-next-line: param-type-mismatch
-        local np = C_NamePlate.GetNamePlateForUnit("target")
+        local np = isEnemyTarget() and C_NamePlate.GetNamePlateForUnit("target")
         if np then
             local pcb = addon:GetModule('PlayerCastBar', true)
             ---@diagnostic disable-next-line: undefined-field
@@ -327,6 +331,7 @@ function castRing:OnNamePlateAdded(_, unitToken)
     if not self.castEndTime then return end
     if not cfg().attachToNameplate then return end
     if not UnitIsUnit(unitToken, "target") then return end
+    if not isEnemyTarget() then return end
     local pcb = addon:GetModule('PlayerCastBar', true)
     ---@diagnostic disable-next-line: undefined-field
     if pcb then pcb:HideFallback() end
@@ -338,6 +343,7 @@ function castRing:OnNamePlateRemoved(_, unitToken)
     if not self.castEndTime then return end
     if not cfg().attachToNameplate then return end
     if not UnitIsUnit(unitToken, "target") then return end
+    if not isEnemyTarget() then return end
     gui.frame:ClearAllPoints()
     gui.frame:Hide()
     local pcb = addon:GetModule('PlayerCastBar', true)
@@ -349,7 +355,7 @@ function castRing:OnTargetChanged()
     if not cfg().attachToNameplate then return end
     if not self.castEndTime then return end
     ---@diagnostic disable-next-line: param-type-mismatch
-    local np = C_NamePlate.GetNamePlateForUnit("target")
+    local np = isEnemyTarget() and C_NamePlate.GetNamePlateForUnit("target")
     if np then
         local pcb = addon:GetModule('PlayerCastBar', true)
         ---@diagnostic disable-next-line: undefined-field
