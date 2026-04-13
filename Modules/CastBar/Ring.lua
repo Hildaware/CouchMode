@@ -373,6 +373,8 @@ end
 
 -- ── Module lifecycle ──────────────────────────────────────────────────────────
 function castRing:OnEnable()
+    if not addon.db.profile.castRing.enabled then self:Disable(); return end
+
     self:CreateUI()
 
     CastUtil.RegisterCastEvents(self)

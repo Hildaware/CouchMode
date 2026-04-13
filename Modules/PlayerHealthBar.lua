@@ -326,6 +326,8 @@ function healthBar:BuildVisibilityCurve()
 end
 
 function healthBar:OnEnable()
+    if not cfg().enabled then self:Disable(); return end
+
     self:CreateUI()
     self:BuildVisibilityCurve()
     self:RegisterEvent('UNIT_HEALTH', 'OnHealthChanged')

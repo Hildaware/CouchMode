@@ -28,6 +28,8 @@ end
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
 function map:OnEnable()
+    if not addon.db.profile.minimap.enabled then self:Disable(); return end
+
     if not map.container then map.createFrame() end
     map.container:Show()
 end

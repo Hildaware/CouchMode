@@ -367,6 +367,8 @@ end
 --#region ── Lifecycle ────────────────────────────────────────────────────────
 
 function banter:OnEnable()
+    if not db().enabled then self:Disable(); return end
+
     -- Register custom font with LSM so it appears in the font picker.
     if not LSM:IsValid(LSM.MediaType.FONT, 'Bebas Neue') then
         LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)

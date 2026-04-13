@@ -437,6 +437,8 @@ end
 
 --#region ── Module lifecycle ──────────────────────────────────────────────────────────
 function castBar:OnEnable()
+    if not addon.db.profile.playerCastBar.enabled then self:Disable(); return end
+
     self:CreateUI()
 
     CastUtil.RegisterCastEvents(self)

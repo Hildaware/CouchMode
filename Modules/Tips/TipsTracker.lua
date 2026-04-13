@@ -111,6 +111,8 @@ end
 local tooltipHooked = false
 
 function tips:OnEnable()
+    if not tips.tipsDB().enabled then self:Disable(); return end
+
     tips.TIP_W = tips.tipsDB().width or 240
     if not tips._trpCallbackRegistered then
         tips._trpCallbackRegistered = true

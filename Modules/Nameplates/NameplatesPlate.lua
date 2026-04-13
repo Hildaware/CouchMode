@@ -266,6 +266,8 @@ end
 --#region ── Module lifecycle ─────────────────────────────────────────────────
 
 function nameplates:OnEnable()
+    if not addon.db.profile.nameplates.enabled then self:Disable(); return end
+
     SetCVar("nameplateSelectedScale", 1.0)
     SetCVar("nameplateOccludedAlphaMult", addon.db.profile.nameplates.occludedAlpha)
     applyFriendlyVisibility()

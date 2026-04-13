@@ -77,7 +77,21 @@ function bags:OnInitialize()
     end)
 end
 
+function bags:OnDisable()
+    if bags.bags.Inventory then
+        bags.bags.Inventory:Hide()
+        bags.bags.Inventory = nil
+    end
+    if bags.bags.Bank then
+        bags.bags.Bank:Hide()
+        bags.bags.Bank = nil
+    end
+    self:UnhookAll()
+end
+
 function bags:OnEnable()
+    if not addon.db.profile.bags.enabled then self:Disable(); return end
+
     bags.bags.Inventory = view:Create(enums.InventoryType.Inventory)
     bags.bags.Bank = view:Create(enums.InventoryType.Bank)
     bags.bags.FocusedNode = nil

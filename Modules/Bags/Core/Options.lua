@@ -19,6 +19,20 @@ function bagsModule:GetOptions()
         type = 'group',
         order = 1,
         args = {
+            enabled = {
+                name = 'Enable',
+                desc = 'Use the custom bag UI.',
+                type = 'toggle',
+                order = 0,
+                get = function() return addon.db.profile.bags.enabled end,
+                set = function(_, value)
+                    addon.db.profile.bags.enabled = value
+                    local bagsM = addon:GetModule('Bags', true)
+                    if bagsM then
+                        if value then bagsM:Enable() else bagsM:Disable() end
+                    end
+                end,
+            },
             viewType = {
                 name = 'View Type',
                 desc =

@@ -15,6 +15,7 @@ local enums      = addon:GetModule('Bags.Enums')
 ---@class databaseOptions
 local defaults   = {
     bags = {
+        enabled = true,
         Characters = {},
         ViewType = enums.ViewType.Compact,
         BackgroundOpacity = 0.75,
