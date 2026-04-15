@@ -1,12 +1,15 @@
 local addonName = ...
 
+---@class BanterLookup
+---@field GetByName fun(name: string): number?, number?
+
 ---@class CouchMode: AceAddon
+---@field BanterData BanterLookup
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LSM = LibStub('LibSharedMedia-3.0')
 
----@class BanterModule: AceModule, AceEvent-3.0
+---@class BanterModule
 local banter = addon:NewModule('Banter', 'AceEvent-3.0')
----@cast banter +AceEvent-3.0
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -32,23 +35,161 @@ local TEST_ARGS = {
 
 --#endregion
 
+--#region ── DB accessor ───────────────────────────────────────────────────────
+
+local function db() return addon.db.profile.banter end
+
+--#endregion
+
 --#region ── Utilities (from Gab Core/Utils.lua) ──────────────────────────────
 
 local function CalculateDisplayDuration(message)
     local baseDuration = 3
-    local charsPerSecond = 20
+    local charsPerSecond = 16
     local duration = baseDuration + (#message / charsPerSecond)
     return math.min(duration, 20)
 end
 
--- Expose so BanterFrame can use it.
+-- Expose so BanterController can use it.
 banter.CalculateDisplayDuration = CalculateDisplayDuration
 
 --#endregion
 
---#region ── DB accessor ───────────────────────────────────────────────────────
 
-local function db() return addon.db.profile.banter end
+--#region ── Blizzard UI suppression ──────────────────────────────────────────
+
+local talkingHeadHooked = false
+
+local function applyTalkingHeadSuppression(suppress)
+    if suppress then
+        if not talkingHeadHooked then
+            if TalkingHeadFrame then
+                hooksecurefunc(TalkingHeadFrame, 'Show', function(f)
+                    if db().disableTalkingHead then f:Hide() end
+                end)
+                talkingHeadHooked = true
+            end
+        end
+    end
+end
+
+--#endregion
+
+--#region ── Event handling ───────────────────────────────────────────────────
+
+---@param event string  e.g. 'CHAT_MSG_MONSTER_YELL'
+---@param message string
+---@param name string
+function banter:OnMonsterMessage(event, message, name)
+    local npcID, displayId = addon.BanterData.GetByName(name)
+    if not npcID or not displayId then return end
+
+    ---@type BanterData
+    local data = {
+        id = npcID,
+        displayId = displayId,
+        name = name,
+        message = message,
+        type = event,
+        duration = CalculateDisplayDuration(message),
+    }
+
+    banter:AddBants(data)
+end
+
+--#endregion
+
+--#region ── Lifecycle ────────────────────────────────────────────────────────
+
+function banter:OnInitialize()
+    self:InitPools()
+end
+
+function banter:OnEnable()
+    if not db().enabled then
+        self:Disable(); return
+    end
+
+    -- Register custom font with LSM so it appears in the font picker.
+    if not LSM:IsValid(LSM.MediaType.FONT, 'Bebas Neue') then
+        LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)
+    end
+
+    self:RegisterEvent(EVENT_SAY, 'OnMonsterMessage')
+    self:RegisterEvent(EVENT_YELL, 'OnMonsterMessage')
+    self:RegisterEvent(EVENT_WHISPER, 'OnMonsterMessage')
+    self:RegisterEvent(EVENT_PARTY, 'OnMonsterMessage')
+
+    if db().disableTalkingHead then
+        applyTalkingHeadSuppression(true)
+    end
+
+    -- Create the container frame on first enable, otherwise just show it.
+    if self.instance then
+        self.instance.widget:Show()
+        return
+    end
+
+    local itemWidth = db().itemWidth
+    local maxItems = db().maxItems
+    local containerHeight = (maxItems * self.bantProto.minimumHeight) + ((maxItems + 1) * self.padding)
+
+    ---@type BanterContainerFrame
+    local frame = CreateFrame('Frame', 'CouchModeBanterContainer', UIParent) --[[@as BanterContainerFrame]]
+    frame:SetSize(itemWidth + (self.padding * 2), containerHeight)
+    local d = db()
+    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', d.x, d.y)
+    frame:SetMovable(true)
+    frame:Hide()
+
+    local bg = frame:CreateTexture(nil, 'BACKGROUND')
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.5)
+    bg:Hide()
+
+    local dragger = CreateFrame('Frame', nil, frame)
+    dragger:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT')
+    dragger:SetSize(80, 12)
+    dragger:EnableMouse(true)
+    dragger:SetMovable(true)
+    dragger:RegisterForDrag('LeftButton')
+    dragger:SetScript('OnDragStart', function() frame:StartMoving() end)
+    dragger:SetScript('OnDragStop', function()
+        frame:StopMovingOrSizing()
+        local pos = db()
+        pos.x = frame:GetLeft() - UIParent:GetLeft()
+        pos.y = frame:GetBottom() - UIParent:GetBottom()
+    end)
+
+    local draggerBg = dragger:CreateTexture(nil, 'BACKGROUND')
+    draggerBg:SetAllPoints()
+    draggerBg:SetColorTexture(0, 0, 1, 0.5)
+
+    local draggerText = dragger:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
+    draggerText:SetPoint('CENTER', dragger, 'CENTER')
+    draggerText:SetText('Banter Anchor')
+
+    dragger:Hide()
+
+    frame.dragger = dragger
+    frame.bg = bg
+
+    ---@type BanterController.Instance
+    self.instance = { widget = frame, bants = {} }
+end
+
+function banter:OnDisable()
+    self:UnregisterEvent(EVENT_SAY)
+    self:UnregisterEvent(EVENT_YELL)
+    self:UnregisterEvent(EVENT_WHISPER)
+    self:UnregisterEvent(EVENT_PARTY)
+
+    if self.instance then
+        self.instance.widget:Hide()
+    end
+end
+
+banter:Enable()
 
 --#endregion
 
@@ -73,12 +214,15 @@ function banter:GetDefaults()
             -- Name font
             nameFontFace = 'Bebas Neue',
             nameFontSize = 28,
-            nameFontColor = { r = 1, g = 1, b = 1, a = 1 },
+            nameFontColor = { r = .902, g = .702, b = 0, a = 1 },
             -- Message font
             msgFontFace = 'Bebas Neue',
             msgFontSize = 16,
             msgFontColor = { r = 1, g = 1, b = 0, a = 1 },
             styleByType = true,
+            -- Text reveal
+            revealText = false,
+            revealSpeed = 44,
         }
     }
 end
@@ -121,7 +265,7 @@ function banter:GetOptions()
                         type = 'execute',
                         order = 1,
                         func = function()
-                            addon:GetModule('BanterFrame'):ToggleLock()
+                            banter:ToggleLock()
                         end,
                     },
                     test = {
@@ -133,9 +277,7 @@ function banter:GetOptions()
                             local delay = 0
                             for _, args in ipairs(TEST_ARGS) do
                                 C_Timer.After(delay, function()
-                                    local fakeGuid = "Creature-0-0-0-0-" .. args.id .. "-0"
-                                    banter:OnMonsterMessage(EVENT_SAY, args.message, args.name, nil, nil, nil, nil, nil,
-                                        nil, nil, nil, nil, fakeGuid)
+                                    banter:OnMonsterMessage(EVENT_SAY, args.message, args.name)
                                 end)
                                 delay = delay + 3
                             end
@@ -152,7 +294,7 @@ function banter:GetOptions()
                         get = function() return db().itemWidth end,
                         set = function(_, val)
                             db().itemWidth = val
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     maxItems = {
@@ -217,7 +359,7 @@ function banter:GetOptions()
                         get = function() return db().nameFontFace end,
                         set = function(_, val)
                             db().nameFontFace = val
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     nameSize = {
@@ -231,7 +373,7 @@ function banter:GetOptions()
                         get = function() return db().nameFontSize end,
                         set = function(_, val)
                             db().nameFontSize = val
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     nameColor = {
@@ -247,7 +389,7 @@ function banter:GetOptions()
                         set = function(_, r, g, b, a)
                             local c = db().nameFontColor
                             c.r, c.g, c.b, c.a = r, g, b, a
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     msgHeader = { name = 'Message', type = 'header', order = 5 },
@@ -262,7 +404,7 @@ function banter:GetOptions()
                         get = function() return db().msgFontFace end,
                         set = function(_, val)
                             db().msgFontFace = val
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     msgSize = {
@@ -276,7 +418,7 @@ function banter:GetOptions()
                         get = function() return db().msgFontSize end,
                         set = function(_, val)
                             db().msgFontSize = val
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     msgColor = {
@@ -293,7 +435,7 @@ function banter:GetOptions()
                         set = function(_, r, g, b, a)
                             local c = db().msgFontColor
                             c.r, c.g, c.b, c.a = r, g, b, a
-                            addon:GetModule('BanterFrame'):Refresh()
+                            banter:Refresh()
                         end,
                     },
                     styleByType = {
@@ -306,99 +448,29 @@ function banter:GetOptions()
                             db().styleByType = val
                         end,
                     },
+                    revealText = {
+                        name = 'Reveal Text',
+                        desc = 'Animate message text character-by-character as if being read.',
+                        type = 'toggle',
+                        order = 10,
+                        get = function() return db().revealText end,
+                        set = function(_, val) db().revealText = val end,
+                    },
+                    revealSpeed = {
+                        name = 'Reveal Speed',
+                        desc = 'Characters revealed per second.',
+                        type = 'range',
+                        order = 11,
+                        min = 10,
+                        max = 120,
+                        step = 5,
+                        get = function() return db().revealSpeed end,
+                        set = function(_, val) db().revealSpeed = val end,
+                    },
                 },
             },
         },
     }
 end
-
---#endregion
-
---#region ── Blizzard UI suppression ──────────────────────────────────────────
-
-local talkingHeadHooked = false
-
-function applyTalkingHeadSuppression(suppress)
-    if suppress then
-        if not talkingHeadHooked then
-            if TalkingHeadFrame then
-                hooksecurefunc(TalkingHeadFrame, 'Show', function(f)
-                    if db().disableTalkingHead then f:Hide() end
-                end)
-                talkingHeadHooked = true
-            end
-        end
-    end
-end
-
---#endregion
-
---#region ── Event handling ───────────────────────────────────────────────────
-
----@param event string  e.g. 'CHAT_MSG_MONSTER_YELL'
----@param message string
----@param name string
-function banter:OnMonsterMessage(event, message, name, lang, channel, player2, specialFlags, zoneChannelID, channelIndex,
-                                 baseChannelName, langID, lineID, guid)
-    if not guid or guid == "" then return end
-
-    local guidType, _, _, _, _, npcIDStr = strsplit("-", guid)
-    if guidType ~= "Creature" and guidType ~= "Vehicle" then return end
-
-    local npcID = tonumber(npcIDStr)
-    local displayId = addon.BanterData.GetDisplayId(npcID)
-    if not displayId then return end
-
-    ---@type BanterGabberData
-    local data = {
-        id = npcID,
-        displayId = displayId,
-        name = name,
-        message = message,
-        type = event,
-        duration = CalculateDisplayDuration(message),
-    }
-
-    addon:GetModule('BanterFrame'):AddBants(data)
-end
-
---#endregion
-
---#region ── Lifecycle ────────────────────────────────────────────────────────
-
-function banter:OnEnable()
-    if not db().enabled then self:Disable(); return end
-
-    -- Register custom font with LSM so it appears in the font picker.
-    if not LSM:IsValid(LSM.MediaType.FONT, 'Bebas Neue') then
-        LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)
-    end
-
-    self:RegisterEvent(EVENT_SAY, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_YELL, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_WHISPER, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_PARTY, 'OnMonsterMessage')
-
-    if db().disableTalkingHead then
-        applyTalkingHeadSuppression(true)
-    end
-
-    local banterFrame = addon:GetModule('BanterFrame', true)
-    if banterFrame then
-        banterFrame:Enable()
-    end
-end
-
-function banter:OnDisable()
-    self:UnregisterEvent(EVENT_SAY)
-    self:UnregisterEvent(EVENT_YELL)
-    self:UnregisterEvent(EVENT_WHISPER)
-    self:UnregisterEvent(EVENT_PARTY)
-
-    local banterFrame = addon:GetModule('BanterFrame', true)
-    if banterFrame then banterFrame:Disable() end
-end
-
-banter:Enable()
 
 --#endregion

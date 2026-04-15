@@ -3,36 +3,21 @@ local addonName = ...
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
----@class BanterFrameModule: AceModule
----@field AddBants      fun(self: BanterFrameModule, data: BantsData)
----@field RemoveBant    fun(self: BanterFrameModule, bant: BantsMain)
----@field RepositionBants fun(self: BanterFrameModule)
----@field ToggleLock    fun(self: BanterFrameModule)
----@field Refresh       fun(self: BanterFrameModule)
-local banterFrame = addon:NewModule('BanterFrame')
+---@class BanterModule
+local banter = addon:GetModule('Banter')
 
 --#region ── Helpers ──────────────────────────────────────────────────────────
 
 local function db() return addon.db.profile.banter end
 
-local padding = 6
+banter.padding = 6
+local padding = banter.padding
 
 --#endregion
 
---#region ── Instance state ───────────────────────────────────────────────────
+--#region ── Layout ───────────────────────────────────────────────────────────
 
----@class BanterFrame.Instance
----@field widget           Frame
----@field bants             BantsMain[]
----@field currentBantsId  number|nil
-
-banterFrame.proto = {}
-
---#endregion
-
---#region ── Public API ───────────────────────────────────────────────────────
-
-function banterFrame:RepositionBants()
+function banter:RepositionBants()
     if not self.instance then return end
     local bants = self.instance.bants
     for i = 1, #bants do
@@ -65,7 +50,7 @@ function banterFrame:RepositionBants()
 end
 
 ---@param bantToRemove table
-function banterFrame:RemoveBant(bantToRemove)
+function banter:RemoveBant(bantToRemove)
     if not self.instance then return end
 
     local bants = self.instance.bants
@@ -85,8 +70,7 @@ function banterFrame:RemoveBant(bantToRemove)
     -- Fade out the removed bant, then release it.
     UIFrameFadeOut(bantToRemove.widget, 0.5, 1, 0)
     C_Timer.After(0.5, function()
-        local bantsModule = addon:GetModule('Bants', true) --[[@as BantsModule?]]
-        if bantsModule then bantsModule:Release(bantToRemove) end
+        self:Release(bantToRemove)
         if #self.instance.bants == 0 then self.instance.widget:Hide() end
     end)
 
@@ -117,13 +101,35 @@ function banterFrame:RemoveBant(bantToRemove)
     end
 end
 
----@param data BantsData
-function banterFrame:AddBants(data)
+---@param data BanterData
+function banter:AddBants(data)
     if not self.instance then return end
 
-    -- Every message creates a new bant — chronological order is preserved in the stack.
-    local bantsModule = addon:GetModule('Bants') --[[@as BantsModule]]
-    local bant = bantsModule:Create()
+    -- If this NPC already has a visible bant AND it's the most recent one
+    -- (no other NPC's bant was added after it), append the new message to it.
+    local bants = self.instance.bants
+    for i = 1, #bants do
+        if bants[i].id == data.id then
+            local isLatest = true
+            for j = i + 1, #bants do
+                if bants[j].id ~= data.id then
+                    isLatest = false
+                    break
+                end
+            end
+            if isLatest then
+                local bant = bants[i]
+                local messageWidget = bant.controller:CreateMessage()
+                bant.controller:FormatMessage(messageWidget, data.message, data.type)
+                bant.widget:SetHeight(bant.widget:GetHeight() + messageWidget.widget:GetHeight())
+                bant.controller:RepositionMessages()
+                self:RepositionBants()
+                return
+            end
+        end
+    end
+
+    local bant = self:Create()
     bant.id = data.id
     bant.data = data
 
@@ -137,10 +143,6 @@ function banterFrame:AddBants(data)
     nameWidget:SetFont(nameFontPath, d.nameFontSize, 'OUTLINE')
     local nc = d.nameFontColor
     nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
-
-    -- Size the title bar to fit the name text.
-    local nameTextWidth = nameWidget:GetUnboundedStringWidth()
-    bant.widget.subWidgets.titleMiddle:SetWidth(math.max(nameTextWidth + 24, 40))
 
     local portrait = bant.widget.subWidgets.portrait
     if data.displayId and data.displayId > 0 then
@@ -169,7 +171,9 @@ function banterFrame:AddBants(data)
     end
     local effectiveDuration = math.max(duration, maxRemaining + 1)
     if effectiveDuration > duration then
-        bant.expiryTime = now + effectiveDuration
+        local extended = now + effectiveDuration
+        bant.expiryTime = extended
+        messageWidget.expiryTime = extended -- keep the per-message closure in sync
     end
 
     table.insert(activeBants, bant)
@@ -215,7 +219,7 @@ function banterFrame:AddBants(data)
     self.instance.widget:Show()
 end
 
-function banterFrame:ToggleLock()
+function banter:ToggleLock()
     if not self.instance then return end
     local widget = self.instance.widget
     if widget.dragger:IsShown() then
@@ -230,82 +234,10 @@ function banterFrame:ToggleLock()
 end
 
 ---Called by options setters after width or font changes.
-function banterFrame:Refresh()
+function banter:Refresh()
     if not self.instance then return end
     local d = db()
     self.instance.widget:SetWidth(d.itemWidth + (padding * 2))
 end
 
 --#endregion
-
---#region ── Lifecycle ────────────────────────────────────────────────────────
-
-function banterFrame:OnEnable()
-    if self.instance then
-        self.instance.widget:Show()
-        return
-    end
-
-    local i = setmetatable({}, { __index = self.proto })
-
-    local itemWidth = db().itemWidth
-    local maxItems = db().maxItems
-    local bantsModule = addon:GetModule('Bants')
-    local normalHeight = bantsModule.proto.minimumHeight
-    local containerHeight = (maxItems * normalHeight) + ((maxItems + 1) * padding)
-
-    ---@type Frame
-    local frame = CreateFrame('Frame', 'CouchModeBanterContainer', UIParent)
-    frame:SetSize(itemWidth + (padding * 2), containerHeight)
-    local d = db()
-    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', d.x, d.y)
-    frame:SetMovable(true)
-    frame:Hide()
-
-    local bg = frame:CreateTexture(nil, 'BACKGROUND')
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0.5)
-    bg:Hide()
-
-    local dragger = CreateFrame('Frame', nil, frame)
-    dragger:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT')
-    dragger:SetSize(80, 12)
-    dragger:EnableMouse(true)
-    dragger:SetMovable(true)
-    dragger:RegisterForDrag('LeftButton')
-    dragger:SetScript('OnDragStart', function() frame:StartMoving() end)
-    dragger:SetScript('OnDragStop', function()
-        frame:StopMovingOrSizing()
-        local pos = db()
-        pos.x = frame:GetLeft() - UIParent:GetLeft()
-        pos.y = frame:GetBottom() - UIParent:GetBottom()
-    end)
-
-    local draggerBg = dragger:CreateTexture(nil, 'BACKGROUND')
-    draggerBg:SetAllPoints()
-    draggerBg:SetColorTexture(0, 0, 1, 0.5)
-
-    local draggerText = dragger:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
-    draggerText:SetPoint('CENTER', dragger, 'CENTER')
-    draggerText:SetText('Banter Anchor')
-
-    dragger:Hide()
-
-    frame.dragger = dragger
-    frame.bg = bg
-
-    i.widget = frame
-    i.bants = {}
-
-    self.instance = i
-end
-
-function banterFrame:OnDisable()
-    if self.instance then
-        self.instance.widget:Hide()
-    end
-end
-
---#endregion
-
-banterFrame:Enable()

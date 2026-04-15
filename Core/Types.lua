@@ -230,7 +230,7 @@
 
 --#region ── Banter ───────────────────────────────────────────────────────────
 
----@class BantsData
+---@class BanterData
 ---@field id        number
 ---@field displayId number
 ---@field name      string
@@ -238,12 +238,30 @@
 ---@field type      string   CHAT_MSG_MONSTER_* event name
 ---@field duration  number
 
----@class BantsModule: AceModule
----@field proto          { minimumHeight: number }
----@field _pool          ObjectPoolMixin
----@field _messagePool   ObjectPoolMixin
----@field Create         fun(self: BantsModule): BantsMain
----@field Release        fun(self: BantsModule, bant: BantsMain)
+---@class BanterContainerFrame: Frame
+---@field dragger Frame
+---@field bg      Texture
+
+---@class BanterController.Instance
+---@field widget          BanterContainerFrame
+---@field bants           BanterContainerMain[]
+---@field currentBantsId  number|nil
+
+---@class BanterModule: AceModule, AceEvent-3.0
+---@field CalculateDisplayDuration fun(message: string): number
+---@field padding         number
+---@field bantProto       { minimumHeight: number }
+---@field _pool           ObjectPoolMixin
+---@field _messagePool    ObjectPoolMixin
+---@field instance        BanterController.Instance?
+---@field Create          fun(self: BanterModule): BanterContainerMain
+---@field Release         fun(self: BanterModule, bant: BanterContainerMain)
+---@field InitPools       fun(self: BanterModule)
+---@field AddBants        fun(self: BanterModule, data: BanterData)
+---@field RemoveBant      fun(self: BanterModule, bant: BanterContainerMain)
+---@field RepositionBants fun(self: BanterModule)
+---@field ToggleLock      fun(self: BanterModule)
+---@field Refresh         fun(self: BanterModule)
 
 ---@class ObjectPoolMixin
 ---@field Acquire              fun(self: ObjectPoolMixin): any, boolean

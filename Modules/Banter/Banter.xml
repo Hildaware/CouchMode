@@ -3,6 +3,6 @@
     xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
     <Include file='Resources/Data.lua'/>
     <Include file='Banter.lua'/>
-    <Include file='BanterFrame.lua'/>
-    <Include file='Bants.lua'/>
+    <Include file='BanterController.lua'/>
+    <Include file='BanterContainer.lua'/>
 </UI>

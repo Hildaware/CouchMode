@@ -82,6 +82,8 @@ end
 ---@field atlas?   string
 ---@field texture? string
 ---@field size?    number|{ w: number, h: number }
+---@field horizTile? boolean
+---@field vertTile?  boolean
 
 ---@class LayoutMaskOpts
 ---@field texture? string
@@ -205,6 +207,8 @@ function Layout:Container(parent, opts)
         if o then
             if o.atlas then tex:SetAtlas(o.atlas) end
             if o.texture then tex:SetTexture(o.texture) end
+            if o.horizTile then tex:SetHorizTile(true) end
+            if o.vertTile then tex:SetVertTile(true) end
             if o.size then
                 if type(o.size) == "number" then
                     tex:SetSize(o.size, o.size)
