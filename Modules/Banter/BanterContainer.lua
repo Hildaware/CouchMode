@@ -10,7 +10,7 @@ local banter = addon:GetModule('Banter')
 --#region ── Constants ────────────────────────────────────────────────────────
 
 local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
-local MIN_MESSAGE_HEIGHT = 40 -- minimum pixel height for a message content widget
+local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widget
 
 -- Event name constants (same values as in Banter.lua — kept local to avoid cross-file coupling).
 local EVENT_YELL = 'CHAT_MSG_MONSTER_YELL'
@@ -67,7 +67,7 @@ function messageProto:Format(text, type)
     self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
     self.message:SetTextColor(r, g, b, a)
 
-    local contentHeight = math.max(self.message:GetHeight() + 20, MIN_MESSAGE_HEIGHT)
+    local contentHeight = math.max(self.message:GetHeight() + 10, MIN_MESSAGE_HEIGHT)
     self.widget:SetSize(d.itemWidth, contentHeight)
 
     if d.revealText then
@@ -140,6 +140,10 @@ local function _MessageReset(pool, msg)
     msg.widget:Hide()
     msg.widget:ClearAllPoints()
     msg.message:SetText('')
+    -- Restore default portrait-present anchors so pool reuse starts clean.
+    msg.message:ClearAllPoints()
+    msg.message:SetPoint('TOPLEFT',     msg.widget, 'TOPLEFT',     62,  0)
+    msg.message:SetPoint('BOTTOMRIGHT', msg.widget, 'BOTTOMRIGHT', -10, 0)
 end
 
 --#endregion
@@ -287,6 +291,14 @@ end
 ---@param type string
 ---@return number duration
 function controllerProto:FormatMessage(msg, text, type)
+    -- Sync container width in case itemWidth changed since this widget was created.
+    local w = db().itemWidth
+    local sw = self.parent.widget.subWidgets
+    self.parent.widget:SetWidth(w)
+    sw.textureBottom:SetWidth(w)
+    sw.textureTop:SetWidth(w)
+    -- messageBg is anchored by two points (BOTTOMLEFT/TOPRIGHT) so its width follows automatically.
+
     local duration = banter.CalculateDisplayDuration(text)
     msg:Format(text, type)
 
@@ -321,6 +333,7 @@ end
 
 ---@class BanterContainerSubWidgets
 ---@field portrait      Texture
+---@field portraitFrame Frame
 ---@field name          FontString
 ---@field messages      BanterContainerMessage[]
 ---@field textureBottom Frame
@@ -334,6 +347,7 @@ end
 ---@field data           BanterData
 ---@field minimumHeight  number
 ---@field expiryTime     number?
+---@field isBubbleMode   boolean?
 ---@field widget         BanterContainerWidget
 ---@field animationGroup AnimationGroup?
 ---@field controller     BanterContainerController
@@ -398,7 +412,7 @@ local function _BantCreate()
     portrait:SetAllPoints(portraitContainer)
 
     local portraitBorder = portraitContainer:Texture('OVERLAY', {
-        atlas = 'auctionhouse-itemicon-border-gray',
+        atlas = 'auctionhouse-itemicon-border-artifact',
         size = { w = 64, h = 64 }
     })
     portraitBorder:SetPoint('CENTER', portraitContainer, 'CENTER')
@@ -416,11 +430,12 @@ local function _BantCreate()
 
     local widget = container.frame --[[@as BanterContainerWidget]]
     widget.subWidgets = {
-        portrait = portrait.tex,
-        name = name.fs,
-        messages = {},
+        portrait      = portrait.tex,
+        portraitFrame = portraitContainer.frame,
+        name          = name.fs,
+        messages      = {},
         textureBottom = bottomContainer.frame,
-        textureTop = topContainer.frame,
+        textureTop    = topContainer.frame,
     }
 
     i.widget = widget
@@ -449,11 +464,14 @@ local function _BantReset(pool, bant)
     bant.widget:Hide()
     bant.widget:ClearAllPoints()
     bant.widget:SetParent(UIParent)
+    bant.widget:SetIgnoreParentAlpha(false)
     bant.widget:SetAlpha(1)
+    bant.isBubbleMode = nil
     bant.data = nil
     bant.widget.subWidgets.name:SetText('')
+    bant.widget.subWidgets.name:Show()
     bant.widget.subWidgets.portrait:SetTexture(nil)
-    bant.widget.subWidgets.portrait:Show()
+    bant.widget.subWidgets.portraitFrame:Show()
 end
 
 --#endregion

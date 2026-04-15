@@ -202,7 +202,12 @@ function banter:GetDefaults()
             -- Blizzard UI suppression
             disableTalkingHead = true,
             disableChatLog = false,
-            disableChatBubble = false,
+            -- Bubble mode
+            reskinBubbles = false,
+            hideScrollLog = false,
+            -- Visibility
+            hideNameIn = 'never',     -- 'never' | 'everywhere' | 'bubble' | 'scroller'
+            hidePortraitIn = 'never', -- same
             -- Position
             x = 0,
             y = 0,
@@ -231,9 +236,11 @@ end
 
 --#region ── Options ──────────────────────────────────────────────────────────
 
+local HIDE_IN_VALUES = { never = 'Never', everywhere = 'Everywhere', bubble = 'Bubble Mode', scroller = 'Scroll Mode' }
+
 function banter:GetOptions()
     return 'banter', {
-        name = 'Banter',
+        name = 'Banter (NPC Dialogue)',
         type = 'group',
         order = 20,
         args = {
@@ -329,15 +336,24 @@ function banter:GetOptions()
                             applyTalkingHeadSuppression(val)
                         end,
                     },
-                    disableChatBubble = {
-                        name = 'Hide Chat Bubbles',
-                        desc = 'Hide Blizzard NPC chat bubbles.',
+                    reskinBubbles = {
+                        name = 'Reskinned Bubbles',
+                        desc =
+                        'Show a Banter container above each NPC chat bubble in open world. Falls back to scrolling log in instanced content.',
                         type = 'toggle',
                         order = 2,
-                        get = function() return db().disableChatBubble end,
-                        set = function(_, val)
-                            db().disableChatBubble = val
-                        end,
+                        get = function() return db().reskinBubbles end,
+                        set = function(_, val) db().reskinBubbles = val end,
+                    },
+                    hideScrollLog = {
+                        name = 'Hide Scrolling Log',
+                        desc =
+                        'When Reskinned Bubbles is active, suppress the fixed scrolling log so only the world-anchored bants are shown.',
+                        type = 'toggle',
+                        order = 3,
+                        disabled = function() return not db().reskinBubbles end,
+                        get = function() return db().hideScrollLog end,
+                        set = function(_, val) db().hideScrollLog = val end,
                     },
                 },
             },
@@ -392,6 +408,16 @@ function banter:GetOptions()
                             banter:Refresh()
                         end,
                     },
+                    hideName = {
+                        name = 'Hide Name',
+                        desc = 'Hide the NPC name in the selected display mode.',
+                        type = 'select',
+                        order = 4.5,
+                        style = 'dropdown',
+                        values = HIDE_IN_VALUES,
+                        get = function() return db().hideNameIn end,
+                        set = function(_, val) db().hideNameIn = val end,
+                    },
                     msgHeader = { name = 'Message', type = 'header', order = 5 },
                     msgFont = {
                         name = 'Font',
@@ -437,6 +463,17 @@ function banter:GetOptions()
                             c.r, c.g, c.b, c.a = r, g, b, a
                             banter:Refresh()
                         end,
+                    },
+                    hidePortrait = {
+                        name = 'Hide Portrait',
+                        desc =
+                        'Hide the NPC portrait in the selected display mode. The message area expands to fill the space.',
+                        type = 'select',
+                        order = 8.5,
+                        style = 'dropdown',
+                        values = HIDE_IN_VALUES,
+                        get = function() return db().hidePortraitIn end,
+                        set = function(_, val) db().hidePortraitIn = val end,
                     },
                     styleByType = {
                         name = 'Style by Type',

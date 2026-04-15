@@ -51,6 +51,17 @@ end
 
 ---@param bantToRemove table
 function banter:RemoveBant(bantToRemove)
+    -- Bubble-mode bants are not in the scroll stack; fade and release directly.
+    -- Clear isBubbleMode immediately so a second call (e.g. OnHide racing with the
+    -- expiry timer while the widget is still fading) hits the nil-index early return
+    -- below instead of scheduling a duplicate Release.
+    if bantToRemove.isBubbleMode then
+        bantToRemove.isBubbleMode = false
+        UIFrameFadeOut(bantToRemove.widget, 0.5, 1, 0)
+        C_Timer.After(0.5, function() self:Release(bantToRemove) end)
+        return
+    end
+
     if not self.instance then return end
 
     local bants = self.instance.bants
@@ -101,34 +112,55 @@ function banter:RemoveBant(bantToRemove)
     end
 end
 
----@param data BanterData
-function banter:AddBants(data)
-    if not self.instance then return end
+--#endregion
 
-    -- If this NPC already has a visible bant AND it's the most recent one
-    -- (no other NPC's bant was added after it), append the new message to it.
-    local bants = self.instance.bants
-    for i = 1, #bants do
-        if bants[i].id == data.id then
-            local isLatest = true
-            for j = i + 1, #bants do
-                if bants[j].id ~= data.id then
-                    isLatest = false
-                    break
-                end
-            end
-            if isLatest then
-                local bant = bants[i]
-                local messageWidget = bant.controller:CreateMessage()
-                bant.controller:FormatMessage(messageWidget, data.message, data.type)
-                bant.widget:SetHeight(bant.widget:GetHeight() + messageWidget.widget:GetHeight())
-                bant.controller:RepositionMessages()
-                self:RepositionBants()
-                return
-            end
-        end
+--#region ── Visibility ───────────────────────────────────────────────────────
+
+local function hiddenInMode(setting, isBubble)
+    return setting == 'everywhere'
+        or (setting == 'bubble' and isBubble)
+        or (setting == 'scroller' and not isBubble)
+end
+
+-- Applies name and portrait visibility for the given display mode, and adjusts
+-- the message left indent to fill the portrait slot when portrait is hidden.
+---@param bant     BanterContainerMain
+---@param isBubble boolean
+function banter:_ApplyVisibility(bant, isBubble)
+    local d = db()
+    local sw = bant.widget.subWidgets
+
+    if hiddenInMode(d.hideNameIn, isBubble) then
+        sw.name:Hide()
+    else
+        sw.name:Show()
     end
 
+    if hiddenInMode(d.hidePortraitIn, isBubble) then
+        sw.portraitFrame:Hide()
+        for _, msg in ipairs(sw.messages) do
+            msg.message:ClearAllPoints()
+            msg.message:SetPoint('TOPLEFT', msg.widget, 'TOPLEFT', 20, 0)
+            msg.message:SetPoint('BOTTOMRIGHT', msg.widget, 'BOTTOMRIGHT', -10, 0)
+        end
+    else
+        sw.portraitFrame:Show()
+        -- Anchors are at the pool-reset default of 62px; nothing to change.
+    end
+end
+
+--#endregion
+
+--#region ── Bant construction ────────────────────────────────────────────────
+
+-- Shared bant initialisation: creates a bant from the pool, sets name/portrait,
+-- and formats the first message. Does NOT parent to the instance widget or show
+-- the bant widget — callers are responsible for placement and visibility.
+---@param data BanterData
+---@return BanterContainerMain bant
+---@return BanterContainerMessage messageWidget
+---@return number duration
+function banter:_BuildBant(data)
     local bant = self:Create()
     bant.id = data.id
     bant.data = data
@@ -150,17 +182,28 @@ function banter:AddBants(data)
         portrait:Show()
     end
 
-    bant.widget:SetParent(self.instance.widget)
-
     local messageWidget = bant.controller:CreateMessage()
     local duration = bant.controller:FormatMessage(messageWidget, data.message, data.type)
     bant.widget:SetHeight(bant.widget:GetHeight() + messageWidget.widget:GetHeight())
     bant.controller:RepositionMessages()
 
+    return bant, messageWidget, duration
+end
+
+-- Parents a pre-built bant into the scroll stack with duration extension,
+-- stack anchoring, and a fade-in animation.
+---@param bant BanterContainerMain
+---@param messageWidget BanterContainerMessage
+---@param duration number
+function banter:_AddBantToStack(bant, messageWidget, duration)
+    if not self.instance then return end
+
+    bant.widget:SetParent(self.instance.widget)
+    self:_ApplyVisibility(bant, false)
+
     local activeBants = self.instance.bants
 
-    -- Extend the incoming bant to match whatever is already on screen, so a short
-    -- message never expires before a longer one that was already active.
+    -- Extend so a short message never expires before a longer one already active.
     local now = GetTime()
     local maxRemaining = 0
     for i = 1, #activeBants do
@@ -173,7 +216,7 @@ function banter:AddBants(data)
     if effectiveDuration > duration then
         local extended = now + effectiveDuration
         bant.expiryTime = extended
-        messageWidget.expiryTime = extended -- keep the per-message closure in sync
+        messageWidget.expiryTime = extended
     end
 
     table.insert(activeBants, bant)
@@ -199,7 +242,6 @@ function banter:AddBants(data)
     bant.widget:SetAlpha(1)
     bant.widget:Show()
 
-    -- Fade-in animation.
     local ag = bant.widget:CreateAnimationGroup()
     bant.animationGroup = ag
     ag:SetToFinalAlpha(true)
@@ -218,6 +260,155 @@ function banter:AddBants(data)
 
     self.instance.widget:Show()
 end
+
+--#endregion
+
+--#region ── Bubble mode ──────────────────────────────────────────────────────
+
+-- Returns the FontString text found anywhere inside a bubble frame (direct
+-- regions OR regions of child frames, one level deep).
+local function getBubbleText(bubble)
+    -- Direct regions first.
+    for _, region in ipairs({ bubble:GetRegions() }) do
+        if region:IsObjectType('FontString') then
+            ---@cast region FontString
+            local t = region:GetText()
+            if t and t ~= '' then return t end
+        end
+    end
+    -- Child frames (e.g. the text frame Blizzard nests inside the bubble).
+    for _, child in ipairs({ bubble:GetChildren() }) do
+        for _, region in ipairs({ child:GetRegions() }) do
+            if region:IsObjectType('FontString') then
+                ---@cast region FontString
+                local t = region:GetText()
+                if t and t ~= '' then return t end
+            end
+        end
+    end
+end
+
+-- Iterates all accessible chat bubbles looking for one whose text matches
+-- `text`. Polls up to 10 times (0.1 s apart) before giving up.
+---@param text     string
+---@param callback fun(bubble: Frame?)
+---@param attempts number?
+function banter:FindBubbleForMessage(text, callback, attempts)
+    attempts = attempts or 0
+    for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles()) do
+        if getBubbleText(bubble) == text then
+            callback(bubble)
+            return
+        end
+    end
+    if attempts < 10 then
+        C_Timer.After(0.1, function()
+            self:FindBubbleForMessage(text, callback, attempts + 1)
+        end)
+    else
+        callback(nil)
+    end
+end
+
+-- Creates a bant and anchors it above the matching chat bubble. Falls back to
+-- the scroll log if no bubble is found within ~1 second.
+---@param data BanterData
+function banter:SpawnBubbleBant(data)
+    local bant, messageWidget, duration = self:_BuildBant(data)
+    bant.isBubbleMode = true
+    self:_ApplyVisibility(bant, true)
+
+    self:FindBubbleForMessage(data.message, function(bubble)
+        if bubble then
+            bant.widget:SetParent(bubble)
+            bant.widget:SetIgnoreParentAlpha(true)
+            bant.widget:ClearAllPoints()
+            bant.widget:SetPoint('BOTTOM', bubble, 'BOTTOM', 0, -24)
+
+            bubble:SetAlpha(0)
+            for _, region in ipairs({ bubble:GetRegions() }) do
+                region:SetAlpha(0)
+            end
+            for _, child in ipairs({ bubble:GetChildren() }) do
+                if child ~= bant.widget then
+                    child:SetAlpha(0)
+                end
+            end
+
+            -- Remove our bant as soon as the game's bubble disappears.
+            bubble:HookScript('OnHide', function()
+                if bant.widget:IsShown() then
+                    self:RemoveBant(bant)
+                end
+            end)
+
+            bant.widget:SetAlpha(0)
+            bant.widget:Show()
+
+            local ag = bant.widget:CreateAnimationGroup()
+            bant.animationGroup = ag
+            ag:SetToFinalAlpha(true)
+            ag:SetScript('OnFinished', function() bant.animationGroup = nil end)
+            local alpha = ag:CreateAnimation('Alpha')
+            alpha:SetDuration(0.3)
+            alpha:SetFromAlpha(0)
+            alpha:SetToAlpha(1)
+            alpha:SetOrder(1)
+            ag:Play()
+        else
+            -- Bubble never found; degrade gracefully to the scroll log.
+            bant.isBubbleMode = false
+            self:_AddBantToStack(bant, messageWidget, duration)
+        end
+    end)
+end
+
+--#endregion
+
+--#region ── AddBants ─────────────────────────────────────────────────────────
+
+---@param data BanterData
+function banter:AddBants(data)
+    if not self.instance then return end
+
+    -- Append to the existing scroll-stack bant for this NPC if it's the most recent one.
+    local bants = self.instance.bants
+    for i = 1, #bants do
+        if bants[i].id == data.id then
+            local isLatest = true
+            for j = i + 1, #bants do
+                if bants[j].id ~= data.id then
+                    isLatest = false
+                    break
+                end
+            end
+            if isLatest then
+                local bant = bants[i]
+                local messageWidget = bant.controller:CreateMessage()
+                bant.controller:FormatMessage(messageWidget, data.message, data.type)
+                bant.widget:SetHeight(bant.widget:GetHeight() + messageWidget.widget:GetHeight())
+                bant.controller:RepositionMessages()
+                self:RepositionBants()
+                return
+            end
+        end
+    end
+
+    -- Route to bubble mode when enabled and not in instanced content.
+    local inInstance = select(1, IsInInstance())
+    if db().reskinBubbles and not inInstance then
+        self:SpawnBubbleBant(data)
+        if db().hideScrollLog then return end
+    end
+
+    -- Scroll log path.
+    local bant, messageWidget, duration = self:_BuildBant(data)
+    self:_AddBantToStack(bant, messageWidget, duration)
+end
+
+--#endregion
+
+--#region ── Utilities ────────────────────────────────────────────────────────
 
 function banter:ToggleLock()
     if not self.instance then return end
