@@ -85,69 +85,50 @@ function banter:RemoveBant(bantToRemove)
         if #self.instance.bants == 0 then self.instance.widget:Hide() end
     end)
 
-    -- Slide bants that were above the gap downward. Anchors are updated inside
-    -- OnFinished — before WoW removes the translation offset — so there is no
-    -- snap between the animation end and the new anchor taking effect.
+    -- Slide bants that were above the gap downward using SetPoint-based OnUpdate
+    -- instead of Translation animations. PlayerModel (portrait3D) frames do not
+    -- follow Translation offsets (they read the real anchor position), so we must
+    -- move the frame via SetPoint each tick so the model renderer stays in sync.
     local slideDistance = bantToRemove.widget:GetHeight() + padding
+    local DURATION = 0.5
     local repositioned = false
     for i = removedIndex, #bants do
         local bant = bants[i]
-        if bant.animationGroup and bant.animationGroup:IsPlaying() then
+
+        -- Stop any in-progress slide.
+        if bant.animationGroup then
             bant.animationGroup:Stop()
             bant.animationGroup = nil
         end
+        bant.widget:SetScript('OnUpdate', nil)
 
-        local ag = bant.widget:CreateAnimationGroup()
-        local t = ag:CreateAnimation('Translation')
-        t:SetDuration(0.5)
-        t:SetOffset(0, -slideDistance)
-        t:SetSmoothing('IN_OUT')
-        ag:SetScript('OnFinished', function()
-            if not repositioned then
-                repositioned = true
-                self:RepositionBants()
+        -- Anchor to the instance widget so we can drive Y directly each frame.
+        local instanceWidget = self.instance.widget
+        local startY = bant.widget:GetBottom() - instanceWidget:GetBottom()
+        local endY   = startY - slideDistance
+        local elapsed = 0
+
+        bant.widget:ClearAllPoints()
+        bant.widget:SetPoint('BOTTOMLEFT', instanceWidget, 'BOTTOMLEFT', padding, startY)
+
+        bant.widget:SetScript('OnUpdate', function(f, dt)
+            elapsed = elapsed + dt
+            local t      = math.min(elapsed / DURATION, 1)
+            local smooth = t * t * (3 - 2 * t)  -- smoothstep (IN_OUT equivalent)
+            f:ClearAllPoints()
+            f:SetPoint('BOTTOMLEFT', instanceWidget, 'BOTTOMLEFT', padding, startY + (endY - startY) * smooth)
+            if t >= 1 then
+                f:SetScript('OnUpdate', nil)
+                if not repositioned then
+                    repositioned = true
+                    self:RepositionBants()
+                end
             end
         end)
-        ag:Play()
     end
 end
 
 --#endregion
-
---#region ── Visibility ───────────────────────────────────────────────────────
-
-local function hiddenInMode(setting, isBubble)
-    return setting == 'everywhere'
-        or (setting == 'bubble' and isBubble)
-        or (setting == 'scroller' and not isBubble)
-end
-
--- Applies name and portrait visibility for the given display mode, and adjusts
--- the message left indent to fill the portrait slot when portrait is hidden.
----@param bant     BanterContainerMain
----@param isBubble boolean
-function banter:_ApplyVisibility(bant, isBubble)
-    local d = db()
-    local sw = bant.widget.subWidgets
-
-    if hiddenInMode(d.hideNameIn, isBubble) then
-        sw.name:Hide()
-    else
-        sw.name:Show()
-    end
-
-    if hiddenInMode(d.hidePortraitIn, isBubble) then
-        sw.portraitFrame:Hide()
-        for _, msg in ipairs(sw.messages) do
-            msg.message:ClearAllPoints()
-            msg.message:SetPoint('TOPLEFT', msg.widget, 'TOPLEFT', 20, 0)
-            msg.message:SetPoint('BOTTOMRIGHT', msg.widget, 'BOTTOMRIGHT', -10, 0)
-        end
-    else
-        sw.portraitFrame:Show()
-        -- Anchors are at the pool-reset default of 62px; nothing to change.
-    end
-end
 
 --#endregion
 
@@ -188,31 +169,18 @@ function banter:_BuildBant(data)
         nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
     end
 
-    local portrait   = bant.widget.subWidgets.portrait
     local portrait3D = bant.widget.subWidgets.portrait3D
 
-    if d.portrait3D then
-        if data.displayId and data.displayId > 0 then
-            portrait3D:SetDisplayInfo(data.displayId)
-            portrait3D:SetCamera(0)
-            portrait3D:SetPortraitZoom(1)
-            portrait3D:SetAnimation(60)
-            portrait3D:Show()
-        elseif data.unitToken then
-            portrait3D:SetUnit(data.unitToken)
-            portrait3D:SetCamera(0)
-            portrait3D:SetPortraitZoom(1)
-            portrait3D:SetAnimation(60)
-            portrait3D:Show()
-        end
-    else
-        if data.displayId and data.displayId > 0 then
-            SetPortraitTextureFromCreatureDisplayID(portrait, data.displayId)
-            portrait:Show()
-        elseif data.unitToken then
-            SetPortraitTexture(portrait, data.unitToken)
-            portrait:Show()
-        end
+    if data.displayId and data.displayId > 0 then
+        portrait3D:SetDisplayInfo(data.displayId)
+        portrait3D:SetCamera(0)
+        portrait3D:SetPortraitZoom(1)
+        portrait3D:SetAnimation(60)
+    elseif data.unitToken then
+        portrait3D:SetUnit(data.unitToken)
+        portrait3D:SetCamera(0)
+        portrait3D:SetPortraitZoom(1)
+        portrait3D:SetAnimation(60)
     end
 
     local channelLabel = bant.widget.subWidgets.channelLabel
@@ -240,7 +208,6 @@ function banter:_AddBantToStack(bant, messageWidget, duration)
     if not self.instance then return end
 
     bant.widget:SetParent(self.instance.widget)
-    self:_ApplyVisibility(bant, false)
 
     local activeBants = self.instance.bants
 
@@ -357,12 +324,12 @@ end
 function banter:SpawnBubbleBant(data)
     local bant, messageWidget, duration = self:_BuildBant(data)
     bant.isBubbleMode = true
-    self:_ApplyVisibility(bant, true)
 
     self:FindBubbleForMessage(data.message, function(bubble)
         if bubble then
             bant.widget:SetParent(bubble)
             bant.widget:SetIgnoreParentAlpha(true)
+            bant.widget:SetScale(UIParent:GetEffectiveScale() / bubble:GetEffectiveScale())
             bant.widget:ClearAllPoints()
             bant.widget:SetPoint('BOTTOM', bubble, 'BOTTOM', 0, -24)
 

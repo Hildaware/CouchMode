@@ -16,15 +16,15 @@ local banter = addon:NewModule('Banter', 'AceEvent-3.0')
 local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
 
 banter.EVENTS = {
-    CHAT_MSG_MONSTER_YELL    = 'CHAT_MSG_MONSTER_YELL',
+    CHAT_MSG_MONSTER_YELL = 'CHAT_MSG_MONSTER_YELL',
     CHAT_MSG_MONSTER_WHISPER = 'CHAT_MSG_MONSTER_WHISPER',
-    CHAT_MSG_MONSTER_PARTY   = 'CHAT_MSG_MONSTER_PARTY',
-    CHAT_MSG_MONSTER_SAY     = 'CHAT_MSG_MONSTER_SAY',
-    CHAT_MSG_SAY             = 'CHAT_MSG_SAY',
-    CHAT_MSG_YELL            = 'CHAT_MSG_YELL',
-    CHAT_MSG_PARTY           = 'CHAT_MSG_PARTY',
-    CHAT_MSG_RAID            = 'CHAT_MSG_RAID',
-    CHAT_MSG_INSTANCE_CHAT   = 'CHAT_MSG_INSTANCE_CHAT',
+    CHAT_MSG_MONSTER_PARTY = 'CHAT_MSG_MONSTER_PARTY',
+    CHAT_MSG_MONSTER_SAY = 'CHAT_MSG_MONSTER_SAY',
+    CHAT_MSG_SAY = 'CHAT_MSG_SAY',
+    CHAT_MSG_YELL = 'CHAT_MSG_YELL',
+    CHAT_MSG_PARTY = 'CHAT_MSG_PARTY',
+    CHAT_MSG_RAID = 'CHAT_MSG_RAID',
+    CHAT_MSG_INSTANCE_CHAT = 'CHAT_MSG_INSTANCE_CHAT',
 }
 
 local TEST_ARGS = {
@@ -112,14 +112,14 @@ function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _,
 
     ---@type BanterData
     local data = {
-        id        = playerId,
+        id = playerId,
         unitToken = unitToken or nil,
-        guid      = guid,
-        channel   = channel,
-        name      = name,
-        message   = message,
-        type      = event,
-        duration  = CalculateDisplayDuration(message),
+        guid = guid,
+        channel = channel,
+        name = name,
+        message = message,
+        type = event,
+        duration = CalculateDisplayDuration(message),
     }
 
     banter:AddBants(data)
@@ -148,10 +148,10 @@ function banter:OnEnable()
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_WHISPER, 'OnMonsterMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_PARTY, 'OnMonsterMessage')
 
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_SAY,           'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_YELL,          'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY,         'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID,          'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_SAY, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_YELL, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID, 'OnPlayerMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT, 'OnPlayerMessage')
 
     if db().disableTalkingHead then
@@ -245,17 +245,12 @@ function banter:GetDefaults()
             reskinBubbles = false,
             hideScrollLog = false,
             -- Visibility
-            hideNameIn = 'never',     -- 'never' | 'everywhere' | 'bubble' | 'scroller'
-            hidePortraitIn = 'never', -- same
-            portrait3D = false,
             -- Position
             x = 0,
             y = 0,
             -- Sizing
             itemWidth = 512,
-            maxItems = 5,
             growUpwards = true,
-            portraitSize = 80,
             -- Name font
             nameFontFace = 'Bebas Neue',
             nameFontSize = 28,
@@ -276,7 +271,6 @@ end
 
 --#region ── Options ──────────────────────────────────────────────────────────
 
-local HIDE_IN_VALUES = { never = 'Never', everywhere = 'Everywhere', bubble = 'Bubble Mode', scroller = 'Scroll Mode' }
 
 function banter:GetOptions()
     return 'banter', {
@@ -342,19 +336,6 @@ function banter:GetOptions()
                         set = function(_, val)
                             db().itemWidth = val
                             banter:Refresh()
-                        end,
-                    },
-                    maxItems = {
-                        name = 'Max Gabbers',
-                        desc = 'Maximum number of NPC dialogue frames shown at once.',
-                        type = 'range',
-                        order = 4,
-                        min = 1,
-                        max = 20,
-                        step = 1,
-                        get = function() return db().maxItems end,
-                        set = function(_, val)
-                            db().maxItems = val
                         end,
                     },
                 },
@@ -448,16 +429,6 @@ function banter:GetOptions()
                             banter:Refresh()
                         end,
                     },
-                    hideName = {
-                        name = 'Hide Name',
-                        desc = 'Hide the NPC name in the selected display mode.',
-                        type = 'select',
-                        order = 4.5,
-                        style = 'dropdown',
-                        values = HIDE_IN_VALUES,
-                        get = function() return db().hideNameIn end,
-                        set = function(_, val) db().hideNameIn = val end,
-                    },
                     msgHeader = { name = 'Message', type = 'header', order = 5 },
                     msgFont = {
                         name = 'Font',
@@ -487,6 +458,7 @@ function banter:GetOptions()
                             banter:Refresh()
                         end,
                     },
+
                     msgColor = {
                         name = 'Color',
                         desc = 'Default color of message text (used when Style by Type is off).',
@@ -503,25 +475,6 @@ function banter:GetOptions()
                             c.r, c.g, c.b, c.a = r, g, b, a
                             banter:Refresh()
                         end,
-                    },
-                    hidePortrait = {
-                        name = 'Hide Portrait',
-                        desc =
-                        'Hide the NPC portrait in the selected display mode. The message area expands to fill the space.',
-                        type = 'select',
-                        order = 8.5,
-                        style = 'dropdown',
-                        values = HIDE_IN_VALUES,
-                        get = function() return db().hidePortraitIn end,
-                        set = function(_, val) db().hidePortraitIn = val end,
-                    },
-                    portrait3D = {
-                        name = '3D Portraits',
-                        desc = 'Render portraits as live 3D models instead of 2D textures.',
-                        type = 'toggle',
-                        order = 8.6,
-                        get = function() return db().portrait3D end,
-                        set = function(_, val) db().portrait3D = val end,
                     },
                     styleByType = {
                         name = 'Style by Type',

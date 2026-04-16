@@ -31,6 +31,7 @@ end
 ---@field message       FontString
 ---@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
+---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
 ---@field Format         fun(self: BanterContainerMessage, text: string, type: string)
 
 
@@ -72,13 +73,37 @@ function messageProto:Format(text, type)
         end
     end
 
-    self.message:SetWidth(d.itemWidth - 20)
+    self.message:SetWidth(d.itemWidth - 72) -- 48 portrait indent + 24 right pad
     self.message:SetText(text)
     self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
+
+    -- Scale up single-line messages
+    local availableWidth = d.itemWidth - 72
+    local bumpedSize = math.floor(messageSize * 1.3)
+    self.message:SetFont(fetchFont(d.msgFontFace), bumpedSize, 'OUTLINE')
+    if self.message:GetUnboundedStringWidth() <= availableWidth then
+        messageSize = bumpedSize
+    else
+        self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
+    end
+
     self.message:SetTextColor(r, g, b, a)
 
-    local contentHeight = math.max(self.message:GetHeight() + 10, MIN_MESSAGE_HEIGHT)
+    local textHeight = self.message:GetHeight()
+    local vPad = math.max(math.ceil(d.msgFontSize * 0.5), 8)
+    local contentHeight = math.max(textHeight + vPad * 2, MIN_MESSAGE_HEIGHT)
     self.widget:SetSize(d.itemWidth, contentHeight)
+
+    local numLines = math.max(1, math.ceil(textHeight / (d.msgFontSize * 1.2)))
+    local correction = math.min(
+        math.floor(d.msgFontSize / 8 * (numLines + 1)),
+        math.floor(d.msgFontSize / 2)
+    )
+    local topPad = math.floor((contentHeight - textHeight) / 2) - correction
+    self.topPad = topPad
+    self.message:ClearAllPoints()
+    self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', 48, -topPad)
+    self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -24, -topPad)
 
     if d.revealText then
         self.message:SetText('')
@@ -94,10 +119,6 @@ function messageProto:Format(text, type)
         end)
     end
 
-    -- Reveal: grow the frame from height 0 to full over 0.25s, clipping children so
-    -- the content is revealed bottom-up. Height is set to full first (above) so that
-    -- callers reading GetHeight() this frame get the correct value; the grow starts
-    -- next frame via C_Timer.After(0).
     local fullHeight = contentHeight
     C_Timer.After(0, function()
         if not self.widget:IsShown() then return end
@@ -124,9 +145,9 @@ local function _MessageCreate()
 
     local content = L:Container(UIParent, { width = d.itemWidth, height = MIN_MESSAGE_HEIGHT })
 
-    local message = content:FontString({ justifyH = 'LEFT' })
-    message:SetPoint('TOPLEFT', content, 'TOPLEFT', 62, 0)
-    message:SetPoint('BOTTOMRIGHT', content, 'BOTTOMRIGHT', -10, 0)
+    local message = content:FontString({ justifyH = 'LEFT', justifyV = 'TOP' })
+    message:SetPoint('TOPLEFT', content, 'TOPLEFT', 48, 0)
+    message:SetPoint('TOPRIGHT', content, 'TOPRIGHT', -24, 0)
     message.fs:SetFont(fetchFont(d.msgFontFace), d.msgFontSize, 'OUTLINE')
     message.fs:SetShadowColor(0, 0, 0, 1)
     message.fs:SetShadowOffset(2, -2)
@@ -150,10 +171,8 @@ local function _MessageReset(pool, msg)
     msg.widget:Hide()
     msg.widget:ClearAllPoints()
     msg.message:SetText('')
-    -- Restore default portrait-present anchors so pool reuse starts clean.
     msg.message:ClearAllPoints()
-    msg.message:SetPoint('TOPLEFT', msg.widget, 'TOPLEFT', 62, 0)
-    msg.message:SetPoint('BOTTOMRIGHT', msg.widget, 'BOTTOMRIGHT', -10, 0)
+    msg.topPad = nil
 end
 
 --#endregion
@@ -317,6 +336,7 @@ function controllerProto:FormatMessage(msg, text, type)
     self.parent.expiryTime = expiryTime -- parent-level, for BanterController's duration-extension logic
 
     local function onExpire()
+        if self.parent.data and self.parent.data.pinned then return end
         local remaining = msg.expiryTime - GetTime()
         if remaining > 0.05 then
             C_Timer.After(remaining, onExpire)
@@ -342,7 +362,6 @@ end
 --#region ── Bant widget ──────────────────────────────────────────────────────
 
 ---@class BanterContainerSubWidgets
----@field portrait      Texture
 ---@field portraitFrame Frame
 ---@field portrait3D    PlayerModel
 ---@field name          FontString
@@ -417,23 +436,24 @@ local function _BantCreate()
 
     -- Portrait
     local portraitContainer = L:Container(container,
-        { width = MIN_MESSAGE_HEIGHT, height = MIN_MESSAGE_HEIGHT })
-    portraitContainer:SetPoint('LEFT', container, 'LEFT', 2)
+        { width = 64, height = 64 })
+    portraitContainer:SetPoint('BOTTOMLEFT', bTex, 'TOPLEFT', -20, 10)
 
-    local portrait = portraitContainer:Texture('ARTWORK')
-    portrait:SetAllPoints(portraitContainer)
+    local portraitBackdrop = portraitContainer:Texture('BACKGROUND', { atlas = 'house-chest-list-item-active' })
+    portraitBackdrop:SetAllPoints(portraitContainer.frame)
 
-    -- 3D model portrait (PlayerModel, larger than the 2D texture; hidden by default)
     local portrait3D = CreateFrame('PlayerModel', nil, portraitContainer.frame)
-    portrait3D:SetSize(48, 48)
     portrait3D:SetPoint('CENTER', portraitContainer.frame, 'CENTER')
-    portrait3D:Hide()
+    portrait3D:SetSize(54, 54)
 
-    local portraitBorder = portraitContainer:Texture('OVERLAY', {
-        atlas = 'auctionhouse-itemicon-border-artifact',
-        size = { w = 64, h = 64 }
-    })
-    portraitBorder:SetPoint('CENTER', portraitContainer, 'CENTER')
+    local portraitBorderFrame = CreateFrame('Frame', nil, portraitContainer.frame)
+    portraitBorderFrame:SetFrameLevel(portrait3D:GetFrameLevel() + 1)
+    portraitBorderFrame:SetAllPoints(portraitContainer.frame)
+    local portraitBorder = portraitBorderFrame:CreateTexture(nil, 'OVERLAY')
+    portraitBorder:SetAtlas('spellbook-item-iconframe')
+    portraitBorder:SetPoint('TOPRIGHT', portraitBorderFrame, 'TOPRIGHT', 2, 4)
+    portraitBorder:SetSize(84, 84)
+    portraitBorder:SetVertexColor(.4, .4, .4, 1)
 
     -- Name
     local nameOverlay = L:Container(container, { frameLevel = container.frame:GetFrameLevel() + 20 })
@@ -442,7 +462,7 @@ local function _BantCreate()
     name.fs:SetFont(fetchFont(d.nameFontFace), d.nameFontSize, 'OUTLINE')
     local c = FACTION_BAR_COLORS[4]
     name:SetTextColor(c.r, c.g, c.b)
-    name:SetPoint('BOTTOMLEFT', tTex, 'BOTTOMLEFT', 6, 13)
+    name:SetPoint('BOTTOMLEFT', bTex, 'TOPLEFT', -2, -8)
     name.fs:SetShadowColor(0, 0, 0, 1)
     name.fs:SetShadowOffset(2, -2)
 
@@ -450,13 +470,12 @@ local function _BantCreate()
     local channelLabel = L:FontString(nameOverlay, { justifyH = 'RIGHT', maxLines = 1 })
     channelLabel.fs:SetFont(fetchFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
     channelLabel.fs:SetTextColor(1, 1, 1, 0.75)
-    channelLabel:SetPoint('BOTTOMRIGHT', tTex, 'BOTTOMRIGHT', -6, 13)
+    channelLabel:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 44, -16)
     channelLabel.fs:SetShadowColor(0, 0, 0, 1)
     channelLabel.fs:SetShadowOffset(2, -2)
 
     local widget = container.frame --[[@as BanterContainerWidget]]
     widget.subWidgets = {
-        portrait = portrait.tex,
         portraitFrame = portraitContainer.frame,
         portrait3D = portrait3D,
         name = name.fs,
@@ -499,9 +518,7 @@ local function _BantReset(pool, bant)
     bant.widget.subWidgets.name:SetText('')
     bant.widget.subWidgets.name:Show()
     bant.widget.subWidgets.channelLabel:SetText('')
-    bant.widget.subWidgets.portrait:SetTexture(nil)
     bant.widget.subWidgets.portrait3D:ClearModel()
-    bant.widget.subWidgets.portrait3D:Hide()
     bant.widget.subWidgets.portraitFrame:Show()
 end
 

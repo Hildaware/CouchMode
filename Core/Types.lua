@@ -236,6 +236,7 @@
 ---@field unitToken string?   Unit token for player portrait (players)
 ---@field guid      string?   Raw GUID string (players only, for class color lookup)
 ---@field channel   string?   "SAY"|"YELL"|"PARTY"|"RAID"|"INSTANCE" (players only)
+---@field pinned    boolean?  If true, the bant never expires automatically
 ---@field name      string
 ---@field message   string
 ---@field type      string   CHAT_MSG_* event name

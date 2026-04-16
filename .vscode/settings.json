@@ -520,7 +520,8 @@
         "UnitTokenFromGUID",
         "UnitDisplayID",
         "GetPlayerInfoByGUID",
-        "ChatTypeInfo"
+        "ChatTypeInfo",
+        "HUD_EDIT_MODE_CHAT_FRAME_LABEL"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [
