@@ -8,8 +8,8 @@ local nameplates = addon:GetModule('Nameplates')
 
 --#region ── Name colors ──────────────────────────────────────────────────────
 
-local COLOR_END   = "|r"
-local COLOR_RARE  = "|cFFFFD200"
+local COLOR_END = "|r"
+local COLOR_RARE = "|cFFFFD200"
 local titleColorCache
 
 local hexColor = addon.Utils.hexColor
@@ -95,6 +95,7 @@ function nameplates.isInCity()
 end
 
 function nameplates.isInInstance()
+    if C_Garrison.IsOnGarrisonMap() then return true end
     local inInstance, instanceType = IsInInstance()
     if instanceType == "scenario" then return true end
     return inInstance

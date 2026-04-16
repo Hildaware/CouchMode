@@ -146,11 +146,19 @@ local function create_world_map()
             end
         end
 
-        -- Notify pins to update their scale (counter-scale) so they remain static size
+        -- GroupMembersPinMixin (and any other pin using ignoreGlobalPinScale) manages
+        -- its own icon sizes via SynchronizePinSizes(), triggered by OnCanvasScaleChanged.
+        -- The real scroll controller calls this; we must do it ourselves.
+        pcall(map_frame.OnCanvasScaleChanged, map_frame)
+
+        -- Standard MapCanvasPinMixin pins (world quests etc.) use C-side ApplyCurrentScale
+        -- which doesn't read our Lua GetCanvasScale() stub. Override with correct value.
+        -- Pins with ignoreGlobalPinScale manage their own sizing (e.g. GroupMembers) so skip.
+        local counter_scale = zoom > 0 and (1 / zoom) or 1
         for _, pool in pairs(map_frame.pinPools or {}) do
             for pin in pool:EnumerateActive() do
-                if pin.ApplyCurrentScale then
-                    pin:ApplyCurrentScale()
+                if not pin.ignoreGlobalPinScale then
+                    pin:SetScale(counter_scale)
                 end
             end
         end
@@ -295,6 +303,20 @@ local function create_world_map()
     map_frame.AreDetailLayersLoaded = function() return true end
 
     if map_frame.OnLoad then map_frame:OnLoad() end
+
+    -- Patch AcquirePin to counter-scale pins on creation, handling async providers
+    -- (e.g. WorldQuestDataProvider ticker fires every 0.5s outside of apply_zoom).
+    -- Pins with ignoreGlobalPinScale manage their own sizing, so skip those.
+    local _orig_acquire_pin = map_frame.AcquirePin
+    if _orig_acquire_pin then
+        map_frame.AcquirePin = function(self, pinTemplate, ...)
+            local pin = _orig_acquire_pin(self, pinTemplate, ...)
+            if pin and not pin.ignoreGlobalPinScale then
+                pin:SetScale(zoom > 0 and (1 / zoom) or 1)
+            end
+            return pin
+        end
+    end
 
     local _orig_refresh = map_frame.RefreshDetailLayers
     if _orig_refresh then
