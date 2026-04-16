@@ -173,13 +173,54 @@ function banter:_BuildBant(data)
         or 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
     nameWidget:SetText(data.name)
     nameWidget:SetFont(nameFontPath, d.nameFontSize, 'OUTLINE')
-    local nc = d.nameFontColor
-    nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
+    if data.guid then
+        -- Player bant: class-color the name, fall back to db color if class unknown.
+        local _, englishClass = GetPlayerInfoByGUID(data.guid)
+        local classColor = englishClass and RAID_CLASS_COLORS[englishClass]
+        if classColor then
+            nameWidget:SetTextColor(classColor.r, classColor.g, classColor.b, 1)
+        else
+            local nc = d.nameFontColor
+            nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
+        end
+    else
+        local nc = d.nameFontColor
+        nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
+    end
 
-    local portrait = bant.widget.subWidgets.portrait
-    if data.displayId and data.displayId > 0 then
-        SetPortraitTextureFromCreatureDisplayID(portrait, data.displayId)
-        portrait:Show()
+    local portrait   = bant.widget.subWidgets.portrait
+    local portrait3D = bant.widget.subWidgets.portrait3D
+
+    if d.portrait3D then
+        if data.displayId and data.displayId > 0 then
+            portrait3D:SetDisplayInfo(data.displayId)
+            portrait3D:SetCamera(0)
+            portrait3D:SetPortraitZoom(1)
+            portrait3D:SetAnimation(60)
+            portrait3D:Show()
+        elseif data.unitToken then
+            portrait3D:SetUnit(data.unitToken)
+            portrait3D:SetCamera(0)
+            portrait3D:SetPortraitZoom(1)
+            portrait3D:SetAnimation(60)
+            portrait3D:Show()
+        end
+    else
+        if data.displayId and data.displayId > 0 then
+            SetPortraitTextureFromCreatureDisplayID(portrait, data.displayId)
+            portrait:Show()
+        elseif data.unitToken then
+            SetPortraitTexture(portrait, data.unitToken)
+            portrait:Show()
+        end
+    end
+
+    local channelLabel = bant.widget.subWidgets.channelLabel
+    if data.channel then
+        channelLabel:SetText(data.channel)
+        local chatKey = (data.channel == 'INSTANCE') and 'INSTANCE_CHAT' or data.channel
+        local ci = ChatTypeInfo[chatKey]
+        if ci then channelLabel:SetTextColor(ci.r, ci.g, ci.b, 1) end
     end
 
     local messageWidget = bant.controller:CreateMessage()
@@ -394,9 +435,8 @@ function banter:AddBants(data)
         end
     end
 
-    -- Route to bubble mode when enabled and not in instanced content.
-    local inInstance = select(1, IsInInstance())
-    if db().reskinBubbles and not inInstance then
+    -- Route to bubble mode when enabled. Falls back to scroll log if no bubble is found.
+    if db().reskinBubbles then
         self:SpawnBubbleBant(data)
         if db().hideScrollLog then return end
     end

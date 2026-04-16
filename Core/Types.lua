@@ -232,10 +232,13 @@
 
 ---@class BanterData
 ---@field id        number
----@field displayId number
+---@field displayId number?   Creature display ID (NPCs)
+---@field unitToken string?   Unit token for player portrait (players)
+---@field guid      string?   Raw GUID string (players only, for class color lookup)
+---@field channel   string?   "SAY"|"YELL"|"PARTY"|"RAID"|"INSTANCE" (players only)
 ---@field name      string
 ---@field message   string
----@field type      string   CHAT_MSG_MONSTER_* event name
+---@field type      string   CHAT_MSG_* event name
 ---@field duration  number
 
 ---@class BanterContainerFrame: Frame

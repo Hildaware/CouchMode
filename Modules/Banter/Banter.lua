@@ -15,16 +15,17 @@ local banter = addon:NewModule('Banter', 'AceEvent-3.0')
 
 local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
 
-local EVENT_SAY = 'CHAT_MSG_MONSTER_SAY'
-local EVENT_YELL = 'CHAT_MSG_MONSTER_YELL'
-local EVENT_WHISPER = 'CHAT_MSG_MONSTER_WHISPER'
-local EVENT_PARTY = 'CHAT_MSG_MONSTER_PARTY'
-
--- Expose event name constants so BanterGabber can use them for styleByType.
-banter.EVENT_SAY = EVENT_SAY
-banter.EVENT_YELL = EVENT_YELL
-banter.EVENT_WHISPER = EVENT_WHISPER
-banter.EVENT_PARTY = EVENT_PARTY
+banter.EVENTS = {
+    CHAT_MSG_MONSTER_YELL    = 'CHAT_MSG_MONSTER_YELL',
+    CHAT_MSG_MONSTER_WHISPER = 'CHAT_MSG_MONSTER_WHISPER',
+    CHAT_MSG_MONSTER_PARTY   = 'CHAT_MSG_MONSTER_PARTY',
+    CHAT_MSG_MONSTER_SAY     = 'CHAT_MSG_MONSTER_SAY',
+    CHAT_MSG_SAY             = 'CHAT_MSG_SAY',
+    CHAT_MSG_YELL            = 'CHAT_MSG_YELL',
+    CHAT_MSG_PARTY           = 'CHAT_MSG_PARTY',
+    CHAT_MSG_RAID            = 'CHAT_MSG_RAID',
+    CHAT_MSG_INSTANCE_CHAT   = 'CHAT_MSG_INSTANCE_CHAT',
+}
 
 local TEST_ARGS = {
     { name = 'Lorewalker Cho',            id = 54961, message = 'Stay a while, and listen.' },
@@ -97,6 +98,33 @@ function banter:OnMonsterMessage(event, message, name)
     banter:AddBants(data)
 end
 
+function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _, guid)
+    -- Parse playerUID from GUID: "Player-realmID-playerUID" (playerUID is hex)
+    local playerUID = guid and guid:match('Player%-%d+%-(%x+)')
+    local playerId = playerUID and tonumber(playerUID, 16) or 0
+
+    -- Resolve unit token for portrait (works for player, party, raid, target, etc.)
+    local unitToken = guid and UnitTokenFromGUID(guid)
+
+    -- Derive short channel label from event name: "CHAT_MSG_INSTANCE_CHAT" -> "INSTANCE"
+    local channel = event:gsub('^CHAT_MSG_', '')
+    if channel == 'INSTANCE_CHAT' then channel = 'INSTANCE' end
+
+    ---@type BanterData
+    local data = {
+        id        = playerId,
+        unitToken = unitToken or nil,
+        guid      = guid,
+        channel   = channel,
+        name      = name,
+        message   = message,
+        type      = event,
+        duration  = CalculateDisplayDuration(message),
+    }
+
+    banter:AddBants(data)
+end
+
 --#endregion
 
 --#region ── Lifecycle ────────────────────────────────────────────────────────
@@ -115,10 +143,16 @@ function banter:OnEnable()
         LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)
     end
 
-    self:RegisterEvent(EVENT_SAY, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_YELL, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_WHISPER, 'OnMonsterMessage')
-    self:RegisterEvent(EVENT_PARTY, 'OnMonsterMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_YELL, 'OnMonsterMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_SAY, 'OnMonsterMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_WHISPER, 'OnMonsterMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_PARTY, 'OnMonsterMessage')
+
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_SAY,           'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_YELL,          'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY,         'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID,          'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT, 'OnPlayerMessage')
 
     if db().disableTalkingHead then
         applyTalkingHeadSuppression(true)
@@ -179,10 +213,15 @@ function banter:OnEnable()
 end
 
 function banter:OnDisable()
-    self:UnregisterEvent(EVENT_SAY)
-    self:UnregisterEvent(EVENT_YELL)
-    self:UnregisterEvent(EVENT_WHISPER)
-    self:UnregisterEvent(EVENT_PARTY)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_YELL)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_SAY)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_WHISPER)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_PARTY)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_SAY)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_YELL)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT)
 
     if self.instance then
         self.instance.widget:Hide()
@@ -208,6 +247,7 @@ function banter:GetDefaults()
             -- Visibility
             hideNameIn = 'never',     -- 'never' | 'everywhere' | 'bubble' | 'scroller'
             hidePortraitIn = 'never', -- same
+            portrait3D = false,
             -- Position
             x = 0,
             y = 0,
@@ -284,7 +324,7 @@ function banter:GetOptions()
                             local delay = 0
                             for _, args in ipairs(TEST_ARGS) do
                                 C_Timer.After(delay, function()
-                                    banter:OnMonsterMessage(EVENT_SAY, args.message, args.name)
+                                    banter:OnMonsterMessage(banter.EVENTS.CHAT_MSG_MONSTER_SAY, args.message, args.name)
                                 end)
                                 delay = delay + 3
                             end
@@ -474,6 +514,14 @@ function banter:GetOptions()
                         values = HIDE_IN_VALUES,
                         get = function() return db().hidePortraitIn end,
                         set = function(_, val) db().hidePortraitIn = val end,
+                    },
+                    portrait3D = {
+                        name = '3D Portraits',
+                        desc = 'Render portraits as live 3D models instead of 2D textures.',
+                        type = 'toggle',
+                        order = 8.6,
+                        get = function() return db().portrait3D end,
+                        set = function(_, val) db().portrait3D = val end,
                     },
                     styleByType = {
                         name = 'Style by Type',

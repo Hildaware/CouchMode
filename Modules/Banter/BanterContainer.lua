@@ -12,11 +12,6 @@ local banter = addon:GetModule('Banter')
 local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
 local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widget
 
--- Event name constants (same values as in Banter.lua — kept local to avoid cross-file coupling).
-local EVENT_YELL = 'CHAT_MSG_MONSTER_YELL'
-local EVENT_WHISPER = 'CHAT_MSG_MONSTER_WHISPER'
-local EVENT_PARTY = 'CHAT_MSG_MONSTER_PARTY'
-
 --#endregion
 
 --#region ── Helpers ──────────────────────────────────────────────────────────
@@ -42,20 +37,35 @@ end
 local messageProto = {}
 messageProto.__index = messageProto
 
+-- Maps player chat event names to their ChatTypeInfo key for message coloring.
+local PLAYER_CHAT_INFO_KEY = {
+    [banter.EVENTS.CHAT_MSG_SAY] = 'SAY',
+    [banter.EVENTS.CHAT_MSG_YELL] = 'YELL',
+    [banter.EVENTS.CHAT_MSG_PARTY] = 'PARTY',
+    [banter.EVENTS.CHAT_MSG_RAID] = 'RAID',
+    [banter.EVENTS.CHAT_MSG_INSTANCE_CHAT] = 'INSTANCE_CHAT',
+}
+
 ---@param text string
----@param type string  CHAT_MSG_MONSTER_* event name
+---@param type string  CHAT_MSG_* event name
 function messageProto:Format(text, type)
     local d = db()
     local r, g, b, a = d.msgFontColor.r, d.msgFontColor.g, d.msgFontColor.b, d.msgFontColor.a
     local messageSize = d.msgFontSize
 
-    if d.styleByType then
-        if type == EVENT_YELL then
+    local chatKey = PLAYER_CHAT_INFO_KEY[type]
+    if chatKey then
+        -- Player channel: always use WoW's canonical ChatTypeInfo color.
+        local ci = ChatTypeInfo[chatKey]
+        if ci then r, g, b, a = ci.r, ci.g, ci.b, 1 end
+    elseif d.styleByType then
+        -- NPC monster messages: color by type.
+        if type == banter.EVENTS.CHAT_MSG_MONSTER_YELL then
             r, g, b, a = 1, 0.2, 0.2, 1 -- red
             messageSize = math.floor(d.msgFontSize * 1.25)
-        elseif type == EVENT_WHISPER then
+        elseif type == banter.EVENTS.CHAT_MSG_MONSTER_WHISPER then
             r, g, b, a = 1, 0.5, 1, 1   -- pink
-        elseif type == EVENT_PARTY then
+        elseif type == banter.EVENTS.CHAT_MSG_MONSTER_PARTY then
             r, g, b, a = 0.6, 0.8, 1, 1 -- light blue
         else
             r, g, b, a = 1, 1, 1, 1     -- white (SAY)
@@ -142,7 +152,7 @@ local function _MessageReset(pool, msg)
     msg.message:SetText('')
     -- Restore default portrait-present anchors so pool reuse starts clean.
     msg.message:ClearAllPoints()
-    msg.message:SetPoint('TOPLEFT',     msg.widget, 'TOPLEFT',     62,  0)
+    msg.message:SetPoint('TOPLEFT', msg.widget, 'TOPLEFT', 62, 0)
     msg.message:SetPoint('BOTTOMRIGHT', msg.widget, 'BOTTOMRIGHT', -10, 0)
 end
 
@@ -334,7 +344,9 @@ end
 ---@class BanterContainerSubWidgets
 ---@field portrait      Texture
 ---@field portraitFrame Frame
+---@field portrait3D    PlayerModel
 ---@field name          FontString
+---@field channelLabel  FontString
 ---@field messages      BanterContainerMessage[]
 ---@field textureBottom Frame
 ---@field textureTop    Frame
@@ -411,6 +423,12 @@ local function _BantCreate()
     local portrait = portraitContainer:Texture('ARTWORK')
     portrait:SetAllPoints(portraitContainer)
 
+    -- 3D model portrait (PlayerModel, larger than the 2D texture; hidden by default)
+    local portrait3D = CreateFrame('PlayerModel', nil, portraitContainer.frame)
+    portrait3D:SetSize(48, 48)
+    portrait3D:SetPoint('CENTER', portraitContainer.frame, 'CENTER')
+    portrait3D:Hide()
+
     local portraitBorder = portraitContainer:Texture('OVERLAY', {
         atlas = 'auctionhouse-itemicon-border-artifact',
         size = { w = 64, h = 64 }
@@ -428,14 +446,24 @@ local function _BantCreate()
     name.fs:SetShadowColor(0, 0, 0, 1)
     name.fs:SetShadowOffset(2, -2)
 
+    -- Channel label (players only; empty for NPCs)
+    local channelLabel = L:FontString(nameOverlay, { justifyH = 'RIGHT', maxLines = 1 })
+    channelLabel.fs:SetFont(fetchFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
+    channelLabel.fs:SetTextColor(1, 1, 1, 0.75)
+    channelLabel:SetPoint('BOTTOMRIGHT', tTex, 'BOTTOMRIGHT', -6, 13)
+    channelLabel.fs:SetShadowColor(0, 0, 0, 1)
+    channelLabel.fs:SetShadowOffset(2, -2)
+
     local widget = container.frame --[[@as BanterContainerWidget]]
     widget.subWidgets = {
-        portrait      = portrait.tex,
+        portrait = portrait.tex,
         portraitFrame = portraitContainer.frame,
-        name          = name.fs,
-        messages      = {},
+        portrait3D = portrait3D,
+        name = name.fs,
+        channelLabel = channelLabel.fs,
+        messages = {},
         textureBottom = bottomContainer.frame,
-        textureTop    = topContainer.frame,
+        textureTop = topContainer.frame,
     }
 
     i.widget = widget
@@ -470,7 +498,10 @@ local function _BantReset(pool, bant)
     bant.data = nil
     bant.widget.subWidgets.name:SetText('')
     bant.widget.subWidgets.name:Show()
+    bant.widget.subWidgets.channelLabel:SetText('')
     bant.widget.subWidgets.portrait:SetTexture(nil)
+    bant.widget.subWidgets.portrait3D:ClearModel()
+    bant.widget.subWidgets.portrait3D:Hide()
     bant.widget.subWidgets.portraitFrame:Show()
 end
 

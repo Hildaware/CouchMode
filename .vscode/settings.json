@@ -515,7 +515,12 @@
         "PET_STABLE_SLOT_LOCKED_TOOLTIP",
         "STABLE_SUMMONED_PET_LABEL",
         "PARTY_POSE_VICTORY",
-        "PARTY_POSE_DEFEAT"
+        "PARTY_POSE_DEFEAT",
+        "CHAT_MSG_SAY",
+        "UnitTokenFromGUID",
+        "UnitDisplayID",
+        "GetPlayerInfoByGUID",
+        "ChatTypeInfo"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [
