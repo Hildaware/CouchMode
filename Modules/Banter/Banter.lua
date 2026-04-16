@@ -83,11 +83,10 @@ end
 ---@param name string
 function banter:OnMonsterMessage(event, message, name)
     local npcID, displayId = addon.BanterData.GetByName(name)
-    if not npcID or not displayId then return end
 
     ---@type BanterData
     local data = {
-        id = npcID,
+        id = npcID or 0,
         displayId = displayId,
         name = name,
         message = message,

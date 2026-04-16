@@ -32,7 +32,7 @@ end
 ---@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
 ---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
----@field Format         fun(self: BanterContainerMessage, text: string, type: string)
+---@field Format         fun(self: BanterContainerMessage, text: string, type: string, noPortrait: boolean?)
 
 
 local messageProto = {}
@@ -49,7 +49,8 @@ local PLAYER_CHAT_INFO_KEY = {
 
 ---@param text string
 ---@param type string  CHAT_MSG_* event name
-function messageProto:Format(text, type)
+---@param noPortrait boolean?
+function messageProto:Format(text, type, noPortrait)
     local d = db()
     local r, g, b, a = d.msgFontColor.r, d.msgFontColor.g, d.msgFontColor.b, d.msgFontColor.a
     local messageSize = d.msgFontSize
@@ -73,12 +74,15 @@ function messageProto:Format(text, type)
         end
     end
 
-    self.message:SetWidth(d.itemWidth - 72) -- 48 portrait indent + 24 right pad
+    local leftPad = noPortrait and 8 or 48
+    local rightPad = noPortrait and 8 or 24
+    local availableWidth = d.itemWidth - leftPad - rightPad
+
+    self.message:SetWidth(availableWidth)
     self.message:SetText(text)
     self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
 
     -- Scale up single-line messages
-    local availableWidth = d.itemWidth - 72
     local bumpedSize = math.floor(messageSize * 1.3)
     self.message:SetFont(fetchFont(d.msgFontFace), bumpedSize, 'OUTLINE')
     if self.message:GetUnboundedStringWidth() <= availableWidth then
@@ -102,8 +106,8 @@ function messageProto:Format(text, type)
     local topPad = math.floor((contentHeight - textHeight) / 2) - correction
     self.topPad = topPad
     self.message:ClearAllPoints()
-    self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', 48, -topPad)
-    self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -24, -topPad)
+    self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', leftPad, -topPad)
+    self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -rightPad, -topPad)
 
     if d.revealText then
         self.message:SetText('')
@@ -329,7 +333,7 @@ function controllerProto:FormatMessage(msg, text, type)
     -- messageBg is anchored by two points (BOTTOMLEFT/TOPRIGHT) so its width follows automatically.
 
     local duration = banter.CalculateDisplayDuration(text)
-    msg:Format(text, type)
+    msg:Format(text, type, self.parent.noPortrait)
 
     local expiryTime = GetTime() + duration
     msg.expiryTime = expiryTime         -- per-message, so multiple messages don't trample each other
@@ -379,6 +383,7 @@ end
 ---@field minimumHeight  number
 ---@field expiryTime     number?
 ---@field isBubbleMode   boolean?
+---@field noPortrait     boolean?
 ---@field widget         BanterContainerWidget
 ---@field animationGroup AnimationGroup?
 ---@field controller     BanterContainerController

@@ -170,6 +170,7 @@ function banter:_BuildBant(data)
     end
 
     local portrait3D = bant.widget.subWidgets.portrait3D
+    local hasPortrait = (data.displayId and data.displayId > 0) or data.unitToken
 
     if data.displayId and data.displayId > 0 then
         portrait3D:SetDisplayInfo(data.displayId)
@@ -181,6 +182,11 @@ function banter:_BuildBant(data)
         portrait3D:SetCamera(0)
         portrait3D:SetPortraitZoom(1)
         portrait3D:SetAnimation(60)
+    end
+
+    bant.noPortrait = not hasPortrait
+    if bant.noPortrait then
+        bant.widget.subWidgets.portraitFrame:Hide()
     end
 
     local channelLabel = bant.widget.subWidgets.channelLabel
