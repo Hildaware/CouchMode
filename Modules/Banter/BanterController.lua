@@ -51,10 +51,6 @@ end
 
 ---@param bantToRemove table
 function banter:RemoveBant(bantToRemove)
-    -- Bubble-mode bants are not in the scroll stack; fade and release directly.
-    -- Clear isBubbleMode immediately so a second call (e.g. OnHide racing with the
-    -- expiry timer while the widget is still fading) hits the nil-index early return
-    -- below instead of scheduling a duplicate Release.
     if bantToRemove.isBubbleMode then
         bantToRemove.isBubbleMode = false
         UIFrameFadeOut(bantToRemove.widget, 0.5, 1, 0)
@@ -85,10 +81,6 @@ function banter:RemoveBant(bantToRemove)
         if #self.instance.bants == 0 then self.instance.widget:Hide() end
     end)
 
-    -- Slide bants that were above the gap downward using SetPoint-based OnUpdate
-    -- instead of Translation animations. PlayerModel (portrait3D) frames do not
-    -- follow Translation offsets (they read the real anchor position), so we must
-    -- move the frame via SetPoint each tick so the model renderer stays in sync.
     local slideDistance = bantToRemove.widget:GetHeight() + padding
     local DURATION = 0.5
     local repositioned = false
@@ -105,7 +97,7 @@ function banter:RemoveBant(bantToRemove)
         -- Anchor to the instance widget so we can drive Y directly each frame.
         local instanceWidget = self.instance.widget
         local startY = bant.widget:GetBottom() - instanceWidget:GetBottom()
-        local endY   = startY - slideDistance
+        local endY = startY - slideDistance
         local elapsed = 0
 
         bant.widget:ClearAllPoints()
@@ -113,8 +105,8 @@ function banter:RemoveBant(bantToRemove)
 
         bant.widget:SetScript('OnUpdate', function(f, dt)
             elapsed = elapsed + dt
-            local t      = math.min(elapsed / DURATION, 1)
-            local smooth = t * t * (3 - 2 * t)  -- smoothstep (IN_OUT equivalent)
+            local t = math.min(elapsed / DURATION, 1)
+            local smooth = t * t * (3 - 2 * t) -- smoothstep (IN_OUT equivalent)
             f:ClearAllPoints()
             f:SetPoint('BOTTOMLEFT', instanceWidget, 'BOTTOMLEFT', padding, startY + (endY - startY) * smooth)
             if t >= 1 then
@@ -134,9 +126,6 @@ end
 
 --#region ── Bant construction ────────────────────────────────────────────────
 
--- Shared bant initialisation: creates a bant from the pool, sets name/portrait,
--- and formats the first message. Does NOT parent to the instance widget or show
--- the bant widget — callers are responsible for placement and visibility.
 ---@param data BanterData
 ---@return BanterContainerMain bant
 ---@return BanterContainerMessage messageWidget
@@ -349,11 +338,12 @@ function banter:SpawnBubbleBant(data)
                 end
             end
 
-            -- Remove our bant as soon as the game's bubble disappears.
             bubble:HookScript('OnHide', function()
-                if bant.widget:IsShown() then
-                    self:RemoveBant(bant)
-                end
+                C_Timer.After(1.0, function()
+                    if bant.widget:IsShown() then
+                        self:RemoveBant(bant)
+                    end
+                end)
             end)
 
             bant.widget:SetAlpha(0)
@@ -408,8 +398,8 @@ function banter:AddBants(data)
         end
     end
 
-    -- Route to bubble mode when enabled. Falls back to scroll log if no bubble is found.
-    if db().reskinBubbles then
+    -- Route to bubble mode when enabled, but never during combat.
+    if db().reskinBubbles and not InCombatLockdown() then
         self:SpawnBubbleBant(data)
         if db().hideScrollLog then return end
     end

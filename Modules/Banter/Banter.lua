@@ -25,6 +25,9 @@ banter.EVENTS = {
     CHAT_MSG_PARTY = 'CHAT_MSG_PARTY',
     CHAT_MSG_RAID = 'CHAT_MSG_RAID',
     CHAT_MSG_INSTANCE_CHAT = 'CHAT_MSG_INSTANCE_CHAT',
+    CHAT_MSG_PARTY_LEADER = 'CHAT_MSG_PARTY_LEADER',
+    CHAT_MSG_INSTANCE_CHAT_LEADER = 'CHAT_MSG_INSTANCE_CHAT_LEADER',
+    CHAT_MSG_RAID_LEADER = 'CHAT_MSG_RAID_LEADER',
 }
 
 local TEST_ARGS = {
@@ -81,13 +84,15 @@ end
 ---@param event string  e.g. 'CHAT_MSG_MONSTER_YELL'
 ---@param message string
 ---@param name string
-function banter:OnMonsterMessage(event, message, name)
+function banter:OnMonsterMessage(event, message, name, _, _, _, _, _, _, _, _, _, guid)
     local npcID, displayId = addon.BanterData.GetByName(name)
+    local unitToken = (not displayId) and guid and UnitTokenFromGUID(guid) or nil
 
     ---@type BanterData
     local data = {
         id = npcID or 0,
         displayId = displayId,
+        unitToken = unitToken,
         name = name,
         message = message,
         type = event,
@@ -102,10 +107,8 @@ function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _,
     local playerUID = guid and guid:match('Player%-%d+%-(%x+)')
     local playerId = playerUID and tonumber(playerUID, 16) or 0
 
-    -- Resolve unit token for portrait (works for player, party, raid, target, etc.)
     local unitToken = guid and UnitTokenFromGUID(guid)
 
-    -- Derive short channel label from event name: "CHAT_MSG_INSTANCE_CHAT" -> "INSTANCE"
     local channel = event:gsub('^CHAT_MSG_', '')
     if channel == 'INSTANCE_CHAT' then channel = 'INSTANCE' end
 
@@ -152,6 +155,9 @@ function banter:OnEnable()
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY, 'OnPlayerMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID, 'OnPlayerMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER, 'OnPlayerMessage')
 
     if db().disableTalkingHead then
         applyTalkingHeadSuppression(true)
@@ -164,7 +170,7 @@ function banter:OnEnable()
     end
 
     local itemWidth = db().itemWidth
-    local maxItems = db().maxItems
+    local maxItems = 5
     local containerHeight = (maxItems * self.bantProto.minimumHeight) + ((maxItems + 1) * self.padding)
 
     ---@type BanterContainerFrame
@@ -221,6 +227,9 @@ function banter:OnDisable()
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY)
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID)
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER)
 
     if self.instance then
         self.instance.widget:Hide()
@@ -273,7 +282,7 @@ end
 
 function banter:GetOptions()
     return 'banter', {
-        name = 'Banter (NPC Dialogue)',
+        name = 'Chat Bubbles',
         type = 'group',
         order = 20,
         args = {

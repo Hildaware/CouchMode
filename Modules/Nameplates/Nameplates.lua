@@ -93,6 +93,7 @@ function nameplates:GetDefaults()
             alwaysShowPlayers   = 'never',
             alwaysShowImportant = false,
             occludedAlpha       = 0,
+            disableSoftTargetFriendInCombat = false,
         },
     }
 end
@@ -226,6 +227,16 @@ function nameplates:GetOptions()
                                         step  = 1,
                                         get   = function() return tonumber(GetCVar('SoftTargetFriendRange')) end,
                                         set   = function(_, value) SetCVar('SoftTargetFriendRange', value) end,
+                                    },
+                                    disableInCombat = {
+                                        name  = 'Disable in Combat',
+                                        desc  = 'Disable friendly soft-targeting while in combat. Restores your setting when combat ends.',
+                                        type  = 'toggle',
+                                        order = 3,
+                                        get   = function() return npDB().disableSoftTargetFriendInCombat end,
+                                        set   = function(_, value)
+                                            npDB().disableSoftTargetFriendInCombat = value
+                                        end,
                                     },
                                 },
                             },

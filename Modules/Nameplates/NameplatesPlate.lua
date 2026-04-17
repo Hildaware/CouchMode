@@ -347,6 +347,17 @@ end
 function nameplates:OnCombatChanged(event)
     inCombat = (event == "PLAYER_REGEN_DISABLED")
     nameplates.inCombat = inCombat
+
+    if addon.db.profile.nameplates.disableSoftTargetFriendInCombat then
+        if inCombat then
+            nameplates._softTargetFriendSaved = GetCVar('SoftTargetFriend')
+            SetCVar('SoftTargetFriend', 0)
+        elseif nameplates._softTargetFriendSaved then
+            SetCVar('SoftTargetFriend', nameplates._softTargetFriendSaved)
+            nameplates._softTargetFriendSaved = nil
+        end
+    end
+
     refreshAll()
 end
 
