@@ -399,9 +399,23 @@ function banter:AddBants(data)
     end
 
     -- Route to bubble mode when enabled, but never during combat.
-    if db().reskinBubbles and not InCombatLockdown() then
-        self:SpawnBubbleBant(data)
-        if db().hideScrollLog then return end
+    if db().reskinBubbles then
+        if not InCombatLockdown() then
+            self:SpawnBubbleBant(data)
+            if db().hideScrollLog then return end
+        else
+            -- In combat: hide the original bubble so it doesn't overlap the scroll log.
+            self:FindBubbleForMessage(data.message, function(bubble)
+                if not bubble then return end
+                bubble:SetAlpha(0)
+                for _, region in ipairs({ bubble:GetRegions() }) do
+                    region:SetAlpha(0)
+                end
+                for _, child in ipairs({ bubble:GetChildren() }) do
+                    child:SetAlpha(0)
+                end
+            end)
+        end
     end
 
     -- Scroll log path.
