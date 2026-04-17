@@ -1,29 +1,29 @@
 ---@diagnostic disable: inject-field
 
-local addon_name        = ...
+local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon             = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map               = addon:GetModule('Minimap')
+local map = addon:GetModule('Minimap')
 
-local _G                = _G
-local math_min          = math.min
-local math_max          = math.max
-local math_floor        = math.floor
-local pairs             = pairs
-local pcall             = pcall
+local _G = _G
+local math_min = math.min
+local math_max = math.max
+local math_floor = math.floor
+local pairs = pairs
+local pcall = pcall
 
-local CreateFrame       = _G.CreateFrame
-local C_AddOns          = _G.C_AddOns
-local C_Map             = _G.C_Map
-local C_QuestLog        = _G.C_QuestLog
-local Mixin             = _G.Mixin
-local CreateFromMixins  = _G.CreateFromMixins
+local CreateFrame = _G.CreateFrame
+local C_AddOns = _G.C_AddOns
+local C_Map = _G.C_Map
+local C_QuestLog = _G.C_QuestLog
+local Mixin = _G.Mixin
+local CreateFromMixins = _G.CreateFromMixins
 local GetCursorPosition = _G.GetCursorPosition
 
-local ConsolePort       = _G['ConsolePort'] ---@type any
+local ConsolePort = _G['ConsolePort'] ---@type any
 
 -- Patches global pin/provider mixins once to fix crashes and add tooltip support.
 local function setup_mixin_patches()
@@ -222,7 +222,7 @@ local function create_world_map()
         local scale = self:GetCanvasScale()
         if scale == 0 then scale = 1 end
         local left = scroll_child:GetLeft() or 0
-        local top  = scroll_child:GetTop() or 0
+        local top = scroll_child:GetTop() or 0
         return Saturate(self:NormalizeHorizontalSize(x / scale - left)),
             Saturate(self:NormalizeVerticalSize(top - y / scale))
     end
@@ -304,18 +304,18 @@ local function create_world_map()
 
     if map_frame.OnLoad then map_frame:OnLoad() end
 
-    -- Patch AcquirePin to counter-scale pins on creation, handling async providers
-    -- (e.g. WorldQuestDataProvider ticker fires every 0.5s outside of apply_zoom).
-    -- Pins with ignoreGlobalPinScale manage their own sizing, so skip those.
-    local _orig_acquire_pin = map_frame.AcquirePin
-    if _orig_acquire_pin then
-        map_frame.AcquirePin = function(self, pinTemplate, ...)
-            local pin = _orig_acquire_pin(self, pinTemplate, ...)
-            if pin and not pin.ignoreGlobalPinScale then
-                pin:SetScale(zoom > 0 and (1 / zoom) or 1)
+    -- Hook AcquirePin to counter-scale pins on creation.
+    if map_frame.AcquirePin then
+        hooksecurefunc(map_frame, "AcquirePin", function(self, pinTemplate)
+            local pool = self.pinPools and self.pinPools[pinTemplate]
+            if pool then
+                pool:EnumerateActive(function(pin)
+                    if not pin.ignoreGlobalPinScale then
+                        pin:SetScale(zoom > 0 and (1 / zoom) or 1)
+                    end
+                end)
             end
-            return pin
-        end
+        end)
     end
 
     local _orig_refresh = map_frame.RefreshDetailLayers
@@ -355,7 +355,7 @@ local function create_world_map()
         if not parentID or parentID <= 0 then return false end
 
         local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(parentID)
-        local layer  = layers and layers[1]
+        local layer = layers and layers[1]
         if layer and layer.layerWidth and layer.layerWidth > 0 then
             map.worldMapArtW = layer.layerWidth
             map.worldMapArtH = layer.layerHeight
@@ -399,7 +399,7 @@ local function create_world_map()
         if not map.worldMap then return end
 
         local layers = C_Map.GetMapArtLayers and C_Map.GetMapArtLayers(childMapID)
-        local layer  = layers and layers[1]
+        local layer = layers and layers[1]
         if layer and layer.layerWidth and layer.layerWidth > 0 then
             map.worldMapArtW = layer.layerWidth
             map.worldMapArtH = layer.layerHeight
