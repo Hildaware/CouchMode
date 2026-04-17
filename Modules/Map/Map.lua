@@ -47,17 +47,21 @@ function map:OnDisable()
         Minimap:SetMaskTexture("Textures\\MinimapMask")
 
         local hybrid_minimap = map.hybridMinimap ---@type any
-        if hybrid_minimap and hybrid_minimap.MapCanvas and hybrid_minimap.CircleMask then
-            hybrid_minimap:ClearAllPoints()
-            hybrid_minimap:SetAllPoints(Minimap)
-            hybrid_minimap.MapCanvas:SetMaskTexture(hybrid_minimap.CircleMask)
-            hybrid_minimap.MapCanvas:SetUseMaskTexture(false)
-            hybrid_minimap.CircleMask:ClearAllPoints()
-            hybrid_minimap.CircleMask:SetAllPoints(hybrid_minimap.MapCanvas)
-            if map.origCircleMaskTexture then
-                hybrid_minimap.CircleMask:SetTexture(map.origCircleMaskTexture)
+        if hybrid_minimap then
+            if hybrid_minimap.MapCanvas and hybrid_minimap.CircleMask then
+                hybrid_minimap:ClearAllPoints()
+                hybrid_minimap:SetAllPoints(Minimap)
+                hybrid_minimap.MapCanvas:SetMaskTexture(hybrid_minimap.CircleMask)
+                hybrid_minimap.MapCanvas:SetUseMaskTexture(false)
+                hybrid_minimap.CircleMask:ClearAllPoints()
+                hybrid_minimap.CircleMask:SetAllPoints(hybrid_minimap.MapCanvas)
+                if map.origCircleMaskTexture then
+                    hybrid_minimap.CircleMask:SetTexture(map.origCircleMaskTexture)
+                end
+                hybrid_minimap.MapCanvas:SetUseMaskTexture(true)
             end
-            hybrid_minimap.MapCanvas:SetUseMaskTexture(true)
+            hybrid_minimap:Enable() ---@diagnostic disable-line: undefined-field
+            map.hybridMinimap = nil
         end
 
         if map.blizzTracking then
@@ -88,6 +92,8 @@ function map:OnDisable()
 
         ---@diagnostic disable-next-line: undefined-global
         MinimapCluster:Show()
+        if MinimapCluster.BorderTop then MinimapCluster.BorderTop:Show() end ---@diagnostic disable-line: undefined-field
+        if MinimapCluster.IndicatorFrame then MinimapCluster.IndicatorFrame:Show() end ---@diagnostic disable-line: undefined-field
         if _G.MinimapBackdrop then _G.MinimapBackdrop:Show() end ---@diagnostic disable-line: undefined-global
 
         map.origParent = nil

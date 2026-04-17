@@ -449,7 +449,6 @@ local function create_world_map()
     plm:AddFrameLevel("PIN_FRAME_LEVEL_WORLD_QUEST", 500)
     plm:AddFrameLevel("PIN_FRAME_LEVEL_ACTIVE_QUEST", C_QuestLog.GetMaxNumQuests())
     plm:AddFrameLevel("PIN_FRAME_LEVEL_SUPER_TRACKED_QUEST")
-    plm:AddFrameLevel("PIN_FRAME_LEVEL_GROUP_MEMBER")
     if _G.QuestOfferDataProviderMixin then ---@diagnostic disable-line: undefined-global
         plm:AddFrameLevel("PIN_FRAME_LEVEL_QUEST_OFFER", _G.QuestOfferDataProviderMixin.PIN_LEVEL_RANGE) ---@diagnostic disable-line: undefined-global, undefined-field
     end
@@ -459,6 +458,7 @@ local function create_world_map()
     plm:AddFrameLevel("PIN_FRAME_LEVEL_FLIGHT_POINT")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_MAP_LINK")
     plm:AddFrameLevel("PIN_FRAME_LEVEL_AREA_POI")
+    plm:AddFrameLevel("PIN_FRAME_LEVEL_GROUP_MEMBER")
 
     setup_mixin_patches()
 
@@ -492,7 +492,22 @@ local function create_world_map()
         function(dp) dp.AdjustDetailLayerAlpha = function() end end)
     add_provider("MapCanvasCursorDataProviderMixin")
     add_provider("MapExplorationDataProviderMixin")
-    add_provider("MapHighlightDataProviderMixin")
+    add_provider("MapHighlightDataProviderMixin", nil, nil, function(dp)
+        local orig_added = dp.OnAdded
+        dp.OnAdded = function(self, mapCanvas)
+            orig_added(self, mapCanvas)
+            if self.pin then
+                self.pin.ignoreGlobalPinScale = true
+                -- Also re-apply position after canvas resizes (map navigation changes canvas size).
+                local orig_size_changed = self.pin.OnCanvasSizeChanged
+                self.pin.OnCanvasSizeChanged = function(pin)
+                    orig_size_changed(pin)
+                    pin:ApplyCurrentPosition()
+                end
+                self.pin:ApplyCurrentPosition()
+            end
+        end
+    end)
     add_provider("AreaLabelDataProviderMixin")
     add_provider("VignetteDataProviderMixin")
     add_provider("QuestDataProviderMixin", "wmDpActiveQuests", "worldMapShowActiveQuests")
@@ -668,7 +683,7 @@ function map.onHideWorldMap()
     map.onShowMinimap()
 
     if map.worldMap then
-        map.startFrameFade(map.worldMap, map.worldMapFade, 0)
+        map.startFrameFade(map.worldMap, map.worldMapFade, 0, true)
     end
 end
 

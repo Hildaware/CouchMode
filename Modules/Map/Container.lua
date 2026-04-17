@@ -23,6 +23,17 @@ local ZOOM_BAR_H = 10
 local FADE_DURATION = 0.5
 local TRANSITION_DURATION = 0.25
 
+local function update_fade(state, frame, elapsed, duration)
+    if not state.active or not frame then return end
+    state.elapsed = state.elapsed + elapsed
+    local t = math_min(1, state.elapsed / (duration or TRANSITION_DURATION))
+    frame:SetAlpha(state.from + (state.to - state.from) * t)
+    if t >= 1 then
+        state.active = false
+        if state.hideOnComplete then frame:Hide() end
+    end
+end
+
 local ConsolePort = _G['ConsolePort'] ---@type any
 
 --#region ── Container ────────────────────────────────────────────────────────
@@ -266,20 +277,10 @@ function map.setupContainerScripts()
     end
 
     map.container:SetScript("OnUpdate", function(_, elapsed)
-        local function update_fade(state, frame, duration)
-            if not state.active or not frame then return end
-            state.elapsed = state.elapsed + elapsed
-            local t = math_min(1, state.elapsed / (duration or TRANSITION_DURATION))
-            frame:SetAlpha(state.from + (state.to - state.from) * t)
-            if t >= 1 then
-                state.active = false
-                if state.hideOnComplete then frame:Hide() end
-            end
-        end
-        update_fade(map.containerFade, map.container, FADE_DURATION)
-        update_fade(map.minimapFade, Minimap)
-        update_fade(map.worldMapFade, map.worldMap)
-        update_fade(map.toolbarFade, map.toolbar, FADE_DURATION)
+        update_fade(map.containerFade, map.container, elapsed, FADE_DURATION)
+        update_fade(map.minimapFade, Minimap, elapsed)
+        update_fade(map.worldMapFade, map.worldMap, elapsed)
+        update_fade(map.toolbarFade, map.toolbar, elapsed, FADE_DURATION)
 
         -- Grow/shrink transition (Minimap frame, delegated to Minimap.lua)
         map.updateGrowTransition(elapsed)
@@ -325,6 +326,11 @@ end
 
 -- Toggle grow: press to grow, press again to shrink
 local function toggle_grow()
+    -- Guard: ignore re-toggle while animation is already running
+    if map.growTransition.active then return end
+
+    local from_w, from_h = map.container:GetSize()
+
     -- Shrinking
     if map.grown then
         map.grown = false
@@ -348,11 +354,8 @@ local function toggle_grow()
             end
         end
     end
-    -- Guard: ignore re-toggle while animation is already running
-    if map.growTransition.active then return end
 
     local db = addon.db.profile.minimap ---@type MinimapDB
-    local from_w, from_h = map.container:GetSize()
     local size = map.grown and db.growSize or db.size
     local shape = map.grown and db.growShape or db.shape
     local to_w, to_h = map.MapUtils.size_for_shape(shape, size)

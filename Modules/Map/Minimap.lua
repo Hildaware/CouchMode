@@ -275,6 +275,11 @@ function map.createFrame()
 
     -- Hide all Blizzard chrome
     MinimapCluster:Hide()
+    -- Explicitly hide sub-frames that respond to events and can resurface independently
+    -- (BorderTop is the NineSlice header; IndicatorFrame hosts mail + crafting-order icons)
+    if MinimapCluster.BorderTop then MinimapCluster.BorderTop:Hide() end ---@diagnostic disable-line: undefined-field
+    if MinimapCluster.IndicatorFrame then MinimapCluster.IndicatorFrame:Hide() end ---@diagnostic disable-line: undefined-field
+
     if _G.MinimapBackdrop then _G.MinimapBackdrop:Hide() end ---@diagnostic disable-line: undefined-global
     if Minimap.ZoomHitArea then Minimap.ZoomHitArea:Hide() end ---@diagnostic disable-line: undefined-field
 
@@ -289,6 +294,25 @@ function map.createFrame()
         Minimap.ZoomOut.IsMouseOver = function() return true end
     end
 
+    -- Suppress HybridMinimap: MinimapMixin:OnEvent(PLAYER_ENTERING_WORLD) calls
+    -- HybridMinimap:Enable() on every zone transition for supported maps. Wrap the
+    -- Minimap's OnEvent so we can immediately disable it again after.
+    map.hybridMinimap = _G['HybridMinimap'] ---@diagnostic disable-line: undefined-global
+    if map.hybridMinimap then map.hybridMinimap:Disable() end ---@diagnostic disable-line: undefined-field
+    local orig_minimap_on_event = Minimap:GetScript("OnEvent")
+    if orig_minimap_on_event then
+        Minimap:SetScript("OnEvent", function(self, event, ...)
+            orig_minimap_on_event(self, event, ...)
+            if event == "PLAYER_ENTERING_WORLD" then
+                -- HybridMinimap may have been loaded and enabled by the original handler
+                local hmm = map.hybridMinimap or _G['HybridMinimap'] ---@diagnostic disable-line: undefined-global
+                if hmm then
+                    map.hybridMinimap = hmm; hmm:Disable()
+                end
+            end
+        end)
+    end
+
     map.setupContainerScripts()
     map.createZoneText()
 
@@ -298,14 +322,13 @@ function map.createFrame()
         map.zoomMinimap(delta)
     end)
 
-    Minimap:HookScript("OnEnter", function()
-        if Minimap.ZoomOut then
-            Minimap.ZoomOut:Hide()
-        end
-        if Minimap.ZoomIn then
-            Minimap.ZoomIn:Hide()
-        end
-    end)
+    -- Suppress Blizzard's built-in Minimap behaviours entirely:
+    -- OnEnter shows ZoomIn/ZoomOut and installs a GameTooltip OnUpdate (coordinates tooltip)
+    -- OnLeave hides those buttons (ZoomIn.IsMouseOver override above prevents that, but
+    --   clearing it is cleaner)
+    -- OnClick pings the map — not wanted
+    Minimap:SetScript("OnEnter", nil)
+    Minimap:SetScript("OnLeave", nil)
 
     if ConsolePort then
         map.container:EnableGamePadButton(true)
