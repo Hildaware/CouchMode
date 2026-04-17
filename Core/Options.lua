@@ -13,7 +13,10 @@ local options = addon:NewModule('Options')
 
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
-local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'Banter' }
+local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'PlayerManaBar', 'Banter' }
+
+-- Modules whose options are nested together under a single "Player Bars" group.
+local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerManaBar = true }
 
 function options:OnInitialize()
     -- Collect defaults from each module.
@@ -31,13 +34,25 @@ function options:OnInitialize()
 
     -- Collect settings panels from each module.
     local settings = { type = 'group', args = {} }
+    local playerBarsGroup = {
+        name        = 'Player Bars',
+        type        = 'group',
+        order       = 2,
+        childGroups = 'tab',
+        args        = {},
+    }
     for _, modName in ipairs(MODULES) do
         local mod = addon:GetModule(modName) --[[@as OptionsModule]]
         if mod.GetOptions then
             local key, group = mod:GetOptions()
-            settings.args[key] = group
+            if PLAYER_BAR_MODULES[modName] then
+                playerBarsGroup.args[key] = group
+            else
+                settings.args[key] = group
+            end
         end
     end
+    settings.args['playerBars'] = playerBarsGroup
 
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, settings)
     LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Couch Mode')

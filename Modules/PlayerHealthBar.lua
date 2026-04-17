@@ -4,36 +4,33 @@ local addonName = ...
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class PlayerHealthBar: AceModule
----@field preview         boolean
----@field visibilityCurve table
+---@field preview          boolean
+---@field visibilityCurve  table
+---@field targetValue      number|nil
+---@field displayedValue   number|nil
+---@field targetAbsorb     number|nil
+---@field displayedAbsorb  number|nil
+---@field targetMax        number|nil
+---@field glowActive       boolean
 local healthBar = addon:NewModule('PlayerHealthBar', 'AceEvent-3.0')
 ---@cast healthBar +AceEvent-3.0
-
----@type CastUtil
-local CastUtil = addon.CastUtil
 
 local MEDIA = {
     TEXTURE = 'interface/hud/uiwowlabsactionbar',
     BAR_ATLAS = 'plunderstorm-stormbar-fill',
     BORDER_ATLAS = 'plunderstorm-stormbar-border',
     BG_ATLAS = 'plunderstorm-stormbar-background',
-    COMBAT = 'plunderstorm-toast-swords'
+    COMBAT = 'plunderstorm-toast-swords',
 }
 
----@class PlayerHealthBarGUI
----@field frame           Frame
----@field bg              Texture
----@field bar             LayoutStatusBar
----@field absorbBar       LayoutStatusBar
----@field border          Texture
----@field healthText      LayoutFontString
----@field combatIconFrame Frame
----@field glowFrame       Frame
+---@class PlayerHealthBarGUI: StatusBarBaseGUI
+---@field glowFrame        Frame
+---@field glowAnim         AnimationGroup
+---@field combatIconFrame  Frame
+---@field combatModelScene ModelScene
 local gui = {}
 
 local healthColorCurve
-
-local SMOOTH_RATE = 2 -- exponential lerp factor for health bar (higher = snappier)
 
 local function cfg()
     return addon.db.profile.playerHealthBar
@@ -43,23 +40,17 @@ end
 
 function healthBar:Refresh()
     if not gui.frame then return end
-    local c = cfg()
-
-    gui.frame:SetSize(c.width, c.height)
-    gui.frame:ClearAllPoints()
-    gui.frame:SetPoint('CENTER', UIParent, 'CENTER', c.xPos, c.yPos)
-
-    gui.frame:SetMovable(not c.locked)
-    gui.frame:EnableMouse(not c.locked)
-
-    gui.healthText:SetShown(c.showText)
+    addon.StatusBarBase.Refresh(gui, cfg())
+    -- Always keep mouse enabled so right-click works regardless of lock state.
+    -- Dragging is controlled independently via SetMovable (set by Refresh above).
+    gui.frame:EnableMouse(true)
 end
 
 --#endregion
 
 --#region ── Health update ─────────────────────────────────────────────────────
 
-function healthBar:UpdateHealth()
+function healthBar:UpdateValue()
     local current = UnitHealth('player')
     local maxHP = UnitHealthMax('player')
     local absorb = UnitGetTotalAbsorbs('player') or 0
@@ -72,15 +63,15 @@ function healthBar:UpdateHealth()
         gui.bar:SetValue(current)
         gui.absorbBar:SetMinMaxValues(0, maxHP)
         gui.absorbBar:SetValue(current)
-        self.targetHealth = nil
-        self.displayedHealth = nil
+        self.targetValue = nil
+        self.displayedValue = nil
         self.targetAbsorb = nil
         self.displayedAbsorb = nil
     else
-        self.targetMaxHP = maxHP
-        if self.displayedHealth == nil then
+        self.targetMax = maxHP
+        if self.displayedValue == nil then
             -- First update: snap rather than animate from zero
-            self.displayedHealth = current
+            self.displayedValue = current
             gui.bar:SetValue(current)
         end
         if self.displayedAbsorb == nil then
@@ -88,7 +79,7 @@ function healthBar:UpdateHealth()
             gui.absorbBar:SetMinMaxValues(0, maxHP)
             gui.absorbBar:SetValue(math.min(current + absorb, maxHP))
         end
-        self.targetHealth = current
+        self.targetValue = current
         self.targetAbsorb = absorb
     end
 
@@ -102,8 +93,8 @@ function healthBar:UpdateHealth()
     elseif c.colorByPct then
         if not healthColorCurve then
             healthColorCurve = C_CurveUtil.CreateColorCurve()
-            healthColorCurve:AddPoint(0.0, CreateColor(1, 0, 0)) -- red   at 0%
-            healthColorCurve:AddPoint(0.5, CreateColor(1, 1, 0)) -- yellow at 50%
+            healthColorCurve:AddPoint(0.0, CreateColor(1, 0, 0)) -- red    at   0%
+            healthColorCurve:AddPoint(0.5, CreateColor(1, 1, 0)) -- yellow at  50%
             healthColorCurve:AddPoint(1.0, CreateColor(0, 1, 0)) -- green  at 100%
         end
         local color = UnitHealthPercent('player', true, healthColorCurve)
@@ -116,7 +107,7 @@ function healthBar:UpdateHealth()
 
     -- Text
     if c.showText then
-        gui.healthText:SetFormattedText('%d / %d', current, maxHP)
+        gui.label:SetFormattedText('%d / %d', current, maxHP)
     end
 
     -- Low-health glow
@@ -133,11 +124,22 @@ function healthBar:UpdateHealth()
     end
 
     -- Visibility
-    if self.preview or not c.autoHide then
+    if self.preview then
         gui.frame:SetAlpha(1)
+    elseif c.showWhenNotFull then
+        -- Show when not full: evaluate via C API so secret values never touch Lua arithmetic.
+        -- When combined with showOnlyInCombat, combat overrides to always-show.
+        if c.showOnlyInCombat and UnitAffectingCombat('player') then
+            gui.frame:SetAlpha(1)
+        else
+            gui.frame:SetAlpha(UnitHealthPercent('player', true, self.notFullCurve))
+        end
+    elseif c.showOnlyInCombat and not UnitAffectingCombat('player') then
+        gui.frame:SetAlpha(0)
+    elseif c.autoHide then
+        gui.frame:SetAlpha(self.visibilityCurve and UnitHealthPercent('player', true, self.visibilityCurve) or 1)
     else
-        -- Secret health value: pass curve result directly to SetAlpha (0 or 1, no arithmetic)
-        gui.frame:SetAlpha(UnitHealthPercent('player', true, self.visibilityCurve))
+        gui.frame:SetAlpha(1)
     end
 end
 
@@ -146,24 +148,19 @@ end
 --#region ── UI Construction ───────────────────────────────────────────────────
 
 function healthBar:CreateUI()
-    local container = addon.Layout:Container(UIParent, {
-        frameStrata = 'MEDIUM',
-        frameLevel = 10,
+    gui = addon.StatusBarBase.CreateBarUI(cfg, {
+        media = MEDIA,
+        hasAbsorbBar = true,
     })
-    gui.frame = container.frame
-
-    CastUtil.ApplyDragToMove(gui.frame, cfg)
-
-    gui.bg = container:AddBackground(MEDIA.BG_ATLAS)
 
     -- Low-health red glow (rendered behind the bar)
-    local glowContainer = container:Container({ frameLevel = 8 })
-    glowContainer:SetPoint('TOPLEFT', container, 'TOPLEFT', -65, 30)
-    glowContainer:SetPoint('BOTTOMRIGHT', container, 'BOTTOMRIGHT', 65, -30)
-    glowContainer:AddBackground('CovenantSanctum-Reservoir-Spark-Glow-Venthyr')
-    glowContainer:AddBackground('CovenantSanctum-Reservoir-Spark-Glow-Venthyr', { flipH = true })
-    glowContainer:SetAlpha(0)
-    gui.glowFrame = glowContainer.frame
+    local container = addon.Layout:Container(gui.frame, { frameLevel = 8 })
+    container:SetPoint('TOPLEFT', gui.frame, 'TOPLEFT', -65, 30)
+    container:SetPoint('BOTTOMRIGHT', gui.frame, 'BOTTOMRIGHT', 65, -30)
+    container:AddBackground('CovenantSanctum-Reservoir-Spark-Glow-Venthyr')
+    container:AddBackground('CovenantSanctum-Reservoir-Spark-Glow-Venthyr', { flipH = true })
+    container:SetAlpha(0)
+    gui.glowFrame = container.frame
 
     local glowAnim = gui.glowFrame:CreateAnimationGroup()
     glowAnim:SetLooping('BOUNCE')
@@ -174,43 +171,14 @@ function healthBar:CreateUI()
     fadeIn:SetOrder(1)
     gui.glowAnim = glowAnim
 
-    gui.absorbBar = container:StatusBar({
-        texture = MEDIA.TEXTURE,
-        atlas = MEDIA.BAR_ATLAS,
-        desaturate = true,
-    })
-    gui.absorbBar:SetAllPoints(gui.frame)
-    gui.absorbBar.bar:SetFrameLevel(gui.frame:GetFrameLevel() + 1)
-    gui.absorbBar:SetStatusBarColor(0.2, 0.8, 1.0, 0.6) -- Semi-transparent cyan
-
-    gui.bar = container:StatusBar({
-        texture = MEDIA.TEXTURE,
-        atlas = MEDIA.BAR_ATLAS,
-        desaturate = true,
-    })
-    gui.bar:SetAllPoints(gui.frame)
-    gui.bar.bar:SetFrameLevel(gui.frame:GetFrameLevel() + 2)
-    gui.border = container:AddBackground(MEDIA.BORDER_ATLAS, { layer = 'OVERLAY', subLevel = 2 })
-
-    local overlay = container:Container({ frameLevel = 12 })
-    overlay:SetAllPoints(container)
-
-    local healthText = overlay:FontString({
-        justifyH = 'LEFT',
-        color = { 1, 1, 1 },
-        font = function() return GameFontNormal:GetFont() end,
-    })
-    healthText:SetPoint('LEFT', overlay, 'LEFT', 8, 0)
-    gui.healthText = healthText
-
-    -- Combat icon
-    local iconContainer = container:Container({ frameLevel = 6, height = 40, width = 90 })
-    iconContainer:SetPoint('BOTTOM', container, 'TOP', 0, -15)
+    -- Combat icon above the bar
+    local iconContainer = addon.Layout:Container(gui.frame, { frameLevel = 6, height = 40, width = 90 })
+    iconContainer:SetPoint('BOTTOM', gui.frame, 'TOP', 0, -15)
     iconContainer:AddBackground(MEDIA.COMBAT)
     gui.combatIconFrame = iconContainer.frame
     gui.combatIconFrame:SetAlpha(UnitAffectingCombat('player') and 1 or 0)
 
-    -- ModelScene animation behind the combat icon (inherits alpha from parent)
+    -- ModelScene animation behind the combat icon
     local scene = CreateFrame('ModelScene', nil, gui.combatIconFrame)
     scene:SetSize(160, 160)
     scene:SetPoint('CENTER', gui.combatIconFrame, 'CENTER', 0, 0)
@@ -236,44 +204,10 @@ function healthBar:CreateUI()
 
     gui.combatModelScene = scene
 
-
-    gui.frame:SetScript('OnUpdate', function(_, elapsed)
-        -- Health smoothing
-        if healthBar.targetHealth then
-            local displayed = healthBar.displayedHealth
-            local target = healthBar.targetHealth
-            local delta = target - displayed
-
-            if math.abs(delta) < 1 then
-                healthBar.displayedHealth = target
-            else
-                healthBar.displayedHealth = displayed + delta * math.min(SMOOTH_RATE * elapsed, 1)
-            end
-
-            gui.bar:SetValue(healthBar.displayedHealth)
-        end
-
-
-        -- Absorb smoothing
-        if healthBar.targetAbsorb and healthBar.targetMaxHP then
-            local displayedAbs = healthBar.displayedAbsorb or 0
-            local targetAbs = healthBar.targetAbsorb
-            local deltaAbs = targetAbs - displayedAbs
-
-            if math.abs(deltaAbs) < 1 then
-                healthBar.displayedAbsorb = targetAbs
-            else
-                healthBar.displayedAbsorb = displayedAbs + deltaAbs * math.min(SMOOTH_RATE * elapsed, 1)
-            end
-
-            gui.absorbBar:SetMinMaxValues(0, healthBar.targetMaxHP)
-            gui.absorbBar:SetValue(math.min((healthBar.displayedHealth or 0) + healthBar.displayedAbsorb,
-                healthBar.targetMaxHP))
-        end
-    end)
+    gui.frame:SetScript('OnUpdate', addon.StatusBarBase.CreateOnUpdate(self, gui, { hasAbsorbBar = true }))
 
     self:Refresh()
-    self:UpdateHealth()
+    self:UpdateValue()
     gui.frame:Show()
 end
 
@@ -298,35 +232,58 @@ end
 
 function healthBar:OnHealthChanged(_, unit)
     if unit ~= 'player' then return end
-    self:UpdateHealth()
+    self:UpdateValue()
 end
 
 function healthBar:OnPlayerEnteringWorld()
-    self:UpdateHealth()
+    self:UpdateValue()
 end
 
 function healthBar:OnEnterCombat()
     UIFrameFadeIn(gui.combatIconFrame, 0.3, 0, 1)
+    self:UpdateValue()
 end
 
 function healthBar:OnLeaveCombat()
     UIFrameFadeOut(gui.combatIconFrame, 0.5, 1, 0)
+    self:UpdateValue()
 end
 
 --#endregion
 
 --#region ── Module lifecycle ──────────────────────────────────────────────────
 
+function healthBar:HandleBlizzPlayerFrame()
+    UnregisterUnitWatch(PlayerFrame)
+    PlayerFrame:SetAlpha(0)
+    PlayerFrame:SetParent(gui.frame)
+    PlayerFrame:SetAllPoints(gui.frame)
+    PlayerFrame:HookScript("OnShow", function(self) self:SetAlpha(0) end)
+    PlayerFrameBottomManagedFramesContainer:UnregisterAllEvents()
+    PlayerFrameBottomManagedFramesContainer:Hide()
+    if PlayerFrame.healthbar then PlayerFrame.healthbar:UnregisterAllEvents() end
+    if PlayerFrame.manabar then PlayerFrame.manabar:UnregisterAllEvents() end
+    if PlayerFrame.powerBarAlt then PlayerFrame.powerBarAlt:UnregisterAllEvents() end
+    if PlayerFrame.spellbar then PlayerFrame.spellbar:UnregisterAllEvents() end
+end
+
 function healthBar:BuildVisibilityCurve()
-    local threshold = cfg().showThreshold / 100
-    self.visibilityCurve = C_CurveUtil.CreateCurve()
-    self.visibilityCurve:SetType(Enum.LuaCurveType.Step)
-    self.visibilityCurve:AddPoint(0.0, 1)       -- at/below threshold: visible
-    self.visibilityCurve:AddPoint(threshold, 0) -- above threshold: hidden
+    self.visibilityCurve = addon.StatusBarBase.BuildVisibilityCurve(cfg().showThreshold)
+
+    -- Static step curve: 1 when health < 100%, 0 at exactly 100%.
+    -- Built once; evaluated via UnitHealthPercent so secret values never touch Lua arithmetic.
+    if not self.notFullCurve then
+        self.notFullCurve = C_CurveUtil.CreateCurve()
+        self.notFullCurve:SetType(Enum.LuaCurveType.Step)
+        self.notFullCurve:AddPoint(0.0, 1)
+        self.notFullCurve:AddPoint(1.0, 0)
+    end
 end
 
 function healthBar:OnEnable()
-    if not cfg().enabled then self:Disable(); return end
+    if not cfg().enabled then
+        self:Disable(); return
+    end
 
     self:CreateUI()
     self:BuildVisibilityCurve()
@@ -336,13 +293,15 @@ function healthBar:OnEnable()
     self:RegisterEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
     self:RegisterEvent('PLAYER_REGEN_DISABLED', 'OnEnterCombat')
     self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
+
+    self:HandleBlizzPlayerFrame()
 end
 
 function healthBar:OnDisable()
     self.preview = false
-    self.targetHealth = nil
-    self.displayedHealth = nil
-    self.targetMaxHP = nil
+    self.targetValue = nil
+    self.displayedValue = nil
+    self.targetMax = nil
     self.targetAbsorb = nil
     self.displayedAbsorb = nil
     self.glowActive = false
@@ -361,201 +320,88 @@ end
 
 function healthBar:GetDefaults()
     return {
-        playerHealthBar = {
-            enabled = true,
-            width = 220,
-            height = 18,
-            xPos = 0,
+        playerHealthBar = addon.StatusBarBase.GetBaseDefaults({
             yPos = -150,
-            locked = false,
-            showText = false,
-            autoHide = false,
-            showThreshold = 75,
+            barColor = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
+            -- health-specific extras
             useClassColor = false,
             colorByPct = false,
-            barColor = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
-        },
+        }),
     }
 end
 
 function healthBar:GetOptions()
-    return 'playerHealthBar', {
-        name = 'Player Health Bar',
-        type = 'group',
-        order = 3,
-        args = {
-            description = {
-                name = 'A simple horizontal bar that always shows your current health.',
-                type = 'description',
-                order = 1,
-            },
-            enabled = {
-                name = 'Enabled',
+    local args = addon.StatusBarBase.GetBaseOptionArgs('playerHealthBar', self, {
+        description = 'A simple horizontal bar that always shows your current health.',
+        extraColorArgs = {
+            useClassColor = {
+                name = 'Class Color',
+                desc = 'Color the bar with your class color.',
                 type = 'toggle',
-                order = 2,
-                get = function() return addon.db.profile.playerHealthBar.enabled end,
+                order = 1,
+                disabled = function() return addon.db.profile.playerHealthBar.colorByPct end,
+                get = function() return addon.db.profile.playerHealthBar.useClassColor end,
                 set = function(_, value)
-                    addon.db.profile.playerHealthBar.enabled = value
-                    if value then healthBar:Enable() else healthBar:Disable() end
+                    addon.db.profile.playerHealthBar.useClassColor = value
+                    healthBar:UpdateValue()
                 end,
             },
-            general = {
-                name = 'General',
-                type = 'group',
-                order = 3,
-                inline = true,
-                args = {
-                    width = {
-                        name = 'Width',
-                        desc = 'Width of the health bar in pixels.',
-                        type = 'range',
-                        order = 1,
-                        min = 80,
-                        max = 600,
-                        step = 2,
-                        get = function() return addon.db.profile.playerHealthBar.width end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.width = value
-                            healthBar:Refresh()
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                    height = {
-                        name = 'Height',
-                        desc = 'Height of the health bar in pixels.',
-                        type = 'range',
-                        order = 2,
-                        min = 10,
-                        max = 60,
-                        step = 2,
-                        get = function() return addon.db.profile.playerHealthBar.height end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.height = value
-                            healthBar:Refresh()
-                        end,
-                    },
-                    locked = {
-                        name = 'Lock Position',
-                        desc = 'Prevent the bar from being dragged.',
-                        type = 'toggle',
-                        order = 3,
-                        get = function() return addon.db.profile.playerHealthBar.locked end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.locked = value
-                            healthBar:Refresh()
-                        end,
-                    },
-                    preview = {
-                        name = function()
-                            return healthBar.preview and 'Hide Preview' or 'Show Preview'
-                        end,
-                        desc = 'Show the health bar so you can drag it into position.',
-                        type = 'execute',
-                        order = 4,
-                        func = function() healthBar:TogglePreview() end,
-                    },
-                },
+            colorByPct = {
+                name = 'Color by Health %',
+                desc = 'Fade the bar green → yellow → red as health decreases.',
+                type = 'toggle',
+                order = 2,
+                disabled = function() return addon.db.profile.playerHealthBar.useClassColor end,
+                get = function() return addon.db.profile.playerHealthBar.colorByPct end,
+                set = function(_, value)
+                    addon.db.profile.playerHealthBar.colorByPct = value
+                    healthBar:UpdateValue()
+                end,
             },
-            display = {
-                name = 'Display',
-                type = 'group',
-                order = 4,
-                inline = true,
-                args = {
-                    showText = {
-                        name = 'Show Health Text',
-                        desc = 'Display current and maximum health as numbers on the bar.',
-                        type = 'toggle',
-                        order = 1,
-                        get = function() return addon.db.profile.playerHealthBar.showText end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.showText = value
-                            healthBar:Refresh()
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                    autoHide = {
-                        name = 'Auto-Hide',
-                        desc = 'Hide the bar when health is above the threshold.',
-                        type = 'toggle',
-                        order = 2,
-                        get = function() return addon.db.profile.playerHealthBar.autoHide end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.autoHide = value
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                    showThreshold = {
-                        name = 'Show Below %',
-                        desc = 'Show the bar when health is at or below this percentage.',
-                        type = 'range',
-                        order = 3,
-                        min = 1,
-                        max = 99,
-                        step = 1,
-                        disabled = function() return not addon.db.profile.playerHealthBar.autoHide end,
-                        get = function() return addon.db.profile.playerHealthBar.showThreshold end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.showThreshold = value
-                            healthBar:BuildVisibilityCurve()
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                },
-            },
-            colors = {
-                name = 'Colors',
-                type = 'group',
-                order = 5,
-                inline = true,
-                args = {
-                    useClassColor = {
-                        name = 'Class Color',
-                        desc = 'Color the bar with your class color.',
-                        type = 'toggle',
-                        order = 1,
-                        disabled = function() return addon.db.profile.playerHealthBar.colorByPct end,
-                        get = function() return addon.db.profile.playerHealthBar.useClassColor end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.useClassColor = value
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                    colorByPct = {
-                        name = 'Color by Health %',
-                        desc = 'Fade the bar green → yellow → red as health decreases.',
-                        type = 'toggle',
-                        order = 2,
-                        disabled = function() return addon.db.profile.playerHealthBar.useClassColor end,
-                        get = function() return addon.db.profile.playerHealthBar.colorByPct end,
-                        set = function(_, value)
-                            addon.db.profile.playerHealthBar.colorByPct = value
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                    barColor = {
-                        name = 'Bar Color',
-                        desc = 'Fill color for the health bar.',
-                        type = 'color',
-                        order = 3,
-                        hasAlpha = false,
-                        disabled = function()
-                            local p = addon.db.profile.playerHealthBar
-                            return p.useClassColor or p.colorByPct
-                        end,
-                        get = function()
-                            local c = addon.db.profile.playerHealthBar.barColor
-                            return c.r, c.g, c.b
-                        end,
-                        set = function(_, r, g, b)
-                            local c = addon.db.profile.playerHealthBar.barColor
-                            c.r, c.g, c.b = r, g, b
-                            healthBar:UpdateHealth()
-                        end,
-                    },
-                },
+            -- barColor (order 10) is provided by the base; disable it when a
+            -- computed color mode is active
+            barColor = {
+                name = 'Bar Color',
+                desc = 'Fill color for the health bar.',
+                type = 'color',
+                order = 10,
+                hasAlpha = false,
+                disabled = function()
+                    local p = addon.db.profile.playerHealthBar
+                    return p.useClassColor or p.colorByPct
+                end,
+                get = function()
+                    local c = addon.db.profile.playerHealthBar.barColor
+                    return c.r, c.g, c.b
+                end,
+                set = function(_, r, g, b)
+                    local c = addon.db.profile.playerHealthBar.barColor
+                    c.r, c.g, c.b = r, g, b
+                    healthBar:UpdateValue()
+                end,
             },
         },
+        extraDisplayArgs = {
+            showText = {
+                name = 'Show Health Text',
+                desc = 'Display current and maximum health as numbers on the bar.',
+                type = 'toggle',
+                order = 1,
+                get = function() return addon.db.profile.playerHealthBar.showText end,
+                set = function(_, value)
+                    addon.db.profile.playerHealthBar.showText = value
+                    healthBar:Refresh()
+                    healthBar:UpdateValue()
+                end,
+            },
+        },
+    })
+
+    return 'playerHealthBar', {
+        name = 'Health',
+        type = 'group',
+        order = 1,
+        args = args,
     }
 end
 

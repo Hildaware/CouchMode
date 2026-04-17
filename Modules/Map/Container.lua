@@ -1,29 +1,29 @@
-local addon_name          = ...
+local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon               = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
-local map                 = addon:GetModule('Minimap')
+local map = addon:GetModule('Minimap')
 
-local _G                  = _G
-local math_min            = math.min
-local math_max            = math.max
-local math_floor          = math.floor
-local math_ceil           = math.ceil
-local CreateFrame         = _G.CreateFrame
-local UIParent            = _G.UIParent
-local Minimap             = _G.Minimap
-local HasNewMail          = _G.HasNewMail
-local GetTime             = _G.GetTime
+local _G = _G
+local math_min = math.min
+local math_max = math.max
+local math_floor = math.floor
+local math_ceil = math.ceil
+local CreateFrame = _G.CreateFrame
+local UIParent = _G.UIParent
+local Minimap = _G.Minimap
+local HasNewMail = _G.HasNewMail
+local GetTime = _G.GetTime
 
-local ZOOM_BAR_W          = 80
-local ZOOM_BAR_H          = 10
+local ZOOM_BAR_W = 80
+local ZOOM_BAR_H = 10
 
-local FADE_DURATION       = 0.5
+local FADE_DURATION = 0.5
 local TRANSITION_DURATION = 0.25
 
-local ConsolePort         = _G['ConsolePort'] ---@type any
+local ConsolePort = _G['ConsolePort'] ---@type any
 
 --#region ── Container ────────────────────────────────────────────────────────
 
@@ -136,7 +136,7 @@ function map.createZoomIndicator()
     end
 
     zi.numLevels = 0  -- cached; ticks only repositioned when this changes
-    zi.lastZoom  = -1 -- sentinel → first frame always redraws fill
+    zi.lastZoom = -1  -- sentinel → first frame always redraws fill
 
     local lt_tex = zi:CreateTexture(nil, "OVERLAY")
     lt_tex:SetSize(16, 16)
@@ -201,8 +201,8 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
         end
 
         -- World map mode: continuous fill, logarithmic scale (each zoom doubling = equal bar width)
-        local sc   = map.worldMap.ScrollContainer
-        local cur  = sc:GetZoom()
+        local sc = map.worldMap.ScrollContainer
+        local cur = sc:GetZoom()
         local wmin = map.worldMapMinZoom or 0.12
         local wmax = map.worldMapMaxZoom or 0.30
         local frac = (wmin > 0 and wmax > wmin and cur > 0)
@@ -351,21 +351,21 @@ local function toggle_grow()
     -- Guard: ignore re-toggle while animation is already running
     if map.growTransition.active then return end
 
-    local db             = addon.db.profile.minimap ---@type MinimapDB
+    local db = addon.db.profile.minimap ---@type MinimapDB
     local from_w, from_h = map.container:GetSize()
-    local size           = map.grown and db.growSize or db.size
-    local shape          = map.grown and db.growShape or db.shape
-    local to_w, to_h     = map.MapUtils.size_for_shape(shape, size)
+    local size = map.grown and db.growSize or db.size
+    local shape = map.grown and db.growShape or db.shape
+    local to_w, to_h = map.MapUtils.size_for_shape(shape, size)
 
-    local gt             = map.growTransition
-    gt.active            = true
-    gt.elapsed           = 0
-    gt.fromW             = from_w
-    gt.fromH             = from_h
-    gt.toW               = to_w
-    gt.toH               = to_h
-    gt.animShape         = db.growShape
-    gt.lastZoomAt        = 0
+    local gt = map.growTransition
+    gt.active = true
+    gt.elapsed = 0
+    gt.fromW = from_w
+    gt.fromH = from_h
+    gt.toW = to_w
+    gt.toH = to_h
+    gt.animShape = db.growShape
+    gt.lastZoomAt = 0
 end
 
 -- Expose as a global so Bindings.xml can invoke it by name
@@ -386,7 +386,7 @@ end
 
 function CouchMode_MinimapToggle() ---@diagnostic disable-line: lowercase-global
     if not map.container then return end
-    local db     = addon.db.profile.minimap ---@type MinimapDB
+    local db = addon.db.profile.minimap ---@type MinimapDB
     local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
     if target > 0 then map.container:Show() end
     map.startFrameFade(map.container, map.containerFade, target, target == 0)

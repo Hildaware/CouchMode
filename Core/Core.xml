@@ -2,6 +2,7 @@
     <Include file = 'Init.lua' />
     <Include file = 'Utils.lua' />
     <Include file = 'Layout.lua' />
+    <Include file = 'StatusBarBase.lua' />
     <Include file = 'QuestUtils.lua' />
     <Include file = 'TRPUtils.lua' />
     <Include file = 'Options.lua' />

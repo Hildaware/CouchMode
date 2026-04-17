@@ -71,9 +71,9 @@ end
 
 function castBar:GetOptions()
     return 'castBars', {
-        name        = 'Cast Bars',
+        name        = 'Cast',
         type        = 'group',
-        order       = 1,
+        order       = 3,
         childGroups = 'tab',
         args        = {
 
