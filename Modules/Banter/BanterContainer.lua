@@ -384,6 +384,7 @@ end
 ---@field expiryTime     number?
 ---@field isBubbleMode   boolean?
 ---@field noPortrait     boolean?
+---@field _bubbleToken   table?
 ---@field widget         BanterContainerWidget
 ---@field animationGroup AnimationGroup?
 ---@field controller     BanterContainerController
@@ -510,6 +511,7 @@ local function _BantReset(pool, bant)
     sw.textureTop:ClearAllPoints()
     sw.textureTop:SetPoint('BOTTOMLEFT', sw.textureBottom, 'TOPLEFT', 0, 0)
 
+    bant._bubbleToken = nil
     bant.widget:SetScript('OnUpdate', nil)
     bant.expiryTime = nil
     bant.widget:SetHeight(bant.minimumHeight)

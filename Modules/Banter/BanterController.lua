@@ -319,6 +319,8 @@ end
 function banter:SpawnBubbleBant(data)
     local bant, messageWidget, duration = self:_BuildBant(data)
     bant.isBubbleMode = true
+    local bubbleToken = {}
+    bant._bubbleToken = bubbleToken
 
     self:FindBubbleForMessage(data.message, function(bubble)
         if bubble then
@@ -340,9 +342,8 @@ function banter:SpawnBubbleBant(data)
 
             bubble:HookScript('OnHide', function()
                 C_Timer.After(1.0, function()
-                    if bant.widget:IsShown() then
-                        self:RemoveBant(bant)
-                    end
+                    if bant._bubbleToken ~= bubbleToken then return end
+                    self:RemoveBant(bant)
                 end)
             end)
 

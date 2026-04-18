@@ -13857,6 +13857,6 @@ addon.BanterData = addon.BanterData or {}
 ---@param name string
 ---@return number? npcId, number? displayId
 function addon.BanterData.GetByName(name)
-    local entry = CREATURE_DISPLAY_DATA[name]
+    local entry = CREATURE_DISPLAY_DATA[tostring(name)]
     if entry then return entry.id, entry.displayId end
 end
