@@ -28,6 +28,7 @@ banter.EVENTS = {
     CHAT_MSG_PARTY_LEADER = 'CHAT_MSG_PARTY_LEADER',
     CHAT_MSG_INSTANCE_CHAT_LEADER = 'CHAT_MSG_INSTANCE_CHAT_LEADER',
     CHAT_MSG_RAID_LEADER = 'CHAT_MSG_RAID_LEADER',
+    CHAT_MSG_WHISPER = 'CHAT_MSG_WHISPER',
 }
 
 local TEST_ARGS = {
@@ -102,14 +103,25 @@ function banter:OnMonsterMessage(event, message, name, _, _, _, _, _, _, _, _, _
     banter:AddBants(data)
 end
 
+local function findUnitTokenByGUID(guid)
+    if not guid then return nil end
+    if UnitGUID('player') == guid then return 'player' end
+    local n = GetNumGroupMembers()
+    local isRaid = IsInRaid()
+    for i = 1, n do
+        local token = isRaid and ('raid' .. i) or ('party' .. i)
+        if UnitGUID(token) == guid then return token end
+    end
+end
+
 function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _, guid)
     -- Parse playerUID from GUID: "Player-realmID-playerUID" (playerUID is hex)
     local playerUID = guid and guid:match('Player%-%d+%-(%x+)')
     local playerId = playerUID and tonumber(playerUID, 16) or 0
 
-    local unitToken = guid and UnitTokenFromGUID(guid)
+    local unitToken = findUnitTokenByGUID(guid) or UnitTokenFromGUID(guid)
 
-    local channel = event:gsub('^CHAT_MSG_', '')
+    local channel = event:gsub('^CHAT_MSG_', ''):gsub('_LEADER$', '')
     if channel == 'INSTANCE_CHAT' then channel = 'INSTANCE' end
 
     ---@type BanterData
@@ -158,6 +170,7 @@ function banter:OnEnable()
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER, 'OnPlayerMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER, 'OnPlayerMessage')
     self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER, 'OnPlayerMessage')
+    self:RegisterEvent(banter.EVENTS.CHAT_MSG_WHISPER, 'OnPlayerMessage')
 
     if db().disableTalkingHead then
         applyTalkingHeadSuppression(true)
@@ -230,6 +243,7 @@ function banter:OnDisable()
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER)
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER)
     self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER)
+    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_WHISPER)
 
     if self.instance then
         self.instance.widget:Hide()

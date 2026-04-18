@@ -54,11 +54,7 @@ function nameplates.buildAurasFrame(f)
         for i = 1, AURA_MAX do
             local icon = self.icons[i]
             if icon:IsShown() and icon.duration then
-                local remaining = math.floor(icon.duration:GetRemainingDuration())
-                if remaining ~= icon._lastTimer then
-                    icon._lastTimer = remaining
-                    icon.timer:SetText(remaining)
-                end
+                icon.timer:SetText(string.format("%.0f", icon.duration:GetRemainingDuration()))
             end
         end
     end)
@@ -85,11 +81,7 @@ function nameplates.buildAurasFrame(f)
 
     f.cc:SetScript("OnUpdate", function(self)
         if self.duration then
-            local remaining = math.floor(self.duration:GetRemainingDuration())
-            if remaining ~= self._lastTimer then
-                self._lastTimer = remaining
-                self.timer:SetText(remaining)
-            end
+            self.timer:SetText(string.format("%.0f", self.duration:GetRemainingDuration()))
         end
     end)
 end

@@ -271,12 +271,13 @@ end
 -- Returns the FontString text found anywhere inside a bubble frame (direct
 -- regions OR regions of child frames, one level deep).
 local function getBubbleText(bubble)
+    if type(bubble) ~= 'userdata' then return end -- guard against protected bubbles in combat
     -- Direct regions first.
     for _, region in ipairs({ bubble:GetRegions() }) do
         if region:IsObjectType('FontString') then
             ---@cast region FontString
             local t = region:GetText()
-            if t and t ~= '' then return t end
+            if t and not issecretvalue(t) and t ~= '' then return t end
         end
     end
     -- Child frames (e.g. the text frame Blizzard nests inside the bubble).
@@ -285,7 +286,7 @@ local function getBubbleText(bubble)
             if region:IsObjectType('FontString') then
                 ---@cast region FontString
                 local t = region:GetText()
-                if t and t ~= '' then return t end
+                if t and not issecretvalue(t) and t ~= '' then return t end
             end
         end
     end
@@ -298,7 +299,7 @@ end
 ---@param attempts number?
 function banter:FindBubbleForMessage(text, callback, attempts)
     attempts = attempts or 0
-    for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles()) do
+    for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(true)) do
         if getBubbleText(bubble) == text then
             callback(bubble)
             return
@@ -399,13 +400,14 @@ function banter:AddBants(data)
         end
     end
 
-    -- Route to bubble mode when enabled, but never during combat.
+    -- Route to bubble mode when enabled, but never during combat or in instances.
     if db().reskinBubbles then
-        if not InCombatLockdown() then
+        local inInstance = IsInInstance()
+        if not InCombatLockdown() and not inInstance then
             self:SpawnBubbleBant(data)
             if db().hideScrollLog then return end
         else
-            -- In combat: hide the original bubble so it doesn't overlap the scroll log.
+            -- In combat or in instance: hide the original bubble so it doesn't overlap the scroll log.
             self:FindBubbleForMessage(data.message, function(bubble)
                 if not bubble then return end
                 bubble:SetAlpha(0)
