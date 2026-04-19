@@ -364,10 +364,8 @@ function banter:SpawnBubbleBant(data)
             end
 
             bubble:HookScript('OnHide', function()
-                C_Timer.After(1.0, function()
-                    if bant._bubbleToken ~= bubbleToken then return end
-                    self:RemoveBant(bant)
-                end)
+                if bant._bubbleToken ~= bubbleToken then return end
+                self:RemoveBant(bant)
             end)
 
             bant.widget:SetAlpha(0)
