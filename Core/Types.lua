@@ -241,6 +241,7 @@
 ---@field message   string
 ---@field type      string   CHAT_MSG_* event name
 ---@field duration  number
+---@field timestamp string?   Wall-clock time when received, formatted as HH:MM:SS
 
 ---@class BanterContainerFrame: Frame
 ---@field dragger Frame

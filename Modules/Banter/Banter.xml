@@ -5,4 +5,5 @@
     <Include file='Banter.lua'/>
     <Include file='BanterController.lua'/>
     <Include file='BanterContainer.lua'/>
+    <Include file='BanterHistory.lua'/>
 </UI>

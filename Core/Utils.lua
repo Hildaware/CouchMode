@@ -96,3 +96,13 @@ function addon.Utils.CreatePool(createFunc, resetFunc)
         end
     }
 end
+
+function addon.Utils.IsInInstance()
+    if C_Garrison.IsOnGarrisonMap() then return true end
+    local inInstance, instanceType = IsInInstance()
+    if instanceType == "scenario" then return true end
+    return inInstance
+        and instanceType ~= "none"
+        and instanceType ~= "neighborhood"
+        and instanceType ~= "interior"
+end

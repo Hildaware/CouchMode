@@ -194,6 +194,16 @@ function banter:_BuildBant(data)
     return bant, messageWidget, duration
 end
 
+-- Creates a fully-rendered bant for display in the history window.
+-- Sets pinned=true so the expiry timer in FormatMessage never fires.
+---@param data BanterData
+---@return BanterContainerMain
+function banter:BuildHistoryBant(data)
+    local pinned = setmetatable({ pinned = true }, { __index = data })
+    local bant = self:_BuildBant(pinned)
+    return bant
+end
+
 -- Parents a pre-built bant into the scroll stack with duration extension,
 -- stack anchoring, and a fade-in animation.
 ---@param bant BanterContainerMain
@@ -268,23 +278,22 @@ end
 
 --#region ── Bubble mode ──────────────────────────────────────────────────────
 
--- Returns the FontString text found anywhere inside a bubble frame (direct
--- regions OR regions of child frames, one level deep).
+local function unwrapBubble(entry)
+    if type(entry) == 'userdata' then return entry end
+    if type(entry) == 'table' then return entry end -- 12.0+ wrapper table acts as Frame via __index
+end
+
 local function getBubbleText(bubble)
-    if type(bubble) ~= 'userdata' then return end -- guard against protected bubbles in combat
-    -- Direct regions first.
+    if not bubble then return end
     for _, region in ipairs({ bubble:GetRegions() }) do
-        if region:IsObjectType('FontString') then
-            ---@cast region FontString
+        if region.GetText then
             local t = region:GetText()
             if t and not issecretvalue(t) and t ~= '' then return t end
         end
     end
-    -- Child frames (e.g. the text frame Blizzard nests inside the bubble).
     for _, child in ipairs({ bubble:GetChildren() }) do
         for _, region in ipairs({ child:GetRegions() }) do
-            if region:IsObjectType('FontString') then
-                ---@cast region FontString
+            if region.GetText then
                 local t = region:GetText()
                 if t and not issecretvalue(t) and t ~= '' then return t end
             end
@@ -299,7 +308,8 @@ end
 ---@param attempts number?
 function banter:FindBubbleForMessage(text, callback, attempts)
     attempts = attempts or 0
-    for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(true)) do
+    for _, entry in ipairs(C_ChatBubbles.GetAllChatBubbles(true)) do
+        local bubble = unwrapBubble(entry)
         if getBubbleText(bubble) == text then
             callback(bubble)
             return
@@ -375,6 +385,8 @@ end
 
 ---@param data BanterData
 function banter:AddBants(data)
+    table.insert(banter.history, data)
+
     if not self.instance then return end
 
     -- Append to the existing scroll-stack bant for this NPC if it's the most recent one.
@@ -402,7 +414,7 @@ function banter:AddBants(data)
 
     -- Route to bubble mode when enabled, but never during combat or in instances.
     if db().reskinBubbles then
-        local inInstance = IsInInstance()
+        local inInstance = addon.Utils.IsInInstance()
         if not InCombatLockdown() and not inInstance then
             self:SpawnBubbleBant(data)
             if db().hideScrollLog then return end

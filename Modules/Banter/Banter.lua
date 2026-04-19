@@ -3,13 +3,21 @@ local addonName = ...
 ---@class BanterLookup
 ---@field GetByName fun(name: string): number?, number?
 
+---@class BanterHistory
+---@field Open   fun(self: BanterHistory)
+---@field Close  fun(self: BanterHistory)
+---@field Toggle fun(self: BanterHistory)
+
 ---@class CouchMode: AceAddon
----@field BanterData BanterLookup
+---@field BanterData    BanterLookup
+---@field BanterHistory BanterHistory
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LSM = LibStub('LibSharedMedia-3.0')
 
 ---@class BanterModule
 local banter = addon:NewModule('Banter', 'AceEvent-3.0')
+
+banter.history = {} ---@type BanterData[]
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -98,6 +106,7 @@ function banter:OnMonsterMessage(event, message, name, _, _, _, _, _, _, _, _, _
         message = message,
         type = event,
         duration = CalculateDisplayDuration(message),
+        timestamp = date('%H:%M:%S'),
     }
 
     banter:AddBants(data)
@@ -134,6 +143,7 @@ function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _,
         message = message,
         type = event,
         duration = CalculateDisplayDuration(message),
+        timestamp = date('%H:%M:%S'),
     }
 
     banter:AddBants(data)
@@ -300,6 +310,13 @@ function banter:GetOptions()
         type = 'group',
         order = 20,
         args = {
+            -- openHistory = {
+            --     name = 'View History',
+            --     desc = 'Open the banter history log for this session.',
+            --     type = 'execute',
+            --     order = 0,
+            --     func = function() addon.BanterHistory:Toggle() end,
+            -- },
             description = {
                 name = 'Displays NPC monster dialogue in a styled overlay with portraits and animated message stacks.',
                 type = 'description',
