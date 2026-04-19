@@ -244,8 +244,7 @@
 ---@field timestamp string?   Wall-clock time when received, formatted as HH:MM:SS
 
 ---@class BanterContainerFrame: Frame
----@field dragger Frame
----@field bg      Texture
+---@field bg Texture
 
 ---@class BanterController.Instance
 ---@field widget          BanterContainerFrame

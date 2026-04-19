@@ -13,6 +13,7 @@ local addonName = ...
 ---@field BanterHistory BanterHistory
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LSM = LibStub('LibSharedMedia-3.0')
+local LibEditMode = LibStub('LibEditMode')
 
 ---@class BanterModule
 local banter = addon:NewModule('Banter', 'AceEvent-3.0')
@@ -199,9 +200,7 @@ function banter:OnEnable()
     ---@type BanterContainerFrame
     local frame = CreateFrame('Frame', 'CouchModeBanterContainer', UIParent) --[[@as BanterContainerFrame]]
     frame:SetSize(itemWidth + (self.padding * 2), containerHeight)
-    local d = db()
-    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', d.x, d.y)
-    frame:SetMovable(true)
+    frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 0, 0)
     frame:Hide()
 
     local bg = frame:CreateTexture(nil, 'BACKGROUND')
@@ -209,35 +208,53 @@ function banter:OnEnable()
     bg:SetColorTexture(0, 0, 0, 0.5)
     bg:Hide()
 
-    local dragger = CreateFrame('Frame', nil, frame)
-    dragger:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT')
-    dragger:SetSize(80, 12)
-    dragger:EnableMouse(true)
-    dragger:SetMovable(true)
-    dragger:RegisterForDrag('LeftButton')
-    dragger:SetScript('OnDragStart', function() frame:StartMoving() end)
-    dragger:SetScript('OnDragStop', function()
-        frame:StopMovingOrSizing()
-        local pos = db()
-        pos.x = frame:GetLeft() - UIParent:GetLeft()
-        pos.y = frame:GetBottom() - UIParent:GetBottom()
-    end)
-
-    local draggerBg = dragger:CreateTexture(nil, 'BACKGROUND')
-    draggerBg:SetAllPoints()
-    draggerBg:SetColorTexture(0, 0, 1, 0.5)
-
-    local draggerText = dragger:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
-    draggerText:SetPoint('CENTER', dragger, 'CENTER')
-    draggerText:SetText('Banter Anchor')
-
-    dragger:Hide()
-
-    frame.dragger = dragger
     frame.bg = bg
 
     ---@type BanterController.Instance
     self.instance = { widget = frame, bants = {} }
+
+    LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+        db().positions[layoutName] = { point = point, x = x, y = y }
+    end, { point = 'BOTTOMLEFT', x = 0, y = 0 }, 'CouchMode Dialog')
+
+    LibEditMode:AddFrameSettings(frame, {
+        {
+            kind = LibEditMode.SettingType.Slider,
+            name = 'Width',
+            desc = 'Width of each message frame in pixels.',
+            default = 512,
+            minValue = 200,
+            maxValue = 1200,
+            valueStep = 10,
+            get = function(_) return db().itemWidth end,
+            set = function(_, value, fromReset)
+                db().itemWidth = fromReset and 512 or value
+                banter:Refresh()
+            end,
+        },
+    })
+
+    LibEditMode:RegisterCallback('layout', function(layoutName)
+        local pos = db().positions[layoutName]
+        frame:ClearAllPoints()
+        if pos then
+            frame:SetPoint(pos.point, pos.x, pos.y)
+        else
+            frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 0, 0)
+        end
+    end)
+
+    LibEditMode:RegisterCallback('enter', function()
+        frame:Show()
+        bg:Show()
+    end)
+
+    LibEditMode:RegisterCallback('exit', function()
+        bg:Hide()
+        if #banter.instance.bants == 0 then
+            frame:Hide()
+        end
+    end)
 end
 
 function banter:OnDisable()
@@ -277,9 +294,8 @@ function banter:GetDefaults()
             reskinBubbles = false,
             hideScrollLog = false,
             -- Visibility
-            -- Position
-            x = 0,
-            y = 0,
+            -- Position (per Edit Mode layout)
+            positions = {},
             -- Sizing
             itemWidth = 512,
             growUpwards = true,
@@ -310,13 +326,6 @@ function banter:GetOptions()
         type = 'group',
         order = 20,
         args = {
-            -- openHistory = {
-            --     name = 'View History',
-            --     desc = 'Open the banter history log for this session.',
-            --     type = 'execute',
-            --     order = 0,
-            --     func = function() addon.BanterHistory:Toggle() end,
-            -- },
             description = {
                 name = 'Displays NPC monster dialogue in a styled overlay with portraits and animated message stacks.',
                 type = 'description',
@@ -333,20 +342,18 @@ function banter:GetOptions()
                     if value then banter:Enable() else banter:Disable() end
                 end,
             },
-            sizing = {
-                name = 'Sizing & Positioning',
+            misc = {
+                name = 'Misc',
                 type = 'group',
                 inline = true,
-                order = 3,
+                order = 99,
                 args = {
-                    unlock = {
-                        name = 'Unlock/Lock',
-                        desc = 'Unlocks the Banter window for repositioning.',
+                    openHistory = {
+                        name = 'View History',
+                        desc = 'Open the banter history log for this session.',
                         type = 'execute',
                         order = 1,
-                        func = function()
-                            banter:ToggleLock()
-                        end,
+                        func = function() addon.BanterHistory:Toggle() end,
                     },
                     test = {
                         name = 'Test',
@@ -361,20 +368,6 @@ function banter:GetOptions()
                                 end)
                                 delay = delay + 3
                             end
-                        end,
-                    },
-                    width = {
-                        name = 'Window Width',
-                        desc = 'Width of each gabber frame in pixels.',
-                        type = 'range',
-                        order = 3,
-                        min = 200,
-                        max = 1200,
-                        step = 10,
-                        get = function() return db().itemWidth end,
-                        set = function(_, val)
-                            db().itemWidth = val
-                            banter:Refresh()
                         end,
                     },
                 },

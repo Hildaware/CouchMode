@@ -32,7 +32,7 @@ end
 ---@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
 ---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
----@field Format         fun(self: BanterContainerMessage, text: string, type: string, noPortrait: boolean?)
+---@field Format         fun(self: BanterContainerMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?)
 
 
 local messageProto = {}
@@ -50,7 +50,7 @@ local PLAYER_CHAT_INFO_KEY = {
 ---@param text string
 ---@param type string  CHAT_MSG_* event name
 ---@param noPortrait boolean?
-function messageProto:Format(text, type, noPortrait)
+function messageProto:Format(text, type, noPortrait, noAnim)
     local d = db()
     local r, g, b, a = d.msgFontColor.r, d.msgFontColor.g, d.msgFontColor.b, d.msgFontColor.a
     local messageSize = d.msgFontSize
@@ -123,21 +123,23 @@ function messageProto:Format(text, type, noPortrait)
         end)
     end
 
-    local fullHeight = contentHeight
-    C_Timer.After(0, function()
-        if not self.widget:IsShown() then return end
-        self.widget:SetHeight(0)
-        local elapsed = 0
-        self.widget:SetScript('OnUpdate', function(f, dt)
-            elapsed = elapsed + dt
-            local t = math.min(elapsed / 0.25, 1)
-            f:SetHeight(fullHeight * (t * (2 - t))) -- ease-out
-            if t >= 1 then
-                f:SetHeight(fullHeight)
-                f:SetScript('OnUpdate', nil)
-            end
+    if not noAnim then
+        local fullHeight = contentHeight
+        C_Timer.After(0, function()
+            if not self.widget:IsShown() then return end
+            self.widget:SetHeight(0)
+            local elapsed = 0
+            self.widget:SetScript('OnUpdate', function(f, dt)
+                elapsed = elapsed + dt
+                local t = math.min(elapsed / 0.25, 1)
+                f:SetHeight(fullHeight * (t * (2 - t))) -- ease-out
+                if t >= 1 then
+                    f:SetHeight(fullHeight)
+                    f:SetScript('OnUpdate', nil)
+                end
+            end)
         end)
-    end)
+    end
 
     self.widget:Show()
 end
@@ -333,7 +335,7 @@ function controllerProto:FormatMessage(msg, text, type)
     -- messageBg is anchored by two points (BOTTOMLEFT/TOPRIGHT) so its width follows automatically.
 
     local duration = banter.CalculateDisplayDuration(text)
-    msg:Format(text, type, self.parent.noPortrait)
+    msg:Format(text, type, self.parent.noPortrait, self.parent.data and self.parent.data.pinned)
 
     local expiryTime = GetTime() + duration
     msg.expiryTime = expiryTime         -- per-message, so multiple messages don't trample each other
@@ -385,6 +387,8 @@ end
 ---@field isBubbleMode   boolean?
 ---@field noPortrait     boolean?
 ---@field _bubbleToken   table?
+---@field shownAt        number?
+---@field bubbleDuration number?
 ---@field widget         BanterContainerWidget
 ---@field animationGroup AnimationGroup?
 ---@field controller     BanterContainerController
@@ -512,9 +516,12 @@ local function _BantReset(pool, bant)
     sw.textureTop:SetPoint('BOTTOMLEFT', sw.textureBottom, 'TOPLEFT', 0, 0)
 
     bant._bubbleToken = nil
+    bant.shownAt = nil
+    bant.bubbleDuration = nil
     bant.widget:SetScript('OnUpdate', nil)
     bant.expiryTime = nil
     bant.widget:SetHeight(bant.minimumHeight)
+    bant.widget:SetScale(1)
     bant.widget:Hide()
     bant.widget:ClearAllPoints()
     bant.widget:SetParent(UIParent)

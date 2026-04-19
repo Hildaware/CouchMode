@@ -53,8 +53,18 @@ end
 function banter:RemoveBant(bantToRemove)
     if bantToRemove.isBubbleMode then
         bantToRemove.isBubbleMode = false
+        local shownFor = bantToRemove.shownAt and (GetTime() - bantToRemove.shownAt) or math.huge
+        local premature = bantToRemove.bubbleDuration and shownFor < bantToRemove.bubbleDuration
         UIFrameFadeOut(bantToRemove.widget, 0.5, 1, 0)
-        C_Timer.After(0.5, function() self:Release(bantToRemove) end)
+        C_Timer.After(0.5, function()
+            self:Release(bantToRemove)
+            -- Bubble vanished before its message duration expired and the scroll log was
+            -- suppressed (hideScrollLog=true), so the message would be lost entirely.
+            if premature and db().hideScrollLog and bantToRemove.data then
+                local fb, fbMsg, fbDur = self:_BuildBant(bantToRemove.data)
+                self:_AddBantToStack(fb, fbMsg, fbDur)
+            end
+        end)
         return
     end
 
@@ -335,6 +345,8 @@ function banter:SpawnBubbleBant(data)
 
     self:FindBubbleForMessage(data.message, function(bubble)
         if bubble then
+            bant.shownAt = GetTime()
+            bant.bubbleDuration = duration
             bant.widget:SetParent(bubble)
             bant.widget:SetIgnoreParentAlpha(true)
             bant.widget:SetScale(UIParent:GetEffectiveScale() / bubble:GetEffectiveScale())
@@ -441,20 +453,6 @@ end
 --#endregion
 
 --#region ── Utilities ────────────────────────────────────────────────────────
-
-function banter:ToggleLock()
-    if not self.instance then return end
-    local widget = self.instance.widget
-    if widget.dragger:IsShown() then
-        widget.dragger:Hide()
-        widget.bg:Hide()
-        widget:Hide()
-    else
-        widget.dragger:Show()
-        widget.bg:Show()
-        widget:Show()
-    end
-end
 
 ---Called by options setters after width or font changes.
 function banter:Refresh()

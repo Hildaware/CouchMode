@@ -164,7 +164,7 @@ function nameplates.applyName(f, unit, plateType)
     local text
     if UnitIsPlayer(unit) then
         local rpFullName = addon.TRPUtils.getRPFullName(unit)
-        if rpFullName and rpFullName ~= "" then
+        if rpFullName and rpFullName ~= "" and rpFullName ~= nameStr then
             local nc = nameColor(unit)
             local rpTitle = addon.TRPUtils.getRPTitle(unit)
             if rpTitle then
