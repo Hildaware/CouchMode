@@ -524,7 +524,12 @@
         "CHAT_MSG_PARTY_LEADER",
         "CHAT_MSG_INSTANCE_CHAT",
         "CHAT_MSG_RAID",
-        "CHAT_MSG_RAID_LEADER"
+        "CHAT_MSG_RAID_LEADER",
+        "DELVES_LABEL",
+        "SECOND_NUMBER_CAP_NO_SPACE",
+        "FIRST_NUMBER_CAP_NO_SPACE",
+        "UNIT_TYPE_LEVEL_TEMPLATE",
+        "UNIT_LEVEL_TEMPLATE"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

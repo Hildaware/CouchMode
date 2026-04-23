@@ -1,8 +1,8 @@
-## Interface: 120001
+## Interface: 120005
 ## Title: CouchMode
 ## Notes: Utilities to make WoW a more 'Console-like' experience
 ## Author: Sel
-## Version: 12.0.1
+## Version: 12.0.5
 # IconTexture: Interface\AddOns\Bags\Media\Logo
 ## OptionalDeps: ConsolePort, Masque, Pawn, CanIMogIt, Scrap, totalRP3, Musician
 ## SavedVariables: CouchModeDB

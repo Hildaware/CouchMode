@@ -91,6 +91,15 @@ local function updateMark(f, unit)
     end
 end
 
+local function updateRoleIcon(f, unit)
+    if UnitIsUnit(unit, "softinteract") then
+        local hasIcon = SetUnitCursorTexture(f.roleIcon, unit)
+        f.roleIcon:SetShown(hasIcon)
+    else
+        f.roleIcon:Hide()
+    end
+end
+
 local function updateBarColor(f, unit)
     -- Priority 1: class color for players
     if UnitIsPlayer(unit) then
@@ -200,11 +209,13 @@ local function refreshBar(f, unitToken)
         nameplates.refreshAuras(f, unitToken)
         nameplates.refreshCC(f, unitToken)
         nameplates.updatePower(f, unitToken)
+        f.roleIcon:Hide()
     else
         nameplates.hideCast(f)
         nameplates.hideAuras(f)
         nameplates.hideCC(f)
         nameplates.hidePower(f)
+        updateRoleIcon(f, unitToken)
     end
 end
 
