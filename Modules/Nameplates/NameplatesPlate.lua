@@ -138,7 +138,7 @@ local function updateHealth(f, unit)
     UnitGetDetailedHealPrediction(unit, nil, f.bar._calc)
 
     f.bar._calc:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.WithAbsorbs)
-    local max    = f.bar._calc:GetMaximumHealth()
+    local max = f.bar._calc:GetMaximumHealth()
     local absorbs = f.bar._calc:GetDamageAbsorbs()
     f.bar.absorb:SetMinMaxValues(0, max)
     f.bar.absorb:SetValue(absorbs)

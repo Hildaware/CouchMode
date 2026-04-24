@@ -1,20 +1,20 @@
-local addon_name     = ...
+local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
-local nameplates     = addon:GetModule('Nameplates')
+local nameplates = addon:GetModule('Nameplates')
 
 --#region ── Frame pool ───────────────────────────────────────────────────────
 
-local pool           = {}
-local active         = {} -- [unitToken] = frame
-local hookedUFs      = {} -- [UnitFrame] = true; lock is currently active
+local pool = {}
+local active = {}         -- [unitToken] = frame
+local hookedUFs = {}      -- [UnitFrame] = true; lock is currently active
 local installedHooks = {} -- [UnitFrame] = true; hook has been installed (never cleared)
 
 -- Shared with NameplatesPlate so event handlers can look up frames by unit token.
-nameplates.active    = active
+nameplates.active = active
 
 local function lockUnitFrame(uf)
     if uf:IsForbidden() then return end
@@ -37,7 +37,7 @@ local function unlockUnitFrame(uf)
     uf:SetAlpha(1)
 end
 
-nameplates.lockUnitFrame   = lockUnitFrame
+nameplates.lockUnitFrame = lockUnitFrame
 nameplates.unlockUnitFrame = unlockUnitFrame
 
 --#endregion
@@ -45,11 +45,11 @@ nameplates.unlockUnitFrame = unlockUnitFrame
 --#region ── Frame building ───────────────────────────────────────────────────
 
 local function buildFrame()
-    local BAR_W   = nameplates.BAR_W
-    local BAR_H   = nameplates.BAR_H
+    local BAR_W = nameplates.BAR_W
+    local BAR_H = nameplates.BAR_H
     local BAR_TEX = nameplates.BAR_TEX
 
-    local f       = CreateFrame("Frame", nil, UIParent)
+    local f = CreateFrame("Frame", nil, UIParent)
     f:SetSize(1, 1)
     f:SetIgnoreParentScale(true)
 
@@ -67,10 +67,11 @@ local function buildFrame()
     f.bar.absorb = CreateFrame("StatusBar", nil, f.bar)
     f.bar.absorb:SetAllPoints(f.bar)
     f.bar.absorb:SetStatusBarTexture(BAR_TEX)
-    f.bar.absorb:SetStatusBarColor(0.0, 0.8, 1.0, 0.75)
+    f.bar.absorb:SetStatusBarColor(1, 1, 1, 1)
     f.bar.absorb:SetAlpha(0.75)
     f.bar.absorb:SetMinMaxValues(0, 1)
     f.bar.absorb:SetValue(0)
+    f.bar.absorb:SetReverseFill(true)
 
     f.bar._calc = CreateUnitHealPredictionCalculator()
     f.bar._calc:SetMaximumHealthMode(Enum.UnitMaximumHealthMode.WithAbsorbs)

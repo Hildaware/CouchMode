@@ -288,22 +288,20 @@ function banter:GetDefaults()
             enabled = true,
             -- Blizzard UI suppression
             disableTalkingHead = true,
-            disableChatLog = false,
             -- Bubble mode
-            reskinBubbles = false,
-            hideScrollLog = false,
+            reskinBubbles = true,
+            hideScrollLog = true,
             -- Visibility
             -- Position (per Edit Mode layout)
             positions = {},
             -- Sizing
-            itemWidth = 512,
-            growUpwards = true,
+            itemWidth = 240,
             -- Name font
-            nameFontFace = 'Bebas Neue',
+            nameFontFace = 'Arial Narrow',
             nameFontSize = 28,
             nameFontColor = { r = .902, g = .702, b = 0, a = 1 },
             -- Message font
-            msgFontFace = 'Bebas Neue',
+            msgFontFace = 'Arial Narrow',
             msgFontSize = 16,
             msgFontColor = { r = 1, g = 1, b = 0, a = 1 },
             styleByType = true,

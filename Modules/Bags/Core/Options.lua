@@ -1,17 +1,17 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
-local LSM        = LibStub("LibSharedMedia-3.0")
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local LSM = LibStub("LibSharedMedia-3.0")
 
 ---@class Bags: AceModule
 local bagsModule = addon:GetModule('Bags')
 
 ---@class Options: AceModule
-local options    = addon:NewModule('Bags.Options')
+local options = addon:NewModule('Bags.Options')
 
 ---@class Database: AceModule
-local database   = addon:GetModule('Bags.Database')
+local database = addon:GetModule('Bags.Database')
 
 function bagsModule:GetOptions()
     return 'bags', {
@@ -90,14 +90,6 @@ function bagsModule:GetOptions()
                 get = function() return database:GetBackgroundOpacity() end,
                 set = function(_, value) database:SetBackgroundOpacity(value) end
             },
-            reload = {
-                name = 'Reload UI',
-                desc =
-                'Some textures/elements may be a bit off after changing some options. Reload the UI to apply changes.',
-                type = 'execute',
-                order = 100,
-                func = function() ReloadUI() end
-            }
         }
     }
 end

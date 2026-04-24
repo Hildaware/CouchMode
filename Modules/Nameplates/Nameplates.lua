@@ -86,14 +86,14 @@ function nameplates:GetDefaults()
         nameplates = {
             enabled = true,
             font = 'Arial Narrow',
-            fontSize = 16,
+            fontSize = 18,
             fontFlag = 'OUTLINE',
             shadowEnabled = true,
-            alwaysShowParty = false,
-            alwaysShowPlayers = 'never',
-            alwaysShowImportant = false,
+            alwaysShowParty = true,
+            alwaysShowPlayers = 'cities',
+            alwaysShowImportant = true,
             occludedAlpha = 0,
-            disableSoftTargetFriendInCombat = false,
+            disableSoftTargetFriendInCombat = true,
         },
     }
 end

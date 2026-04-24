@@ -50,10 +50,10 @@ function tips:GetDefaults()
     return {
         tips = {
             enabled = true,
-            showFriendlyNpcs = true,
+            showFriendlyNpcs = false,
             showEnemyNpcs = true,
             alwaysShowQuestObjectiveTips = true,
-            alwaysShowImportant = false,
+            alwaysShowImportant = true,
             shadowEnabled = true,
             font = 'Arial Narrow',
             fontFlags = '',

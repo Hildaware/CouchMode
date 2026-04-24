@@ -121,12 +121,13 @@ function tips:OnEnable()
             end
         end)
     end
+
     -- Suppress the native GameTooltip when it's showing a unit.
-    -- Guard with a flag so we don't double-hook on re-enable.
     if not tooltipHooked then
         tooltipHooked = true
         GameTooltip:HookScript("OnShow", function(self)
-            if self:GetUnit() then self:Hide() end
+            local data = self.tooltipData
+            if data and data.type == Enum.TooltipDataType.Unit then self:Hide() end
         end)
     end
 

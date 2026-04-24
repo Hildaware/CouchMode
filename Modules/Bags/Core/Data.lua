@@ -1,23 +1,23 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class Bags: AceModule
 local bagsModule = addon:GetModule('Bags')
 
 ---@class Database: AceModule
-local database   = addon:NewModule('Bags.Database')
+local database = addon:NewModule('Bags.Database')
 
 ---@class Enums: AceModule
-local enums      = addon:GetModule('Bags.Enums')
+local enums = addon:GetModule('Bags.Enums')
 
 ---@class databaseOptions
-local defaults   = {
+local defaults = {
     bags = {
         enabled = true,
         Characters = {},
-        ViewType = enums.ViewType.Compact,
+        ViewType = enums.ViewType.Full,
         BackgroundOpacity = 0.75,
         Font = {
             Name = 'Accidental Presidency',
