@@ -41,6 +41,7 @@ local gui = {
 ---@field bar Texture
 ---@field tex Texture
 ---@field border Texture
+---@field sparkClip Frame
 ---@field spark Texture
 ---@field latency Texture
 
@@ -104,7 +105,19 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
     borderCenter:SetTexture(MEDIA.TEXTURE)
     borderCenter:SetAtlas(MEDIA.BORDER_ATLAS)
 
-    local spark = borderFrm:CreateTexture(nil, "OVERLAY")
+    -- Clipper constrains the spark to the fill area so it never overhangs the bar edges.
+    local sparkClip = CreateFrame("Frame", nil, borderFrm)
+    sparkClip:SetClipsChildren(true)
+    if isLeft then
+        sparkClip:SetPoint("LEFT", parentFrame, "LEFT")
+        sparkClip:SetPoint("RIGHT", iconFrm, "LEFT")
+    else
+        sparkClip:SetPoint("LEFT", iconFrm, "RIGHT")
+        sparkClip:SetPoint("RIGHT", parentFrame, "RIGHT")
+    end
+    sparkClip:SetHeight(h)
+
+    local spark = sparkClip:CreateTexture(nil, "OVERLAY")
     spark:SetTexture(MEDIA.SPARK_TEX)
     spark:SetAtlas(MEDIA.SPARK_ATLAS)
     if isLeft then
@@ -118,6 +131,7 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
         bar = fill,
         tex = fillTex,
         border = borderCenter,
+        sparkClip = sparkClip,
         spark = spark,
     }
 end
@@ -141,7 +155,8 @@ local function RefreshBarSide(cap, isLeft, t)
     t.bar:SetHeight(cap)
     t.tex:SetHeight(cap)
     t.border:SetHeight(cap)
-    t.spark:SetSize(cap / 2, cap * 1.5)
+    t.sparkClip:SetHeight(cap)
+    t.spark:SetSize(cap / 2, cap)
 end
 
 -- ── Refresh ───────────────────────────────────────────────────────────────────
@@ -437,7 +452,9 @@ end
 
 --#region ── Module lifecycle ──────────────────────────────────────────────────────────
 function castBar:OnEnable()
-    if not addon.db.profile.playerCastBar.enabled then self:Disable(); return end
+    if not addon.db.profile.playerCastBar.enabled then
+        self:Disable(); return
+    end
 
     self:CreateUI()
 

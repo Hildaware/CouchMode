@@ -13,10 +13,11 @@ local options = addon:NewModule('Options')
 
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
-local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'PlayerManaBar', 'Banter' }
+local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'PlayerPowerBar',
+    'PlayerManaBar', 'Banter' }
 
 -- Modules whose options are nested together under a single "Player Bars" group.
-local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerManaBar = true }
+local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerPowerBar = true, PlayerManaBar = true }
 
 function options:OnInitialize()
     -- Collect defaults from each module.
@@ -35,11 +36,11 @@ function options:OnInitialize()
     -- Collect settings panels from each module.
     local settings = { type = 'group', args = {} }
     local playerBarsGroup = {
-        name        = 'Player Bars',
-        type        = 'group',
-        order       = 2,
+        name = 'Player Bars',
+        type = 'group',
+        order = 2,
         childGroups = 'tab',
-        args        = {},
+        args = {},
     }
     for _, modName in ipairs(MODULES) do
         local mod = addon:GetModule(modName) --[[@as OptionsModule]]

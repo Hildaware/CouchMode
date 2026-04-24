@@ -2,6 +2,7 @@
     <Include file = 'CastBar/CastBar.xml' />
     <Include file = 'PlayerHealthBar.lua' />
     <Include file = 'PlayerManaBar.lua' />
+    <Include file = 'PlayerPowerBar.lua' />
     <Include file = 'Map/Map.xml' />
     <Include file = 'Nameplates/Nameplates.xml' />
     <Include file = 'Bags/Bags.xml' />

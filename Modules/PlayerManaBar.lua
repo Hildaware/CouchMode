@@ -267,7 +267,7 @@ function manaBar:GetOptions()
     return 'playerManaBar', {
         name = 'Mana',
         type = 'group',
-        order = 2,
+        order = 3,
         args = args,
     }
 end
