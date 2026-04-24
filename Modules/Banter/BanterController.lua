@@ -29,23 +29,12 @@ function banter:RepositionBants()
 
         bant.widget:ClearAllPoints()
 
-        ---@type Frame
-        local targetRelativeFrame = self.instance.widget
-        ---@type FramePoint
-        local targetPoint = 'BOTTOMLEFT'
-        ---@type FramePoint
-        local targetRelativePoint = 'BOTTOMLEFT'
-        local targetX = padding
-        local targetY = padding
-
         local prevBant = bants[i - 1]
         if prevBant and prevBant.widget then
-            targetRelativeFrame = prevBant.widget
-            targetRelativePoint = 'TOPLEFT'
-            targetX = 0
+            bant.widget:SetPoint('BOTTOMLEFT', prevBant.widget, 'TOPLEFT', 0, padding)
+        else
+            bant.widget:SetPoint('BOTTOMLEFT', self.instance.widget, 'BOTTOMLEFT', padding, padding)
         end
-
-        bant.widget:SetPoint(targetPoint, targetRelativeFrame, targetRelativePoint, targetX, targetY)
     end
 end
 
@@ -131,8 +120,6 @@ end
 
 --#endregion
 
---#endregion
-
 --#region ── Bant construction ────────────────────────────────────────────────
 
 ---@param data BanterData
@@ -152,31 +139,29 @@ function banter:_BuildBant(data)
         or 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
     nameWidget:SetText(data.name)
     nameWidget:SetFont(nameFontPath, d.nameFontSize, 'OUTLINE')
+
+    local classColor
     if data.guid then
-        -- Player bant: class-color the name, fall back to db color if class unknown.
         local _, englishClass = GetPlayerInfoByGUID(data.guid)
-        local classColor = englishClass and RAID_CLASS_COLORS[englishClass]
-        if classColor then
-            nameWidget:SetTextColor(classColor.r, classColor.g, classColor.b, 1)
-        else
-            local nc = d.nameFontColor
-            nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
-        end
+        classColor = englishClass and RAID_CLASS_COLORS[englishClass]
+    end
+    if classColor then
+        nameWidget:SetTextColor(classColor.r, classColor.g, classColor.b, 1)
     else
         local nc = d.nameFontColor
         nameWidget:SetTextColor(nc.r, nc.g, nc.b, nc.a)
     end
 
     local portrait3D = bant.widget.subWidgets.portrait3D
-    local hasPortrait = (data.displayId and data.displayId > 0) or data.unitToken
+    local hasDisplayId = data.displayId and data.displayId > 0
+    local hasPortrait = hasDisplayId or data.unitToken
 
-    if data.displayId and data.displayId > 0 then
+    if hasDisplayId then
         portrait3D:SetDisplayInfo(data.displayId)
-        portrait3D:SetCamera(0)
-        portrait3D:SetPortraitZoom(1)
-        portrait3D:SetAnimation(60)
     elseif data.unitToken then
         portrait3D:SetUnit(data.unitToken)
+    end
+    if hasPortrait then
         portrait3D:SetCamera(0)
         portrait3D:SetPortraitZoom(1)
         portrait3D:SetAnimation(60)
@@ -244,20 +229,12 @@ function banter:_AddBantToStack(bant, messageWidget, duration)
     table.insert(activeBants, bant)
 
     local prevBant = activeBants[#activeBants - 1]
-    local targetPoint, targetRelativeFrame, targetRelativePoint, targetX, targetY
-
+    local targetPoint = 'BOTTOMLEFT'
+    local targetRelativeFrame, targetRelativePoint, targetX, targetY
     if prevBant then
-        targetPoint = 'BOTTOMLEFT'
-        targetRelativeFrame = prevBant.widget
-        targetRelativePoint = 'TOPLEFT'
-        targetX = 0
-        targetY = padding
+        targetRelativeFrame, targetRelativePoint, targetX, targetY = prevBant.widget, 'TOPLEFT', 0, padding
     else
-        targetPoint = 'BOTTOMLEFT'
-        targetRelativeFrame = self.instance.widget
-        targetRelativePoint = 'BOTTOMLEFT'
-        targetX = padding
-        targetY = padding
+        targetRelativeFrame, targetRelativePoint, targetX, targetY = self.instance.widget, 'BOTTOMLEFT', padding, padding
     end
 
     bant.widget:SetPoint(targetPoint, targetRelativeFrame, targetRelativePoint, targetX, targetY)
@@ -287,26 +264,32 @@ end
 
 --#region ── Bubble mode ──────────────────────────────────────────────────────
 
-local function unwrapBubble(entry)
-    if type(entry) == 'userdata' then return entry end
-    if type(entry) == 'table' then return entry end -- 12.0+ wrapper table acts as Frame via __index
-end
-
-local function getBubbleText(bubble)
-    if not bubble then return end
-    for _, region in ipairs({ bubble:GetRegions() }) do
+local function findRegionText(frame)
+    for _, region in ipairs({ frame:GetRegions() }) do
         if region.GetText then
             local t = region:GetText()
             if t and not issecretvalue(t) and t ~= '' then return t end
         end
     end
+end
+
+local function getBubbleText(bubble)
+    if not bubble then return end
+    local t = findRegionText(bubble)
+    if t then return t end
     for _, child in ipairs({ bubble:GetChildren() }) do
-        for _, region in ipairs({ child:GetRegions() }) do
-            if region.GetText then
-                local t = region:GetText()
-                if t and not issecretvalue(t) and t ~= '' then return t end
-            end
-        end
+        t = findRegionText(child)
+        if t then return t end
+    end
+end
+
+local function hideBubble(bubble)
+    bubble:SetAlpha(0)
+    for _, region in ipairs({ bubble:GetRegions() }) do
+        region:SetAlpha(0)
+    end
+    for _, child in ipairs({ bubble:GetChildren() }) do
+        child:SetAlpha(0)
     end
 end
 
@@ -317,8 +300,7 @@ end
 ---@param attempts number?
 function banter:FindBubbleForMessage(text, callback, attempts)
     attempts = attempts or 0
-    for _, entry in ipairs(C_ChatBubbles.GetAllChatBubbles(true)) do
-        local bubble = unwrapBubble(entry)
+    for _, bubble in ipairs(C_ChatBubbles.GetAllChatBubbles(true)) do
         if getBubbleText(bubble) == text then
             callback(bubble)
             return
@@ -430,14 +412,7 @@ function banter:AddBants(data)
         else
             -- In combat or in instance: hide the original bubble so it doesn't overlap the scroll log.
             self:FindBubbleForMessage(data.message, function(bubble)
-                if not bubble then return end
-                bubble:SetAlpha(0)
-                for _, region in ipairs({ bubble:GetRegions() }) do
-                    region:SetAlpha(0)
-                end
-                for _, child in ipairs({ bubble:GetChildren() }) do
-                    child:SetAlpha(0)
-                end
+                if bubble then hideBubble(bubble) end
             end)
         end
     end

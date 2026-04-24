@@ -51,16 +51,19 @@ local activeFilter  = 'all'
 
 --#region ── Filter ───────────────────────────────────────────────────────────
 
+local FILTER_CHANNEL = {
+    whisper = 'WHISPER',
+    say = 'SAY',
+    party = 'PARTY',
+    instance = 'INSTANCE',
+    raid = 'RAID',
+}
+
 ---@param data BanterData
 local function matchesFilter(data)
     if activeFilter == 'all' then return true end
     if activeFilter == 'npc' then return data.type:find('^CHAT_MSG_MONSTER_') ~= nil end
-    if activeFilter == 'whisper' then return data.channel == 'WHISPER' end
-    if activeFilter == 'say' then return data.channel == 'SAY' end
-    if activeFilter == 'party' then return data.channel == 'PARTY' end
-    if activeFilter == 'instance' then return data.channel == 'INSTANCE' end
-    if activeFilter == 'raid' then return data.channel == 'RAID' end
-    return false
+    return data.channel == FILTER_CHANNEL[activeFilter]
 end
 
 --#endregion

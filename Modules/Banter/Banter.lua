@@ -40,6 +40,25 @@ banter.EVENTS = {
     CHAT_MSG_WHISPER = 'CHAT_MSG_WHISPER',
 }
 
+local MONSTER_EVENTS = {
+    'CHAT_MSG_MONSTER_YELL',
+    'CHAT_MSG_MONSTER_SAY',
+    'CHAT_MSG_MONSTER_WHISPER',
+    'CHAT_MSG_MONSTER_PARTY',
+}
+
+local PLAYER_EVENTS = {
+    'CHAT_MSG_SAY',
+    'CHAT_MSG_YELL',
+    'CHAT_MSG_PARTY',
+    'CHAT_MSG_RAID',
+    'CHAT_MSG_INSTANCE_CHAT',
+    'CHAT_MSG_PARTY_LEADER',
+    'CHAT_MSG_INSTANCE_CHAT_LEADER',
+    'CHAT_MSG_RAID_LEADER',
+    'CHAT_MSG_WHISPER',
+}
+
 local TEST_ARGS = {
     { name = 'Lorewalker Cho',            id = 54961, message = 'Stay a while, and listen.' },
     { name = 'Highlord Bolvar Fordragon', id = 1748,  message = 'Power can be easily taken, but should not be given lightly. Those who lead through fear only stay in power while those they govern lack courage.' },
@@ -75,16 +94,11 @@ banter.CalculateDisplayDuration = CalculateDisplayDuration
 local talkingHeadHooked = false
 
 local function applyTalkingHeadSuppression(suppress)
-    if suppress then
-        if not talkingHeadHooked then
-            if TalkingHeadFrame then
-                hooksecurefunc(TalkingHeadFrame, 'Show', function(f)
-                    if db().disableTalkingHead then f:Hide() end
-                end)
-                talkingHeadHooked = true
-            end
-        end
-    end
+    if not suppress or talkingHeadHooked or not TalkingHeadFrame then return end
+    hooksecurefunc(TalkingHeadFrame, 'Show', function(f)
+        if db().disableTalkingHead then f:Hide() end
+    end)
+    talkingHeadHooked = true
 end
 
 --#endregion
@@ -137,7 +151,7 @@ function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _,
     ---@type BanterData
     local data = {
         id = playerId,
-        unitToken = unitToken or nil,
+        unitToken = unitToken,
         guid = guid,
         channel = channel,
         name = name,
@@ -168,20 +182,12 @@ function banter:OnEnable()
         LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)
     end
 
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_YELL, 'OnMonsterMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_SAY, 'OnMonsterMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_WHISPER, 'OnMonsterMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_PARTY, 'OnMonsterMessage')
-
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_SAY, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_YELL, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER, 'OnPlayerMessage')
-    self:RegisterEvent(banter.EVENTS.CHAT_MSG_WHISPER, 'OnPlayerMessage')
+    for _, event in ipairs(MONSTER_EVENTS) do
+        self:RegisterEvent(event, 'OnMonsterMessage')
+    end
+    for _, event in ipairs(PLAYER_EVENTS) do
+        self:RegisterEvent(event, 'OnPlayerMessage')
+    end
 
     if db().disableTalkingHead then
         applyTalkingHeadSuppression(true)
@@ -258,19 +264,12 @@ function banter:OnEnable()
 end
 
 function banter:OnDisable()
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_YELL)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_SAY)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_WHISPER)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_MONSTER_PARTY)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_SAY)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_YELL)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_PARTY_LEADER)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_INSTANCE_CHAT_LEADER)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_RAID_LEADER)
-    self:UnregisterEvent(banter.EVENTS.CHAT_MSG_WHISPER)
+    for _, event in ipairs(MONSTER_EVENTS) do
+        self:UnregisterEvent(event)
+    end
+    for _, event in ipairs(PLAYER_EVENTS) do
+        self:UnregisterEvent(event)
+    end
 
     if self.instance then
         self.instance.widget:Hide()

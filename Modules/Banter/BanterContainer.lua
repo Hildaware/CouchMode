@@ -78,17 +78,17 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     local rightPad = noPortrait and 8 or 24
     local availableWidth = d.itemWidth - leftPad - rightPad
 
+    local fontPath = fetchFont(d.msgFontFace)
     self.message:SetWidth(availableWidth)
     self.message:SetText(text)
-    self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
 
     -- Scale up single-line messages
     local bumpedSize = math.floor(messageSize * 1.3)
-    self.message:SetFont(fetchFont(d.msgFontFace), bumpedSize, 'OUTLINE')
+    self.message:SetFont(fontPath, bumpedSize, 'OUTLINE')
     if self.message:GetUnboundedStringWidth() <= availableWidth then
         messageSize = bumpedSize
     else
-        self.message:SetFont(fetchFont(d.msgFontFace), messageSize, 'OUTLINE')
+        self.message:SetFont(fontPath, messageSize, 'OUTLINE')
     end
 
     self.message:SetTextColor(r, g, b, a)
