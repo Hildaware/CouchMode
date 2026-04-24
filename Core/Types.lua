@@ -54,6 +54,7 @@
 ---@field poiLabelsShowRares       boolean
 ---@field poiLabelsShowTreasures   boolean
 ---@field poiLabelsShowPetTamers   boolean
+---@field positions                table<string, {point:string, x:number, y:number}>
 
 
 ---@class CTScrollContainer: ScrollFrame

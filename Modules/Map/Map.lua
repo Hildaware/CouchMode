@@ -6,6 +6,8 @@ local addon          = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class MapModule
 local map            = addon:NewModule('Minimap')
 
+local LibEditMode    = LibStub('LibEditMode')
+
 local _G             = _G
 local unpack         = unpack
 local Minimap        = _G.Minimap
@@ -30,7 +32,67 @@ end
 function map:OnEnable()
     if not addon.db.profile.minimap.enabled then self:Disable(); return end
 
-    if not map.container then map.createFrame() end
+    if not map.container then
+        map.createFrame()
+
+        local db = addon.db.profile.minimap ---@type MinimapDB
+        local frame = map.container
+
+        LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+            db.positions[layoutName] = { point = point, x = x, y = y }
+        end, { point = 'TOPRIGHT', x = -20, y = -20 }, 'CouchMode Map')
+
+        LibEditMode:AddFrameSettings(frame, {
+            {
+                kind     = LibEditMode.SettingType.Dropdown,
+                name     = 'Shape',
+                desc     = 'Square: full square. Rectangle: wide letterbox.',
+                default  = 'rectangle',
+                values   = {
+                    { text = 'Square',    value = 'square' },
+                    { text = 'Rectangle', value = 'rectangle' },
+                },
+                get = function(_) return db.shape end,
+                set = function(_, value, fromReset)
+                    db.shape = fromReset and 'rectangle' or value
+                    map.applySettings()
+                end,
+            },
+            {
+                kind       = LibEditMode.SettingType.Slider,
+                name       = 'Size',
+                desc       = 'Normal minimap width in pixels.',
+                default    = 200,
+                minValue   = 100,
+                maxValue   = 500,
+                valueStep  = 10,
+                get = function(_) return db.size end,
+                set = function(_, value, fromReset)
+                    db.size = fromReset and 200 or value
+                    map.applySettings()
+                end,
+            },
+        })
+
+        LibEditMode:RegisterCallback('layout', function(layoutName)
+            local pos = db.positions[layoutName]
+            frame:ClearAllPoints()
+            if pos then
+                frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
+            else
+                frame:SetPoint(db.point, UIParent, db.point, db.x, db.y)
+            end
+        end)
+
+        LibEditMode:RegisterCallback('enter', function()
+            frame:Show()
+        end)
+
+        LibEditMode:RegisterCallback('exit', function()
+            -- nothing to do; map visibility is managed by normal gameplay state
+        end)
+    end
+
     map.container:Show()
 end
 
@@ -117,6 +179,7 @@ function map:GetDefaults()
             growSize                 = 420,
             growShape                = "rectangle",
             locked                   = true,
+            positions                = {},
             zoom                     = 2,
             growZoom                 = 3,
             point                    = "TOPRIGHT",
@@ -187,37 +250,11 @@ function map:GetOptions()
                 inline = true,
                 order  = 3,
                 args   = {
-                    shape = {
-                        name   = 'Shape',
-                        desc   = 'Square: full square. Rectangle: wide letterbox.',
-                        type   = 'select',
-                        order  = 1,
-                        values = { square = 'Square', rectangle = 'Rectangle' },
-                        get    = function() return addon.db.profile.minimap.shape end,
-                        set    = function(_, value)
-                            addon.db.profile.minimap.shape = value
-                            map.applySettings()
-                        end,
-                    },
-                    size = {
-                        name  = 'Size',
-                        desc  = 'Normal minimap width in pixels.',
-                        type  = 'range',
-                        order = 2,
-                        min   = 100,
-                        max   = 500,
-                        step  = 10,
-                        get   = function() return addon.db.profile.minimap.size end,
-                        set   = function(_, value)
-                            addon.db.profile.minimap.size = value
-                            map.applySettings()
-                        end,
-                    },
                     alpha = {
                         name  = 'Opacity',
                         desc  = 'Transparency of the minimap overlay.',
                         type  = 'range',
-                        order = 3,
+                        order = 1,
                         min   = 0.1,
                         max   = 1.0,
                         step  = 0.05,
@@ -225,17 +262,6 @@ function map:GetOptions()
                         set   = function(_, value)
                             addon.db.profile.minimap.alpha = value
                             if map.container then map.container:SetAlpha(value) end
-                        end,
-                    },
-                    locked = {
-                        name  = 'Lock Position',
-                        desc  = 'Lock the minimap in place. Disable to show the drag handle.',
-                        type  = 'toggle',
-                        order = 4,
-                        get   = function() return addon.db.profile.minimap.locked end,
-                        set   = function(_, value)
-                            addon.db.profile.minimap.locked = value
-                            map.applyLock()
                         end,
                     },
                 },

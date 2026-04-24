@@ -58,9 +58,9 @@ function tips:GetDefaults()
             font = 'Arial Narrow',
             fontFlags = '',
             width = TIP_W_DEFAULT,
-            x = 0,
-            y = -200,
-            locked = true,
+            positions = {
+                ['Default'] = { point = 'TOPLEFT', x = 0, y = -400 },
+            },
         },
     }
 end
@@ -135,18 +135,6 @@ function tips:GetOptions()
                 inline = true,
                 order = 3,
                 args = {
-                    lockToggle = {
-                        name = function() return tipsDB().locked and 'Unlock Position' or 'Lock Position' end,
-                        desc =
-                        'Toggle the drag handle. While unlocked, a green border marks the frame and it can be freely dragged.',
-                        type = 'execute',
-                        order = 5,
-                        func = function()
-                            local db = tipsDB()
-                            db.locked = not db.locked
-                            tips.applyDock()
-                        end,
-                    },
                     font = {
                         name = 'Font',
                         type = 'select',
@@ -179,20 +167,6 @@ function tips:GetOptions()
                         set = function(_, value)
                             tipsDB().shadowEnabled = value
                             tips.applyShadow()
-                        end,
-                    },
-                    width = {
-                        name = 'Max Width',
-                        desc = 'Max width of the tooltip frame in pixels.',
-                        type = 'range',
-                        order = 2,
-                        min = 120,
-                        max = 500,
-                        step = 1,
-                        get = function() return tipsDB().width end,
-                        set = function(_, value)
-                            tipsDB().width = value
-                            tips.applyWidth()
                         end,
                     },
                 },

@@ -3,7 +3,8 @@
 ## Notes: Utilities to make WoW a more 'Console-like' experience
 ## Author: Sel
 ## Version: 12.0.5
-# IconTexture: Interface\AddOns\Bags\Media\Logo
+## Category: User Interface
+## IconTexture: Interface\AddOns\CouchMode\Media\logo
 ## OptionalDeps: ConsolePort, Masque, Pawn, CanIMogIt, Scrap, totalRP3, Musician
 ## SavedVariables: CouchModeDB
 ## X-Curse-Project-ID: 950246

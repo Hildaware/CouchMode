@@ -54,16 +54,15 @@ function banter:RemoveBant(bantToRemove)
     if bantToRemove.isBubbleMode then
         bantToRemove.isBubbleMode = false
         local shownFor = bantToRemove.shownAt and (GetTime() - bantToRemove.shownAt) or math.huge
-        local premature = bantToRemove.bubbleDuration and shownFor < bantToRemove.bubbleDuration
+        local minVisibleDuration = bantToRemove.bubbleDuration and bantToRemove.bubbleDuration * 0.8 or math.huge
+        local premature = shownFor < minVisibleDuration
         UIFrameFadeOut(bantToRemove.widget, 0.5, 1, 0)
         C_Timer.After(0.5, function()
-            self:Release(bantToRemove)
-            -- Bubble vanished before its message duration expired and the scroll log was
-            -- suppressed (hideScrollLog=true), so the message would be lost entirely.
-            if premature and db().hideScrollLog and bantToRemove.data then
+            if premature and bantToRemove.data then
                 local fb, fbMsg, fbDur = self:_BuildBant(bantToRemove.data)
                 self:_AddBantToStack(fb, fbMsg, fbDur)
             end
+            self:Release(bantToRemove)
         end)
         return
     end

@@ -1,10 +1,11 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local LibEditMode = LibStub('LibEditMode')
 
 ---@class TipsModule: AceModule
-local tips       = addon:GetModule('Tips')
+local tips = addon:GetModule('Tips')
 ---@cast tips +AceEvent-3.0
 
 --#region ── Unit priority ────────────────────────────────────────────────────
@@ -18,14 +19,14 @@ local function isEnemyNpc(unit)
 end
 
 local function getCurrentUnit()
-    local db               = tips.tipsDB()
-    local showFriendlyNpcs           = db.showFriendlyNpcs
-    local showEnemyNpcs              = db.showEnemyNpcs
+    local db = tips.tipsDB()
+    local showFriendlyNpcs = db.showFriendlyNpcs
+    local showEnemyNpcs = db.showEnemyNpcs
     local alwaysShowQuestObjectiveTips = db.alwaysShowQuestObjectiveTips
-    local alwaysShowImportant          = db.alwaysShowImportant
+    local alwaysShowImportant = db.alwaysShowImportant
     local function allow(unit)
         local wouldHide = (not showFriendlyNpcs and isFriendlyNpc(unit))
-                       or (not showEnemyNpcs and isEnemyNpc(unit))
+            or (not showEnemyNpcs and isEnemyNpc(unit))
         if wouldHide then
             if alwaysShowQuestObjectiveTips and addon.QuestUtils.isQuestUnit(unit) then
                 return true
@@ -64,8 +65,7 @@ local function fadeInFrame(f)
 end
 
 local function showTip(unit)
-    tips.hideGhostFrame()
-    local f     = tips.activeFrame
+    local f = tips.activeFrame
     local isNew = (f == nil)
     if isNew then
         f = tips.acquire()
@@ -88,9 +88,6 @@ local function hideTip()
         UIFrameFadeOut(f, 0.25, f:GetAlpha(), 0)
         C_Timer.After(0.25, function()
             tips.release(f)
-            if not tips.tipsDB().locked then
-                tips.showGhostFrame()
-            end
         end)
     end
 end
@@ -111,7 +108,9 @@ end
 local tooltipHooked = false
 
 function tips:OnEnable()
-    if not tips.tipsDB().enabled then self:Disable(); return end
+    if not tips.tipsDB().enabled then
+        self:Disable(); return
+    end
 
     tips.TIP_W = tips.tipsDB().width or 240
     if not tips._trpCallbackRegistered then
@@ -140,6 +139,63 @@ function tips:OnEnable()
     self:RegisterEvent("UNIT_NAME_UPDATE", "OnUnitNameUpdate")
     self:RegisterEvent("PLAYER_GUILD_UPDATE", "OnGuildUpdate")
     self:RegisterEvent("INSPECT_READY", "OnInspectReady")
+
+    -- Initialize LibEditMode frame if not already done
+    if not tips.editModeFrame then
+        local f = CreateFrame('Frame', 'CouchModeTipsAnchor', UIParent)
+        f:SetSize(tips.TIP_W + 4, 180)
+        f:Hide()
+        tips.editModeFrame = f
+
+        LibEditMode:AddFrame(tips.editModeFrame, function(_, layoutName, point, x, y)
+            tips.tipsDB().positions[layoutName] = { point = point, x = x, y = y }
+        end, { point = 'TOPLEFT', x = 0, y = -400 }, 'CouchMode Tips')
+
+        --     tips.tipsDB().positions = tips.tipsDB().positions or {}
+        --     tips.tipsDB().positions[layoutName] = { point = point, x = x, y = y }
+        --     if tips.activeFrame then
+        --         tips.applyAnchor(tips.activeFrame)
+        --     end
+        -- end, { point = 'TOP', x = 0, y = -200 }, 'CouchMode Tips')
+
+        LibEditMode:AddFrameSettings(tips.editModeFrame, {
+            {
+                kind = LibEditMode.SettingType.Slider,
+                name = 'Width',
+                desc = 'Width of the tooltip frame in pixels.',
+                default = 240,
+                minValue = 120,
+                maxValue = 500,
+                valueStep = 10,
+                get = function(_) return tips.tipsDB().width end,
+                set = function(_, value, fromReset)
+                    tips.tipsDB().width = fromReset and 240 or value
+                    tips.applyWidth()
+                end,
+            },
+        })
+
+        LibEditMode:RegisterCallback('layout', function(layoutName)
+            local pos = tips.tipsDB().positions[layoutName]
+            tips.editModeFrame:ClearAllPoints()
+            if pos then
+                tips.editModeFrame:SetPoint(pos.point, pos.x, pos.y)
+            else
+                tips.editModeFrame:SetPoint('TOPLEFT', UIParent, 'TOPLEFT', 0, -400)
+            end
+        end)
+
+        LibEditMode:RegisterCallback('enter', function()
+            tips.editModeFrame:Show()
+            if tips.activeFrame then
+                tips.activeFrame:Show()
+            end
+        end)
+
+        LibEditMode:RegisterCallback('exit', function()
+            tips.editModeFrame:Hide()
+        end)
+    end
 
     refreshTip()
 end
@@ -186,7 +242,7 @@ function tips:OnWorldCursorUpdate(_, anchorType)
             if text and text ~= "" then
                 if line.type == Enum.TooltipDataLineType.QuestObjective then
                     local finished = false
-                    local p1, p2   = text:match("(%d+)/(%d+)")
+                    local p1, p2 = text:match("(%d+)/(%d+)")
                     if p1 and p2 then
                         finished = tonumber(p1) >= tonumber(p2)
                     else
@@ -205,7 +261,7 @@ function tips:OnWorldCursorUpdate(_, anchorType)
         if #quests == 0 then quests = nil end
     end
 
-    local f     = tips.activeFrame
+    local f = tips.activeFrame
     local isNew = (f == nil)
     if isNew then
         f = tips.acquire()

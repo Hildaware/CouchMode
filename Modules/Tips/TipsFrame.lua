@@ -8,49 +8,16 @@ local tips = addon:GetModule('Tips')
 
 --#region ── Anchor ───────────────────────────────────────────────────────────
 
--- Derives the best anchor point from the frame's current screen position and
--- stores x/y as offsets from that corner (rather than from CENTER).
-local function saveAnchor(frame)
-    local db = tips.tipsDB()
-    local uiW = UIParent:GetWidth()
-    local uiH = UIParent:GetHeight()
-    local cx = frame:GetLeft() + frame:GetWidth() / 2
-    local cy = frame:GetBottom() + frame:GetHeight() / 2
-    local h = cx < uiW * 0.4 and "LEFT" or cx > uiW * 0.6 and "RIGHT" or ""
-    -- Default to TOP so the frame always grows downward; only flip to BOTTOM
-    -- when near the very bottom of the screen.
-    local v = cy < uiH * 0.2 and "BOTTOM" or "TOP"
-    db.anchor = v .. h
-    db.x = math.floor((h == "LEFT" and frame:GetLeft()
-        or h == "RIGHT" and (frame:GetRight() - uiW)
-        or (cx - uiW / 2)) + 0.5)
-    db.y = math.floor((v == "TOP" and (frame:GetTop() - uiH)
-        or frame:GetBottom()) + 0.5)
-end
-
 ---@param f TipsFrame
 function tips.applyAnchor(f)
     if not f then return end
     local db = tips.tipsDB()
-    local anchor = db.anchor or "TOP"
-    f:ClearAllPoints()
-    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
-    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
-end
+    local LibEditMode = LibStub('LibEditMode')
+    local layoutName = LibEditMode:GetActiveLayoutName() or 'Default'
+    local pos = db.positions[layoutName] or db.positions['Default']
 
-function tips.applyDock()
-    local f = tips.activeFrame
-    local locked = tips.tipsDB().locked
-    if locked then
-        tips.hideGhostFrame()
-        if f then tips.applyAnchor(f) end
-    else
-        if f then
-            tips.applyAnchor(f)
-        else
-            tips.showGhostFrame()
-        end
-    end
+    f:ClearAllPoints()
+    f:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
 end
 
 --#endregion
@@ -72,68 +39,6 @@ tips.QUEST_ICON_GAP = 4
 
 --#endregion
 
---#region ── Ghost frame ──────────────────────────────────────────────────────
-
-local function buildGhostFrame()
-    local f = CreateFrame("Frame", nil, UIParent)
-    f:SetFrameStrata("TOOLTIP")
-    f:SetFrameLevel(99)
-    f:SetMovable(true)
-    f:SetClampedToScreen(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-
-    local bg = f:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(f)
-    bg:SetColorTexture(0, 0, 0, 0.55)
-
-    local label = f:CreateFontString(nil, "OVERLAY")
-    label:SetFont(tips.currentSubFont())
-    label:SetPoint("CENTER", f, "CENTER", 0, 0)
-    label:SetText("Drag to reposition")
-    label:SetVertexColor(0.3, 1.0, 0.3, 1)
-
-    local border = CreateFrame("Frame", nil, f, "BackdropTemplate")
-    border:SetAllPoints(f)
-    border:SetFrameLevel(f:GetFrameLevel() + 10)
-    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 2 })
-    border:SetBackdropBorderColor(0.3, 1.0, 0.3, 0.9)
-
-    f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-    f:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        saveAnchor(self)
-        local db = tips.tipsDB()
-        self:ClearAllPoints()
-        self:SetPoint(db.anchor, UIParent, db.anchor, db.x, db.y)
-    end)
-
-    f:Hide()
-    return f
-end
-
-function tips.showGhostFrame()
-    if not tips.ghostFrame then
-        tips.ghostFrame = buildGhostFrame()
-    end
-    local db = tips.tipsDB()
-    local f = tips.ghostFrame
-    f:SetWidth(tips.TIP_W + 4)
-    f:SetHeight(math.floor(tips.TIP_W * tips.HEADER_ASPECT) + 8)
-    local anchor = db.anchor or "TOP"
-    f:ClearAllPoints()
-    f:SetPoint(anchor, UIParent, anchor, db.x or 0, db.y or -100)
-    f:Show()
-end
-
-function tips.hideGhostFrame()
-    if tips.ghostFrame then
-        tips.ghostFrame:Hide()
-    end
-end
-
---#endregion
-
 --#region ── Outer frame build ────────────────────────────────────────────────
 
 ---@return TipsFrame
@@ -148,15 +53,6 @@ local function buildContainer()
         width = TIP_W + 4,
         childAlign = "CENTER",
     })
-
-    local function onDragStart(self) if not tips.tipsDB().locked then self:StartMoving() end end
-    local function onDragStop(self)
-        self:StopMovingOrSizing()
-        saveAnchor(self)
-        tips.applyAnchor(container)
-    end
-
-    container:Movable(onDragStart, onDragStop)
 
     container.bg = container:AddBackground("Interface\\Addons\\CouchMode\\Media\\parchment_bg", {
         alpha = 0.85,
@@ -467,10 +363,8 @@ function tips.applyWidth()
     mountPool.flush()
     questPool.flush()
 
-    local gf = tips.ghostFrame
-    if gf and gf:IsShown() then
-        gf:SetWidth(tips.TIP_W + 4)
-        gf:SetHeight(math.floor(tips.TIP_W * tips.HEADER_ASPECT) + 8)
+    if tips.editModeFrame then
+        tips.editModeFrame:SetWidth(tips.TIP_W + 4)
     end
 
     local f = tips.activeFrame
