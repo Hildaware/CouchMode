@@ -2,6 +2,7 @@ local addonName = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
+local LibEditMode = LibStub('LibEditMode')
 
 local SMOOTH_RATE = 2 -- exponential lerp factor (higher = snappier)
 
@@ -25,8 +26,7 @@ local SMOOTH_RATE = 2 -- exponential lerp factor (higher = snappier)
 ---@field absorbBarColor? { r: number, g: number, b: number, a: number }
 
 ---@class StatusBarBaseOptionOpts
----@field description?    string
----@field extraGeneralArgs? table
+---@field description?      string
 ---@field extraDisplayArgs? table
 ---@field extraColorArgs?   table
 
@@ -36,13 +36,10 @@ local StatusBarBase = addon.StatusBarBase
 --#region ── UI Construction ───────────────────────────────────────────────────
 
 --- Creates the standard bar frame structure: container, background, bar(s), border,
---- and a text label overlay. CastUtil is referenced lazily so this is safe to call
---- from Modules even though StatusBarBase is loaded in Core.
----@param cfgFn fun(): table  zero-arg fn returning the module's config subtable
+--- and a text label overlay.
 ---@param opts  StatusBarBaseCreateOpts
 ---@return StatusBarBaseGUI
-function StatusBarBase.CreateBarUI(cfgFn, opts)
-    local CastUtil = addon.CastUtil -- lazy: CastUtil lives in Modules, loaded after Core
+function StatusBarBase.CreateBarUI(opts)
     local media = opts.media
     local gui = {}
 
@@ -51,8 +48,6 @@ function StatusBarBase.CreateBarUI(cfgFn, opts)
         frameLevel = 10,
     })
     gui.frame = container.frame
-
-    CastUtil.ApplyDragToMove(gui.frame, cfgFn)
 
     gui.bg = container:AddBackground(media.BG_ATLAS)
 
@@ -96,15 +91,15 @@ end
 
 --#region ── Shared helpers ────────────────────────────────────────────────────
 
---- Applies size, position, drag-lock, and label visibility from the config to the gui.
+--- Applies size and label visibility from the config to the gui.
+--- Position is managed by LibEditMode; this function intentionally does not touch anchors.
 ---@param gui StatusBarBaseGUI
 ---@param c   table  the module's config subtable
 function StatusBarBase.Refresh(gui, c)
+    gui.frame:SetFrameStrata(c.frameStrata or 'MEDIUM')
     gui.frame:SetSize(c.width, c.height)
-    gui.frame:ClearAllPoints()
-    gui.frame:SetPoint('CENTER', UIParent, 'CENTER', c.xPos, c.yPos)
-    gui.frame:SetMovable(not c.locked)
-    gui.frame:EnableMouse(not c.locked)
+    gui.frame:SetMovable(false)
+    gui.frame:EnableMouse(true)
     gui.label:SetShown(c.showText)
 end
 
@@ -212,6 +207,8 @@ function StatusBarBase.GetBaseDefaults(overrides)
         xPos = 0,
         yPos = -150,
         locked = false,
+        positions = {},
+        frameStrata = 'MEDIUM',
         showText = false,
         autoHide = false,
         showThreshold = 75,
@@ -226,18 +223,15 @@ function StatusBarBase.GetBaseDefaults(overrides)
 end
 
 --- Builds the standard AceOptions args subtable for a resource bar.
---- Includes: enabled toggle, general group (width/height/locked/preview),
---- display group (showText/autoHide/showThreshold), colors group (barColor).
---- Extra args can be injected into any group via opts.extra*Args.
---- The module must implement :Refresh(), :UpdateValue(), :TogglePreview(),
---- and :BuildVisibilityCurve().
+--- Includes: enabled toggle, display group (showText/autoHide/showThreshold), colors group (barColor).
+--- Extra args can be injected into display or colors via opts.extraDisplayArgs / opts.extraColorArgs.
+--- The module must implement :Refresh(), :UpdateValue(), and :BuildVisibilityCurve().
 ---@param dbKey  string                the profile key (e.g. 'playerHealthBar')
 ---@param module table                 the AceModule instance
 ---@param opts?  StatusBarBaseOptionOpts
 ---@return table  args table ready to embed in a GetOptions group
 function StatusBarBase.GetBaseOptionArgs(dbKey, module, opts)
     local db = function() return addon.db.profile[dbKey] end
-    local extraGeneral = opts and opts.extraGeneralArgs or {}
     local extraDisplay = opts and opts.extraDisplayArgs or {}
     local extraColors = opts and opts.extraColorArgs or {}
 
@@ -260,62 +254,6 @@ function StatusBarBase.GetBaseOptionArgs(dbKey, module, opts)
             db().enabled = value
             if value then module:Enable() else module:Disable() end
         end,
-    }
-
-    args.general = {
-        name = 'General',
-        type = 'group',
-        order = 3,
-        inline = true,
-        args = {
-            width = {
-                name = 'Width',
-                desc = 'Width of the bar in pixels.',
-                type = 'range',
-                order = 1,
-                min = 80,
-                max = 600,
-                step = 2,
-                get = function() return db().width end,
-                set = function(_, value)
-                    db().width = value
-                    module:Refresh()
-                    module:UpdateValue()
-                end,
-            },
-            height = {
-                name = 'Height',
-                desc = 'Height of the bar in pixels.',
-                type = 'range',
-                order = 2,
-                min = 10,
-                max = 60,
-                step = 2,
-                get = function() return db().height end,
-                set = function(_, value)
-                    db().height = value
-                    module:Refresh()
-                end,
-            },
-            locked = {
-                name = 'Lock Position',
-                desc = 'Prevent the bar from being dragged.',
-                type = 'toggle',
-                order = 3,
-                get = function() return db().locked end,
-                set = function(_, value)
-                    db().locked = value
-                    module:Refresh()
-                end,
-            },
-            preview = {
-                name = function() return module.preview and 'Hide Preview' or 'Show Preview' end,
-                desc = 'Show the bar so you can drag it into position.',
-                type = 'execute',
-                order = 4,
-                func = function() module:TogglePreview() end,
-            },
-        },
     }
 
     args.display = {
@@ -414,12 +352,100 @@ function StatusBarBase.GetBaseOptionArgs(dbKey, module, opts)
         },
     }
 
-    -- Merge caller-supplied extras into each group
-    for k, v in pairs(extraGeneral) do args.general.args[k] = v end
     for k, v in pairs(extraDisplay) do args.display.args[k] = v end
     for k, v in pairs(extraColors) do args.colors.args[k] = v end
 
     return args
+end
+
+--#endregion
+
+--#region ── LibEditMode helpers ──────────────────────────────────────────────
+
+---@class StatusBarBaseEditModeOpts
+---@field label         string  Edit Mode label (e.g. 'CouchMode Health')
+---@field widthDefault  number  Default/reset value for the Width slider
+---@field heightDefault number  Default/reset value for the Height slider
+---@field exitFn?       fun()   Exit callback; defaults to module:UpdateValue()
+
+--- Registers a standard horizontal bar frame with LibEditMode.
+--- Sets the initial position, wires up AddFrame + AddFrameSettings (Width, Height, Frame Strata),
+--- and registers layout / enter / exit callbacks.
+---@param frame  Frame
+---@param db     table  the module's config subtable
+---@param module table  the AceModule instance (must implement :Refresh() and :UpdateValue())
+---@param opts   StatusBarBaseEditModeOpts
+function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
+    frame:SetPoint('CENTER', UIParent, 'CENTER', db.xPos, db.yPos)
+
+    LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+        db.positions[layoutName] = { point = point, x = x, y = y }
+    end, { point = 'CENTER', x = db.xPos, y = db.yPos }, opts.label)
+
+    LibEditMode:AddFrameSettings(frame, {
+        {
+            kind      = LibEditMode.SettingType.Slider,
+            name      = 'Width',
+            desc      = 'Width of the bar in pixels.',
+            default   = opts.widthDefault,
+            minValue  = 80,
+            maxValue  = 600,
+            valueStep = 2,
+            get = function(_) return db.width end,
+            set = function(_, value, fromReset)
+                db.width = fromReset and opts.widthDefault or value
+                module:Refresh()
+            end,
+        },
+        {
+            kind      = LibEditMode.SettingType.Slider,
+            name      = 'Height',
+            desc      = 'Height of the bar in pixels.',
+            default   = opts.heightDefault,
+            minValue  = 10,
+            maxValue  = 60,
+            valueStep = 2,
+            get = function(_) return db.height end,
+            set = function(_, value, fromReset)
+                db.height = fromReset and opts.heightDefault or value
+                module:Refresh()
+            end,
+        },
+        {
+            kind    = LibEditMode.SettingType.Dropdown,
+            name    = 'Frame Strata',
+            desc    = 'Rendering layer for the bar. Raise this if other frames overlap it.',
+            default = 'MEDIUM',
+            values  = {
+                { text = 'Background',        value = 'BACKGROUND' },
+                { text = 'Low',               value = 'LOW' },
+                { text = 'Medium',            value = 'MEDIUM' },
+                { text = 'High',              value = 'HIGH' },
+                { text = 'Dialog',            value = 'DIALOG' },
+                { text = 'Fullscreen',        value = 'FULLSCREEN' },
+                { text = 'Fullscreen Dialog', value = 'FULLSCREEN_DIALOG' },
+                { text = 'Tooltip',           value = 'TOOLTIP' },
+            },
+            get = function(_) return db.frameStrata end,
+            set = function(_, value, fromReset)
+                db.frameStrata = fromReset and 'MEDIUM' or value
+                module:Refresh()
+            end,
+        },
+    })
+
+    LibEditMode:RegisterCallback('layout', function(layoutName)
+        local pos = db.positions[layoutName]
+        frame:ClearAllPoints()
+        if pos then
+            frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
+        else
+            frame:SetPoint('CENTER', UIParent, 'CENTER', db.xPos, db.yPos)
+        end
+    end)
+
+    LibEditMode:RegisterCallback('enter', function() frame:Show() end)
+    LibEditMode:RegisterCallback('exit',  opts.exitFn or function() module:UpdateValue() end)
 end
 
 --#endregion

@@ -111,13 +111,11 @@ end
 --#region ── UI Construction ───────────────────────────────────────────────────
 
 function manaBar:CreateUI()
-    gui = addon.StatusBarBase.CreateBarUI(cfg, { media = MEDIA })
+    gui = addon.StatusBarBase.CreateBarUI({ media = MEDIA })
 
     gui.frame:SetScript('OnUpdate', addon.StatusBarBase.CreateOnUpdate(self, gui))
 
     self:Refresh()
-    self:UpdateValue()
-    gui.frame:Show()
 end
 
 --#endregion
@@ -125,14 +123,8 @@ end
 --#region ── Preview ───────────────────────────────────────────────────────────
 
 function manaBar:TogglePreview()
-    if self.preview then
-        self.preview = false
-    else
-        self.preview = true
-        gui.frame:ClearAllPoints()
-        gui.frame:SetPoint('CENTER', UIParent, 'CENTER', cfg().xPos, cfg().yPos)
-        gui.frame:Show()
-    end
+    self.preview = not self.preview
+    if self.preview then gui.frame:Show() end
     self:UpdateValue()
 end
 
@@ -178,7 +170,19 @@ function manaBar:OnEnable()
         self:Disable(); return
     end
 
-    self:CreateUI()
+    if not gui.frame then
+        self:CreateUI()
+
+        local db    = cfg()
+        local frame = gui.frame
+
+        addon.StatusBarBase.RegisterWithEditMode(frame, db, self, {
+            label         = 'CouchMode Mana',
+            widthDefault  = 220,
+            heightDefault = 18,
+        })
+    end
+
     self:BuildVisibilityCurve()
     self:RegisterEvent('UNIT_POWER_FREQUENT', 'OnPowerChanged')
     self:RegisterEvent('UNIT_MAXPOWER', 'OnPowerChanged')
@@ -186,6 +190,9 @@ function manaBar:OnEnable()
     self:RegisterEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
     self:RegisterEvent('PLAYER_REGEN_DISABLED', 'OnEnterCombat')
     self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
+
+    gui.frame:Show()
+    self:UpdateValue()
 end
 
 function manaBar:OnDisable()

@@ -41,9 +41,6 @@ end
 function healthBar:Refresh()
     if not gui.frame then return end
     addon.StatusBarBase.Refresh(gui, cfg())
-    -- Always keep mouse enabled so right-click works regardless of lock state.
-    -- Dragging is controlled independently via SetMovable (set by Refresh above).
-    gui.frame:EnableMouse(true)
 end
 
 --#endregion
@@ -148,7 +145,7 @@ end
 --#region ── UI Construction ───────────────────────────────────────────────────
 
 function healthBar:CreateUI()
-    gui = addon.StatusBarBase.CreateBarUI(cfg, {
+    gui = addon.StatusBarBase.CreateBarUI({
         media = MEDIA,
         hasAbsorbBar = true,
     })
@@ -207,8 +204,6 @@ function healthBar:CreateUI()
     gui.frame:SetScript('OnUpdate', addon.StatusBarBase.CreateOnUpdate(self, gui, { hasAbsorbBar = true }))
 
     self:Refresh()
-    self:UpdateValue()
-    gui.frame:Show()
 end
 
 --#endregion
@@ -216,14 +211,9 @@ end
 --#region ── Preview ───────────────────────────────────────────────────────────
 
 function healthBar:TogglePreview()
-    if self.preview then
-        self.preview = false
-    else
-        self.preview = true
-        gui.frame:ClearAllPoints()
-        gui.frame:SetPoint('CENTER', UIParent, 'CENTER', cfg().xPos, cfg().yPos)
-        gui.frame:Show()
-    end
+    self.preview = not self.preview
+    if self.preview then gui.frame:Show() end
+    self:UpdateValue()
 end
 
 --#endregion
@@ -285,7 +275,20 @@ function healthBar:OnEnable()
         self:Disable(); return
     end
 
-    self:CreateUI()
+    if not gui.frame then
+        self:CreateUI()
+        self:HandleBlizzPlayerFrame()
+
+        local db  = cfg()
+        local frame = gui.frame
+
+        addon.StatusBarBase.RegisterWithEditMode(frame, db, self, {
+            label         = 'CouchMode Health',
+            widthDefault  = 220,
+            heightDefault = 18,
+        })
+    end
+
     self:BuildVisibilityCurve()
     self:RegisterEvent('UNIT_HEALTH', 'OnHealthChanged')
     self:RegisterEvent('UNIT_MAXHEALTH', 'OnHealthChanged')
@@ -294,7 +297,8 @@ function healthBar:OnEnable()
     self:RegisterEvent('PLAYER_REGEN_DISABLED', 'OnEnterCombat')
     self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
 
-    self:HandleBlizzPlayerFrame()
+    gui.frame:Show()
+    self:UpdateValue()
 end
 
 function healthBar:OnDisable()

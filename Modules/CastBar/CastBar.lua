@@ -31,6 +31,7 @@ function castBar:GetDefaults()
             xPos                = 0,
             yPos                = -150,
             locked              = false,
+            positions           = {},
             hideBlizzardCastBar = false,
             showIcon            = true,
             showSpellName       = true,
@@ -56,6 +57,8 @@ function castBar:GetDefaults()
             xPos          = 0,
             yPos          = -200,
             locked        = false,
+            positions     = {},
+            frameStrata   = 'MEDIUM',
             showIcon      = true,
             showSpellName = true,
             showTimer     = true,
@@ -105,64 +108,16 @@ function castBar:GetOptions()
                         order  = 3,
                         inline = true,
                         args   = {
-                            width = {
-                                name  = 'Width',
-                                desc  = 'Width of the cast bar in pixels.',
-                                type  = 'range',
-                                order = 1,
-                                min   = 80,
-                                max   = 600,
-                                step  = 2,
-                                get   = function() return addon.db.profile.playerCastBar.width end,
-                                set   = function(_, value)
-                                    addon.db.profile.playerCastBar.width = value
-                                    bar():Refresh()
-                                end,
-                            },
-                            height = {
-                                name  = 'Height',
-                                desc  = 'Height of the cast bar in pixels.',
-                                type  = 'range',
-                                order = 2,
-                                min   = 10,
-                                max   = 60,
-                                step  = 2,
-                                get   = function() return addon.db.profile.playerCastBar.height end,
-                                set   = function(_, value)
-                                    addon.db.profile.playerCastBar.height = value
-                                    bar():Refresh()
-                                end,
-                            },
-                            locked = {
-                                name  = 'Lock Position',
-                                desc  = 'Prevent the bar from being dragged.',
-                                type  = 'toggle',
-                                order = 3,
-                                get   = function() return addon.db.profile.playerCastBar.locked end,
-                                set   = function(_, value)
-                                    addon.db.profile.playerCastBar.locked = value
-                                    bar():Refresh()
-                                end,
-                            },
                             alwaysShow = {
                                 name  = 'Always Show Bar',
                                 desc  =
                                 'Show the cast bar even while the Cast Ring is active. By default the bar is hidden when the ring handles cast display.',
                                 type  = 'toggle',
-                                order = 4,
+                                order = 1,
                                 get   = function() return addon.db.profile.playerCastBar.alwaysShow end,
                                 set   = function(_, value)
                                     addon.db.profile.playerCastBar.alwaysShow = value
                                 end,
-                            },
-                            preview = {
-                                name  = function()
-                                    return bar().preview and 'Hide Preview' or 'Show Preview'
-                                end,
-                                desc  = 'Show or hide the cast bar so you can drag it into position.',
-                                type  = 'execute',
-                                order = 5,
-                                func  = function() bar():TogglePreview() end,
                             },
                         },
                     },
@@ -285,7 +240,7 @@ function castBar:GetOptions()
                 order = 2,
                 args  = {
                     description = {
-                        name  = 'A circular cast bar for your character. Drag it anywhere on screen (unless locked).',
+                        name  = 'A circular cast bar for your character. Reposition it via Edit Mode.',
                         type  = 'description',
                         order = 1,
                     },
@@ -305,71 +260,16 @@ function castBar:GetOptions()
                         order  = 3,
                         inline = true,
                         args   = {
-                            size = {
-                                name  = 'Size',
-                                desc  = 'Diameter of the ring in pixels.',
-                                type  = 'range',
-                                order = 1,
-                                min   = 16,
-                                max   = 256,
-                                step  = 2,
-                                get   = function() return addon.db.profile.castRing.size end,
-                                set   = function(_, value)
-                                    addon.db.profile.castRing.size = value
-                                    ring():Refresh()
-                                end,
-                            },
-                            locked = {
-                                name  = 'Lock Position',
-                                desc  = 'Prevent the ring from being dragged.',
-                                type  = 'toggle',
-                                order = 2,
-                                get   = function() return addon.db.profile.castRing.locked end,
-                                set   = function(_, value)
-                                    addon.db.profile.castRing.locked = value
-                                    ring():Refresh()
-                                end,
-                            },
                             hideBlizzardCastBar = {
                                 name  = 'Hide Blizzard Cast Bar',
                                 desc  = 'Hide the default Blizzard casting bar.',
                                 type  = 'toggle',
-                                order = 3,
+                                order = 1,
                                 get   = function() return addon.db.profile.castRing.hideBlizzardCastBar end,
                                 set   = function(_, value)
                                     addon.db.profile.castRing.hideBlizzardCastBar = value
                                     ring():ApplyCastBarHide()
                                 end,
-                            },
-                            frameStrata = {
-                                name   = 'Frame Strata',
-                                desc   = 'Rendering layer of the ring. Raise this if other frames overlap it.',
-                                type   = 'select',
-                                order  = 4,
-                                values = {
-                                    BACKGROUND        = 'Background',
-                                    LOW               = 'Low',
-                                    MEDIUM            = 'Medium',
-                                    HIGH              = 'High',
-                                    DIALOG            = 'Dialog',
-                                    FULLSCREEN        = 'Fullscreen',
-                                    FULLSCREEN_DIALOG = 'Fullscreen Dialog',
-                                    TOOLTIP           = 'Tooltip',
-                                },
-                                get    = function() return addon.db.profile.castRing.frameStrata end,
-                                set    = function(_, value)
-                                    addon.db.profile.castRing.frameStrata = value
-                                    ring():Refresh()
-                                end,
-                            },
-                            preview = {
-                                name  = function()
-                                    return ring().preview and 'Hide Preview' or 'Show Preview'
-                                end,
-                                desc  = 'Show or hide the cast ring so you can drag it into position.',
-                                type  = 'execute',
-                                order = 5,
-                                func  = function() ring():TogglePreview() end,
                             },
                         },
                     },

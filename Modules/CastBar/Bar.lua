@@ -9,8 +9,12 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local castBar = addon:NewModule('PlayerCastBar', 'AceEvent-3.0')
 ---@cast castBar +AceEvent-3.0
 
+local LibEditMode = LibStub('LibEditMode')
+
 ---@type CastUtil
 local CastUtil = addon.CastUtil
+
+local barHomePt = { point = 'CENTER', x = 0, y = -200 }
 
 local MEDIA = {
     TEXTURE = 'interface/hud/uiwowlabsactionbar',
@@ -164,12 +168,10 @@ function castBar:Refresh()
     if not gui.frame then return end
     local c = cfg()
 
+    gui.frame:SetFrameStrata(c.frameStrata or 'MEDIUM')
     gui.frame:SetSize(c.width, c.height)
-    gui.frame:ClearAllPoints()
-    gui.frame:SetPoint("CENTER", UIParent, "CENTER", c.xPos, c.yPos)
-
-    gui.frame:SetMovable(not c.locked)
-    gui.frame:EnableMouse(not c.locked)
+    gui.frame:SetMovable(false)
+    gui.frame:EnableMouse(true)
 
     if gui.iconFrame then
         gui.iconFrame:SetSize(c.height * 2, c.height * 1.6)
@@ -199,8 +201,6 @@ function castBar:CreateUI()
     gui.frame:SetFrameStrata("MEDIUM")
     gui.frame:SetFrameLevel(10)
     gui.frame:Hide()
-
-    CastUtil.ApplyDragToMove(gui.frame, cfg)
 
     gui.iconFrame = CreateFrame("Button", nil, gui.frame)
     gui.iconFrame:SetPoint("CENTER", gui.frame, "CENTER")
@@ -399,7 +399,7 @@ function castBar:TogglePreview()
         gui.leftBar.bar:SetWidth(0.6 * gui.barFullWidth)
         gui.rightBar.bar:SetWidth(0.6 * gui.barFullWidth)
         gui.frame:ClearAllPoints()
-        gui.frame:SetPoint("CENTER", UIParent, "CENTER", cfg().xPos, cfg().yPos)
+        gui.frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
         gui.frame:Show()
     end
 end
@@ -456,7 +456,88 @@ function castBar:OnEnable()
         self:Disable(); return
     end
 
-    self:CreateUI()
+    if not gui.frame then
+        self:CreateUI()
+
+        local db    = cfg()
+        local frame = gui.frame
+
+        barHomePt.x = db.xPos
+        barHomePt.y = db.yPos
+        frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
+
+        LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+            db.positions[layoutName] = { point = point, x = x, y = y }
+        end, { point = 'CENTER', x = db.xPos, y = db.yPos }, 'CouchMode Cast Bar')
+
+        LibEditMode:AddFrameSettings(frame, {
+            {
+                kind      = LibEditMode.SettingType.Slider,
+                name      = 'Width',
+                desc      = 'Width of the cast bar in pixels.',
+                default   = 250,
+                minValue  = 80,
+                maxValue  = 600,
+                valueStep = 2,
+                get = function(_) return db.width end,
+                set = function(_, value, fromReset)
+                    db.width = fromReset and 250 or value
+                    castBar:Refresh()
+                end,
+            },
+            {
+                kind      = LibEditMode.SettingType.Slider,
+                name      = 'Height',
+                desc      = 'Height of the cast bar in pixels.',
+                default   = 24,
+                minValue  = 10,
+                maxValue  = 60,
+                valueStep = 2,
+                get = function(_) return db.height end,
+                set = function(_, value, fromReset)
+                    db.height = fromReset and 24 or value
+                    castBar:Refresh()
+                end,
+            },
+            {
+                kind    = LibEditMode.SettingType.Dropdown,
+                name    = 'Frame Strata',
+                desc    = 'Rendering layer for the bar. Raise this if other frames overlap it.',
+                default = 'MEDIUM',
+                values  = {
+                    { text = 'Background',        value = 'BACKGROUND' },
+                    { text = 'Low',               value = 'LOW' },
+                    { text = 'Medium',            value = 'MEDIUM' },
+                    { text = 'High',              value = 'HIGH' },
+                    { text = 'Dialog',            value = 'DIALOG' },
+                    { text = 'Fullscreen',        value = 'FULLSCREEN' },
+                    { text = 'Fullscreen Dialog', value = 'FULLSCREEN_DIALOG' },
+                    { text = 'Tooltip',           value = 'TOOLTIP' },
+                },
+                get = function(_) return db.frameStrata end,
+                set = function(_, value, fromReset)
+                    db.frameStrata = fromReset and 'MEDIUM' or value
+                    castBar:Refresh()
+                end,
+            },
+        })
+
+        LibEditMode:RegisterCallback('layout', function(layoutName)
+            local pos = db.positions[layoutName]
+            barHomePt.point = pos and pos.point or 'CENTER'
+            barHomePt.x     = pos and pos.x     or db.xPos
+            barHomePt.y     = pos and pos.y     or db.yPos
+            frame:ClearAllPoints()
+            frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
+        end)
+
+        LibEditMode:RegisterCallback('enter', function() frame:Show() end)
+        LibEditMode:RegisterCallback('exit',  function()
+            if not castBar.castEndTime and not castBar.preview then
+                frame:Hide()
+            end
+        end)
+    end
 
     CastUtil.RegisterCastEvents(self)
 
