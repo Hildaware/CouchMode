@@ -529,7 +529,10 @@
         "SECOND_NUMBER_CAP_NO_SPACE",
         "FIRST_NUMBER_CAP_NO_SPACE",
         "UNIT_TYPE_LEVEL_TEMPLATE",
-        "UNIT_LEVEL_TEMPLATE"
+        "UNIT_LEVEL_TEMPLATE",
+        "INTERRUPTED",
+        "CAST_BAR_CAST_TIME",
+        "FAILED"
     ],
     "Lua.type.weakUnionCheck": true,
     "Lua.diagnostics.disable": [

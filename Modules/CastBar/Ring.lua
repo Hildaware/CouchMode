@@ -5,6 +5,7 @@ local addon         = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class CastRing: AceModule
 ---@field preview boolean
+---@field isEmpowered boolean
 local castRing      = addon:NewModule('CastRing', 'AceEvent-3.0')
 ---@cast castRing +AceEvent-3.0
 
@@ -32,6 +33,7 @@ local MEDIA         = {
 ---@field icon Texture
 ---@field spellName FontString
 ---@field castTimer FontString
+---@field stageMarkers Texture[]
 local gui           = {}
 local lastTimerText = ""
 
@@ -127,6 +129,18 @@ function castRing:CreateUI()
     gui.sparkTex:SetBlendMode("ADD")
     gui.sparkTex:Hide()
 
+    local ringMarkerFrm = CreateFrame("Frame", nil, gui.frame)
+    ringMarkerFrm:SetAllPoints()
+    ringMarkerFrm:SetFrameLevel(gui.frame:GetFrameLevel() + 4)
+
+    gui.stageMarkers = {}
+    for i = 1, 6 do
+        local mark = ringMarkerFrm:CreateTexture(nil, "OVERLAY")
+        mark:SetAtlas("UI-CastingBar-Pip")
+        mark:Hide()
+        gui.stageMarkers[i] = mark
+    end
+
     local iconFrame = CreateFrame("Frame", nil, gui.frame)
     iconFrame:SetAllPoints()
     iconFrame:SetFrameLevel(gui.frame:GetFrameLevel() - 1)
@@ -191,6 +205,23 @@ function castRing:StartCast(isChannel)
     local name, texture, startTimeMS, endTimeMS = CastUtil.GetCastInfo(isChannel)
     if not name or not startTimeMS or not endTimeMS then return end
 
+    self.isEmpowered = false
+    local stageFractions = nil
+    if isChannel then
+        local numStages = select(10, UnitChannelInfo("player"))
+        if numStages and numStages > 0 then
+            self.isEmpowered = true
+            endTimeMS = endTimeMS + GetUnitEmpowerHoldAtMaxTime("player")
+            local totalMS = endTimeMS - startTimeMS
+            stageFractions = {}
+            local sum = 0
+            for i = 0, numStages - 1 do
+                sum = sum + GetUnitEmpowerStageDuration("player", i)
+                stageFractions[i + 1] = sum / totalMS
+            end
+        end
+    end
+
     local startTime = startTimeMS / 1000
     local endTime   = endTimeMS / 1000
     local duration  = endTime - startTime
@@ -200,14 +231,16 @@ function castRing:StartCast(isChannel)
     self.castDuration = duration
     self.isChannel    = isChannel
 
-    gui.cooldown:SetReverse(isChannel)
+    -- empowered fills forward like a cast, not backward like a channel
+    local reverseCD = isChannel and not self.isEmpowered
+    gui.cooldown:SetReverse(reverseCD)
 
     local latency  = CastUtil.GetLatency()
     local K        = 100
     local totalDur = duration * K
     local latFrac  = latency / duration
-    local offset   = isChannel and latFrac or (1 - latFrac)
-    gui.latencyCD:SetReverse(isChannel)
+    local offset   = reverseCD and latFrac or (1 - latFrac)
+    gui.latencyCD:SetReverse(reverseCD)
     gui.latencyCD:SetCooldown(startTime - totalDur * offset, totalDur)
 
     gui.ringTex:SetVertexColor(CastUtil.ResolveColor(cfg(), isChannel))
@@ -215,6 +248,35 @@ function castRing:StartCast(isChannel)
     gui.cooldown:SetCooldown(startTime, duration)
     gui.icon:SetTexture(texture)
     gui.spellName:SetText(name)
+
+    if stageFractions then
+        local c      = cfg()
+        local outerR = c.size / 2
+        local innerR = outerR * HOLE_RATIO
+        local midR   = (outerR + innerR) / 2
+        local bandH  = outerR - innerR
+        for i, frac in ipairs(stageFractions) do
+            local mark = gui.stageMarkers[i]
+            if mark then
+                local angle = frac * 2 * math.pi
+                mark:SetSize(5, bandH)
+                mark:ClearAllPoints()
+                mark:SetPoint("CENTER", gui.frame, "CENTER",
+                    midR * math.sin(angle),
+                    midR * math.cos(angle))
+                mark:SetRotation(-angle)
+                mark:Show()
+            end
+        end
+        for i = #stageFractions + 1, #gui.stageMarkers do
+            gui.stageMarkers[i]:Hide()
+        end
+    else
+        for _, mark in ipairs(gui.stageMarkers) do
+            mark:Hide()
+        end
+    end
+
     gui.frame:Show()
 
     if cfg().attachToNameplate then
@@ -239,9 +301,13 @@ function castRing:StopCast()
     self.castDuration    = nil
     self.currentCastGUID = nil
     self.isChannel       = nil
+    self.isEmpowered     = false
     gui.cooldown:SetCooldown(0, 0)
     gui.latencyCD:SetCooldown(0, 0)
     gui.sparkTex:Hide()
+    for _, mark in ipairs(gui.stageMarkers) do
+        mark:Hide()
+    end
     lastTimerText = ""
     if not self.preview then
         gui.frame:Hide()

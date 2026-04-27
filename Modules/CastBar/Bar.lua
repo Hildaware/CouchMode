@@ -6,6 +6,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@class PlayerCastBar: AceModule
 ---@field preview boolean
 ---@field castRingMode boolean
+---@field isEmpowered boolean
 local castBar = addon:NewModule('PlayerCastBar', 'AceEvent-3.0')
 ---@cast castBar +AceEvent-3.0
 
@@ -36,6 +37,7 @@ local MEDIA = {
 ---@field leftBar BarSide
 ---@field rightBar BarSide
 ---@field barFullWidth number
+---@field stageMarkers {left: Texture, right: Texture}[]
 local gui = {
     barFullWidth = 0
 }
@@ -45,7 +47,6 @@ local gui = {
 ---@field bar Texture
 ---@field tex Texture
 ---@field border Texture
----@field sparkClip Frame
 ---@field spark Texture
 ---@field latency Texture
 
@@ -109,19 +110,7 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
     borderCenter:SetTexture(MEDIA.TEXTURE)
     borderCenter:SetAtlas(MEDIA.BORDER_ATLAS)
 
-    -- Clipper constrains the spark to the fill area so it never overhangs the bar edges.
-    local sparkClip = CreateFrame("Frame", nil, borderFrm)
-    sparkClip:SetClipsChildren(true)
-    if isLeft then
-        sparkClip:SetPoint("LEFT", parentFrame, "LEFT")
-        sparkClip:SetPoint("RIGHT", iconFrm, "LEFT")
-    else
-        sparkClip:SetPoint("LEFT", iconFrm, "RIGHT")
-        sparkClip:SetPoint("RIGHT", parentFrame, "RIGHT")
-    end
-    sparkClip:SetHeight(h)
-
-    local spark = sparkClip:CreateTexture(nil, "OVERLAY")
+    local spark = borderFrm:CreateTexture(nil, "OVERLAY")
     spark:SetTexture(MEDIA.SPARK_TEX)
     spark:SetAtlas(MEDIA.SPARK_ATLAS)
     if isLeft then
@@ -135,7 +124,6 @@ local function CreateBarSide(parentFrame, iconFrm, isLeft)
         bar = fill,
         tex = fillTex,
         border = borderCenter,
-        sparkClip = sparkClip,
         spark = spark,
     }
 end
@@ -159,8 +147,7 @@ local function RefreshBarSide(cap, isLeft, t)
     t.bar:SetHeight(cap)
     t.tex:SetHeight(cap)
     t.border:SetHeight(cap)
-    t.sparkClip:SetHeight(cap)
-    t.spark:SetSize(cap / 2, cap)
+    t.spark:SetSize(cap / 1.5, cap)
 end
 
 -- ── Refresh ───────────────────────────────────────────────────────────────────
@@ -244,6 +231,23 @@ function castBar:CreateUI()
     gui.rightBar.latency:SetPoint("BOTTOMRIGHT", gui.rightBar.bg, "BOTTOMRIGHT", -3, 0)
     gui.rightBar.latency:Hide()
 
+    local markerFrm = CreateFrame("Frame", nil, gui.frame)
+    markerFrm:SetAllPoints()
+    markerFrm:SetFrameLevel(gui.frame:GetFrameLevel() + 3)
+
+    gui.stageMarkers = {}
+    for i = 1, 6 do
+        local m = {
+            left = markerFrm:CreateTexture(nil, "OVERLAY"),
+            right = markerFrm:CreateTexture(nil, "OVERLAY"),
+        }
+        m.left:SetAtlas("UI-CastingBar-Pip")
+        m.left:Hide()
+        m.right:SetAtlas("UI-CastingBar-Pip")
+        m.right:Hide()
+        gui.stageMarkers[i] = m
+    end
+
     gui.spellName = gui.frame:CreateFontString(nil,
         "OVERLAY",
         "GameFontNormal")
@@ -265,9 +269,18 @@ function castBar:CreateUI()
         lastTimerText, remaining = CastUtil.UpdateTimer(gui.castTimer, castBar.castEndTime, lastTimerText)
 
         local total = castBar.castDuration or 1
-        local value = castBar.isChannel and (remaining / total) or ((total - remaining) / total)
-        gui.leftBar.bar:SetWidth(value * gui.barFullWidth)
-        gui.rightBar.bar:SetWidth(value * gui.barFullWidth)
+        local value = (castBar.isChannel and not castBar.isEmpowered) and (remaining / total) or
+            ((total - remaining) / total)
+        local fillWidth = value * gui.barFullWidth
+        gui.leftBar.bar:SetWidth(fillWidth)
+        gui.rightBar.bar:SetWidth(fillWidth)
+
+        if cfg().showSpark then
+            local halfSpark = cfg().height / 3
+            local sparkShown = fillWidth > halfSpark and fillWidth < gui.barFullWidth - halfSpark
+            gui.leftBar.spark:SetShown(sparkShown)
+            gui.rightBar.spark:SetShown(sparkShown)
+        end
     end)
 
     self:Refresh()
@@ -279,6 +292,23 @@ end
 function castBar:StartCastInternal(isChannel)
     local name, texture, startTimeMS, endTimeMS = CastUtil.GetCastInfo(isChannel)
     if not name or not startTimeMS or not endTimeMS then return end
+
+    self.isEmpowered = false
+    local stageFractions = nil
+    if isChannel then
+        local numStages = select(10, UnitChannelInfo("player"))
+        if numStages and numStages > 0 then
+            self.isEmpowered = true
+            endTimeMS = endTimeMS + GetUnitEmpowerHoldAtMaxTime("player")
+            local totalMS = endTimeMS - startTimeMS
+            stageFractions = {}
+            local sum = 0
+            for i = 0, numStages - 1 do
+                sum = sum + GetUnitEmpowerStageDuration("player", i)
+                stageFractions[i + 1] = sum / totalMS
+            end
+        end
+    end
 
     local startTime = startTimeMS / 1000
     local endTime = endTimeMS / 1000
@@ -306,9 +336,36 @@ function castBar:StartCastInternal(isChannel)
     end
 
     local elapsed = GetTime() - startTime
-    local value = isChannel and (1 - elapsed / duration) or (elapsed / duration)
-    gui.leftBar.bar:SetWidth(value * gui.barFullWidth)
-    gui.rightBar.bar:SetWidth(value * gui.barFullWidth)
+    local fillValue = (isChannel and not self.isEmpowered) and (1 - elapsed / duration) or (elapsed / duration)
+    gui.leftBar.bar:SetWidth(fillValue * gui.barFullWidth)
+    gui.rightBar.bar:SetWidth(fillValue * gui.barFullWidth)
+
+    if stageFractions then
+        local h = c.height
+        for i, frac in ipairs(stageFractions) do
+            local m = gui.stageMarkers[i]
+            if m then
+                local xOff = frac * gui.barFullWidth
+                m.left:SetSize(5, h)
+                m.left:ClearAllPoints()
+                m.left:SetPoint("CENTER", gui.iconFrame, "LEFT", -xOff, 0)
+                m.left:Show()
+                m.right:SetSize(5, h)
+                m.right:ClearAllPoints()
+                m.right:SetPoint("CENTER", gui.iconFrame, "RIGHT", xOff, 0)
+                m.right:Show()
+            end
+        end
+        for i = #stageFractions + 1, #gui.stageMarkers do
+            gui.stageMarkers[i].left:Hide()
+            gui.stageMarkers[i].right:Hide()
+        end
+    else
+        for _, m in ipairs(gui.stageMarkers) do
+            m.left:Hide()
+            m.right:Hide()
+        end
+    end
 
     gui.icon:SetTexture(texture)
     local fw, fh = gui.iconFrame:GetWidth(), gui.iconFrame:GetHeight()
@@ -330,11 +387,18 @@ function castBar:StopCastInternal()
     self.castEndTime = nil
     self.castDuration = nil
     self.isChannel = nil
+    self.isEmpowered = false
     self.currentCastGUID = nil
     gui.leftBar.bar:SetWidth(0)
     gui.rightBar.bar:SetWidth(0)
+    gui.leftBar.spark:SetShown(cfg().showSpark)
+    gui.rightBar.spark:SetShown(cfg().showSpark)
     gui.leftBar.latency:Hide()
     gui.rightBar.latency:Hide()
+    for _, m in ipairs(gui.stageMarkers) do
+        m.left:Hide()
+        m.right:Hide()
+    end
     lastTimerText = ""
     if not self.preview then
         gui.frame:Hide()
@@ -373,10 +437,15 @@ function castBar:HideFallback()
     self.castEndTime = nil
     self.castDuration = nil
     self.isChannel = nil
+    self.isEmpowered = false
     gui.leftBar.bar:SetWidth(0)
     gui.rightBar.bar:SetWidth(0)
     gui.leftBar.latency:Hide()
     gui.rightBar.latency:Hide()
+    for _, m in ipairs(gui.stageMarkers) do
+        m.left:Hide()
+        m.right:Hide()
+    end
     lastTimerText = ""
     if not self.preview then
         gui.frame:Hide()
@@ -459,7 +528,7 @@ function castBar:OnEnable()
     if not gui.frame then
         self:CreateUI()
 
-        local db    = cfg()
+        local db = cfg()
         local frame = gui.frame
 
         barHomePt.x = db.xPos
@@ -472,12 +541,12 @@ function castBar:OnEnable()
 
         LibEditMode:AddFrameSettings(frame, {
             {
-                kind      = LibEditMode.SettingType.Slider,
-                name      = 'Width',
-                desc      = 'Width of the cast bar in pixels.',
-                default   = 250,
-                minValue  = 80,
-                maxValue  = 600,
+                kind = LibEditMode.SettingType.Slider,
+                name = 'Width',
+                desc = 'Width of the cast bar in pixels.',
+                default = 250,
+                minValue = 80,
+                maxValue = 600,
                 valueStep = 2,
                 get = function(_) return db.width end,
                 set = function(_, value, fromReset)
@@ -486,12 +555,12 @@ function castBar:OnEnable()
                 end,
             },
             {
-                kind      = LibEditMode.SettingType.Slider,
-                name      = 'Height',
-                desc      = 'Height of the cast bar in pixels.',
-                default   = 24,
-                minValue  = 10,
-                maxValue  = 60,
+                kind = LibEditMode.SettingType.Slider,
+                name = 'Height',
+                desc = 'Height of the cast bar in pixels.',
+                default = 24,
+                minValue = 10,
+                maxValue = 60,
                 valueStep = 2,
                 get = function(_) return db.height end,
                 set = function(_, value, fromReset)
@@ -500,11 +569,11 @@ function castBar:OnEnable()
                 end,
             },
             {
-                kind    = LibEditMode.SettingType.Dropdown,
-                name    = 'Frame Strata',
-                desc    = 'Rendering layer for the bar. Raise this if other frames overlap it.',
+                kind = LibEditMode.SettingType.Dropdown,
+                name = 'Frame Strata',
+                desc = 'Rendering layer for the bar. Raise this if other frames overlap it.',
                 default = 'MEDIUM',
-                values  = {
+                values = {
                     { text = 'Background',        value = 'BACKGROUND' },
                     { text = 'Low',               value = 'LOW' },
                     { text = 'Medium',            value = 'MEDIUM' },
@@ -525,14 +594,14 @@ function castBar:OnEnable()
         LibEditMode:RegisterCallback('layout', function(layoutName)
             local pos = db.positions[layoutName]
             barHomePt.point = pos and pos.point or 'CENTER'
-            barHomePt.x     = pos and pos.x     or db.xPos
-            barHomePt.y     = pos and pos.y     or db.yPos
+            barHomePt.x = pos and pos.x or db.xPos
+            barHomePt.y = pos and pos.y or db.yPos
             frame:ClearAllPoints()
             frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
         end)
 
         LibEditMode:RegisterCallback('enter', function() frame:Show() end)
-        LibEditMode:RegisterCallback('exit',  function()
+        LibEditMode:RegisterCallback('exit', function()
             if not castBar.castEndTime and not castBar.preview then
                 frame:Hide()
             end
