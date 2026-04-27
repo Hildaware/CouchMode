@@ -264,33 +264,19 @@ end
 
 --#region ── Bubble mode ──────────────────────────────────────────────────────
 
-local function findRegionText(frame)
-    for _, region in ipairs({ frame:GetRegions() }) do
-        if region.GetText then
-            local t = region:GetText()
-            if t and not issecretvalue(t) and t ~= '' then return t end
-        end
-    end
-end
-
 local function getBubbleText(bubble)
     if not bubble then return end
-    local t = findRegionText(bubble)
-    if t then return t end
-    for _, child in ipairs({ bubble:GetChildren() }) do
-        t = findRegionText(child)
-        if t then return t end
-    end
+    local str = bubble.String
+    -- In Instances, str will always be nil
+    if not str then return end
+    local t = str:GetText()
+    if t and not issecretvalue(t) and t ~= '' then return t end
 end
 
 local function hideBubble(bubble)
     bubble:SetAlpha(0)
-    for _, region in ipairs({ bubble:GetRegions() }) do
-        region:SetAlpha(0)
-    end
-    for _, child in ipairs({ bubble:GetChildren() }) do
-        child:SetAlpha(0)
-    end
+    if bubble.String then bubble.String:SetAlpha(0) end
+    if bubble.Tail then bubble.Tail:SetAlpha(0) end
 end
 
 -- Iterates all accessible chat bubbles looking for one whose text matches
@@ -405,12 +391,11 @@ function banter:AddBants(data)
 
     -- Route to bubble mode when enabled, but never during combat or in instances.
     if db().reskinBubbles then
-        local inInstance = addon.Utils.IsInInstance()
-        if not InCombatLockdown() and not inInstance then
+        if not InCombatLockdown() then
             self:SpawnBubbleBant(data)
             if db().hideScrollLog then return end
         else
-            -- In combat or in instance: hide the original bubble so it doesn't overlap the scroll log.
+            -- In combat: hide the original bubble so it doesn't overlap the scroll log.
             self:FindBubbleForMessage(data.message, function(bubble)
                 if bubble then hideBubble(bubble) end
             end)
