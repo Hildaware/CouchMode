@@ -73,7 +73,7 @@ local function create_world_map()
         C_AddOns.LoadAddOn("Blizzard_SharedMapDataProviders")
     end
 
-    local map_frame = CreateFrame("Frame", nil, map.container)
+    local map_frame = CreateFrame("Frame", "CTMinimapWorldMap", map.container)
     map_frame:SetAllPoints(map.container)
 
     -- ScrollContainer required by MapCanvasMixin
@@ -530,12 +530,12 @@ local function create_world_map()
 end
 
 map.openWorldMap = function()
-    if ConsolePort then
-        ConsolePort:AddInterfaceCursorFrame(map.container)
-    end
-
     map.worldMapOpen = true
     create_world_map()
+
+    if ConsolePort then
+        ConsolePort:AddInterfaceCursorFrame(map.worldMap)
+    end
 
     local map_id = C_Map.GetBestMapForUnit("player")
     if map_id then
@@ -679,6 +679,10 @@ end
 function map.onHideWorldMap()
     map.worldMapOpen = false
     map.applySettings()
+
+    if ConsolePort and map.worldMap then
+        ConsolePort:RemoveInterfaceCursorFrame(map.worldMap)
+    end
 
     map.onShowMinimap()
 

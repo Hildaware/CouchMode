@@ -134,7 +134,7 @@ end
 function map.createToolbar()
     local db = addon.db.profile.minimap ---@type MinimapDB
 
-    map.toolbar = CreateFrame("Frame", nil, UIParent)
+    map.toolbar = CreateFrame("Frame", "CTMinimapToolbar", UIParent)
     map.toolbar:SetHeight(24)
     map.applyToolbarPosition()
     map.toolbar:SetFrameStrata("DIALOG")
