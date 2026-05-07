@@ -82,34 +82,42 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetWidth(availableWidth)
     self.message:SetText(text)
 
-    -- Scale up single-line messages
-    local bumpedSize = math.floor(messageSize * 1.3)
-    self.message:SetFont(fontPath, bumpedSize, 'OUTLINE')
-    if self.message:GetUnboundedStringWidth() <= availableWidth then
-        messageSize = bumpedSize
-    else
+    local contentHeight, topPad
+    if issecretvalue(text) then
+        -- Can't measure a secret-aspected FontString; use safe defaults
         self.message:SetFont(fontPath, messageSize, 'OUTLINE')
+        contentHeight = MIN_MESSAGE_HEIGHT
+        topPad = math.max(math.floor((contentHeight - messageSize) / 2), 0)
+    else
+        -- Scale up single-line messages
+        local bumpedSize = math.floor(messageSize * 1.3)
+        self.message:SetFont(fontPath, bumpedSize, 'OUTLINE')
+        if self.message:GetUnboundedStringWidth() <= availableWidth then
+            messageSize = bumpedSize
+        else
+            self.message:SetFont(fontPath, messageSize, 'OUTLINE')
+        end
+
+        local textHeight = self.message:GetHeight()
+        local vPad = math.max(math.ceil(d.msgFontSize * 0.5), 8)
+        contentHeight = math.max(textHeight + vPad * 2, MIN_MESSAGE_HEIGHT)
+
+        local numLines = math.max(1, math.ceil(textHeight / (d.msgFontSize * 1.2)))
+        local correction = math.min(
+            math.floor(d.msgFontSize / 8 * (numLines + 1)),
+            math.floor(d.msgFontSize / 2)
+        )
+        topPad = math.floor((contentHeight - textHeight) / 2) - correction
     end
 
     self.message:SetTextColor(r, g, b, a)
-
-    local textHeight = self.message:GetHeight()
-    local vPad = math.max(math.ceil(d.msgFontSize * 0.5), 8)
-    local contentHeight = math.max(textHeight + vPad * 2, MIN_MESSAGE_HEIGHT)
     self.widget:SetSize(d.itemWidth, contentHeight)
-
-    local numLines = math.max(1, math.ceil(textHeight / (d.msgFontSize * 1.2)))
-    local correction = math.min(
-        math.floor(d.msgFontSize / 8 * (numLines + 1)),
-        math.floor(d.msgFontSize / 2)
-    )
-    local topPad = math.floor((contentHeight - textHeight) / 2) - correction
     self.topPad = topPad
     self.message:ClearAllPoints()
     self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', leftPad, -topPad)
     self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -rightPad, -topPad)
 
-    if d.revealText then
+    if d.revealText and not issecretvalue(text) then
         self.message:SetText('')
         local total = #text
         local shown = 0

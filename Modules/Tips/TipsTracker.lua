@@ -126,8 +126,7 @@ function tips:OnEnable()
     if not tooltipHooked then
         tooltipHooked = true
         GameTooltip:HookScript("OnShow", function(self)
-            local data = self.tooltipData
-            if data and data.type == Enum.TooltipDataType.Unit then self:Hide() end
+            if self:IsTooltipType(Enum.TooltipDataType.Unit) then self:Hide() end
         end)
     end
 

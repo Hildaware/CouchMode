@@ -6,10 +6,10 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 --#region ── Inspect cache ────────────────────────────────────────────────────
 
 local INSPECT_THROTTLE = 1.5
-local CACHE_TTL        = 300
+local CACHE_TTL = 300
 
-local inspectCache = {}  -- [guid] = { specName, specIcon, time }
-local lastInspect  = 0
+local inspectCache = {} -- [guid] = { specName, specIcon, time }
+local lastInspect = 0
 
 local function cacheSpec(guid, unit)
     local specID = GetInspectSpecialization(unit)
@@ -72,6 +72,7 @@ local function measureWidth(fs)
     local text = fs:GetText()
     if not text or issecretvalue(text) then return 0 end
     local fontPath, fontSize, fontFlags = fs:GetFont()
+    if not fontPath then return 0 end
     if fontPath then measureFs:SetFont(fontPath, fontSize, fontFlags) end
     measureFs:SetText(text)
     local w = measureFs:GetStringWidth()
@@ -79,10 +80,10 @@ local function measureWidth(fs)
 end
 
 addon.TipsUtils = {
-    getSpecData    = getSpecData,
+    getSpecData = getSpecData,
     requestInspect = requestInspect,
     onInspectReady = onInspectReady,
-    measureWidth   = measureWidth,
+    measureWidth = measureWidth,
 }
 
 --#endregion

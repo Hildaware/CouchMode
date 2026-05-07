@@ -91,17 +91,11 @@ end
 --#region ── Name & guild display ─────────────────────────────────────────────
 
 function nameplates.isInCity()
-    return GetZonePVPInfo() == "sanctuary"
+    return GetZonePVPInfo() == "sanctuary" or GetZonePVPInfo() == "friendly"
 end
 
 function nameplates.isInInstance()
-    if C_Garrison.IsOnGarrisonMap() then return true end
-    local inInstance, instanceType = IsInInstance()
-    if instanceType == "scenario" then return true end
-    return inInstance
-        and instanceType ~= "none"
-        and instanceType ~= "neighborhood"
-        and instanceType ~= "interior"
+    return addon.Utils.IsInInstance()
 end
 
 function nameplates.buildNameFrame(f, overlay)

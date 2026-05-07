@@ -266,11 +266,14 @@ end
 
 local function getBubbleText(bubble)
     if not bubble then return end
-    local str = bubble.String
-    -- In Instances, str will always be nil
-    if not str then return end
-    local t = str:GetText()
-    if t and not issecretvalue(t) and t ~= '' then return t end
+    for _, child in ipairs({ bubble:GetChildren() }) do
+        for _, region in ipairs({ child:GetRegions() }) do
+            if region:GetObjectType() == 'FontString' then
+                local t = region:GetText()
+                if t and not issecretvalue(t) and t ~= '' then return t end
+            end
+        end
+    end
 end
 
 local function hideBubble(bubble)

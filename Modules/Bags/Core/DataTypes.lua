@@ -1,19 +1,19 @@
 local addon_name = ...
 
 ---@class CouchMode: AceAddon
-local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class Bags: AceModule
-local bags       = addon:GetModule('Bags')
+local bags = addon:GetModule('Bags')
 
 ---@class Types: AceModule
-local types      = addon:NewModule('Bags.Types')
+local types = addon:NewModule('Bags.Types')
 
 ---@class Utils: AceModule
-local utils      = addon:GetModule('Bags.Utils')
+local utils = addon:GetModule('Bags.Utils')
 
 ---@class Enums: AceModule
-local enums      = addon:GetModule('Bags.Enums')
+local enums = addon:GetModule('Bags.Enums')
 
 
 ---@class Resolver: AceModule

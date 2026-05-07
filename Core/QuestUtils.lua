@@ -15,7 +15,7 @@ local function isQuestColor(color)
 end
 
 local function scanGUID(guid, unit)
-    local guidType    = guid:match("^(%a+)-")
+    local guidType = guid:match("^(%a+)-")
     local tooltipData
     if guidType == "GameObject" then
         tooltipData = unit and C_TooltipInfo.GetUnit(unit)
@@ -27,8 +27,8 @@ local function scanGUID(guid, unit)
         return
     end
 
-    local isObjective  = false
-    local quests       = {}
+    local isObjective = false
+    local quests = {}
     local currentQuest = nil
 
     local lines = tooltipData.lines or {}
@@ -68,7 +68,7 @@ local function scanGUID(guid, unit)
 
     questCache[guid] = {
         isObjective = isObjective,
-        quests      = #filtered > 0 and filtered or nil,
+        quests = #filtered > 0 and filtered or nil,
     }
 end
 

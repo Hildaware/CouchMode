@@ -136,7 +136,7 @@ local function buildLayout(f, fullWidth)
     if fullWidth then
         w = tips.TIP_W
     else
-        local inInstance = IsInInstance()
+        local inInstance = addon.Utils.IsInInstance()
         if inInstance then
             w = tips.TIP_W -- skip naturalWidth(); GetStringWidth on secret strings is forbidden in instances
         else

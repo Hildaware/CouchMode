@@ -78,6 +78,7 @@ local function db() return addon.db.profile.banter end
 
 local function CalculateDisplayDuration(message)
     local baseDuration = 3
+    if issecretvalue(message) then return baseDuration * 3 end
     local charsPerSecond = 16
     local duration = baseDuration + (#message / charsPerSecond)
     return math.min(duration, 20)
@@ -109,8 +110,11 @@ end
 ---@param message string
 ---@param name string
 function banter:OnMonsterMessage(event, message, name, _, _, _, _, _, _, _, _, _, guid)
-    local npcID, displayId = addon.BanterData.GetByName(name)
-    local unitToken = (not displayId) and guid and UnitTokenFromGUID(guid) or nil
+    local npcID, displayId
+    if not issecretvalue(name) then
+        npcID, displayId = addon.BanterData.GetByName(name)
+    end
+    local unitToken = (not displayId) and not issecretvalue(guid) and guid and UnitTokenFromGUID(guid) or nil
 
     ---@type BanterData
     local data = {
@@ -139,11 +143,12 @@ local function findUnitTokenByGUID(guid)
 end
 
 function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _, guid)
+    local guidStr = (not issecretvalue(guid)) and guid or nil
     -- Parse playerUID from GUID: "Player-realmID-playerUID" (playerUID is hex)
-    local playerUID = guid and guid:match('Player%-%d+%-(%x+)')
+    local playerUID = guidStr and guidStr:match('Player%-%d+%-(%x+)')
     local playerId = playerUID and tonumber(playerUID, 16) or 0
 
-    local unitToken = findUnitTokenByGUID(guid) or UnitTokenFromGUID(guid)
+    local unitToken = guidStr and (findUnitTokenByGUID(guidStr) or UnitTokenFromGUID(guidStr))
 
     local channel = event:gsub('^CHAT_MSG_', ''):gsub('_LEADER$', '')
     if channel == 'INSTANCE_CHAT' then channel = 'INSTANCE' end
@@ -152,7 +157,7 @@ function banter:OnPlayerMessage(event, message, name, _, _, _, _, _, _, _, _, _,
     local data = {
         id = playerId,
         unitToken = unitToken,
-        guid = guid,
+        guid = guidStr,
         channel = channel,
         name = name,
         message = message,
