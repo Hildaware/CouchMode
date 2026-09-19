@@ -26,8 +26,8 @@ end
 map.MapUtils.create_border_textures = addon.Utils.create_border_textures
 map.MapUtils.apply_border_textures  = addon.Utils.apply_border_textures
 
-local BUTTON_GOLD                   = "Interface\\AddOns\\CouchMode\\Media\\button_gold.blp"
-local BUTTON_SILVER                 = "Interface\\AddOns\\CouchMode\\Media\\button_silver.blp"
+local BUTTON_GOLD                   = "Interface\\AddOns\\CouchMode\\Resources\\Media\\button_gold.blp"
+local BUTTON_SILVER                 = "Interface\\AddOns\\CouchMode\\Resources\\Media\\button_silver.blp"
 
 --- Toolbar button helper: 20x20 button with atlas icon.
 --- btn.selected_bg (button_silver.blp) can be shown/hidden to indicate selected state.

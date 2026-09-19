@@ -5,12 +5,42 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 addon.Utils = {}
 
+local _, _, _, interfaceVersion = GetBuildInfo()
+local IS_WOW_FOREVER = interfaceVersion >= 16000 and interfaceVersion < 17000
+
 ---@param r number
 ---@param g number
 ---@param b number
 ---@return string
 function addon.Utils.hexColor(r, g, b)
     return string.format("|cFF%02X%02X%02X", r * 255, g * 255, b * 255)
+end
+
+--- Splits a player's PvP display name into a title prefix, character name, and title suffix.
+--- Forever adds surnames to the display name, so the text between the base name and a
+--- comma-delimited title remains part of the character name.
+---@param unit string
+---@return string preTitle
+---@return string characterName
+---@return string postTitle
+function addon.Utils.GetPlayerNameParts(unit)
+    local baseName = UnitName(unit) or ""
+    local pvpName = UnitPVPName(unit)
+    if not pvpName or (issecretvalue and issecretvalue(pvpName)) then
+        return "", baseName, ""
+    end
+
+    local nameStart, nameEnd = pvpName:find(baseName, 1, true)
+    if not nameStart then return "", baseName, "" end
+
+    local preTitle = nameStart > 1 and pvpName:sub(1, nameStart - 1) or ""
+    if IS_WOW_FOREVER then
+        local titleStart = pvpName:find(",", nameEnd + 1, true)
+        local characterEnd = titleStart and titleStart - 1 or #pvpName
+        return preTitle, pvpName:sub(nameStart, characterEnd), titleStart and pvpName:sub(titleStart) or ""
+    end
+
+    return preTitle, baseName, nameEnd < #pvpName and pvpName:sub(nameEnd + 1) or ""
 end
 
 --- Creates four border textures (T, B, L, R) parented to `parent` and anchored to `anchor`.

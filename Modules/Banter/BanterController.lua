@@ -136,7 +136,7 @@ function banter:_BuildBant(data)
 
     local nameWidget = bant.widget.subWidgets.name
     local nameFontPath = LSM:Fetch(LSM.MediaType.FONT, d.nameFontFace)
-        or 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
+        or 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
     nameWidget:SetText(data.name)
     nameWidget:SetFont(nameFontPath, d.nameFontSize, 'OUTLINE')
 

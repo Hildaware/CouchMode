@@ -21,7 +21,7 @@ local ConsolePort = _G['ConsolePort'] ---@type any
 
 local GROW_DURATION = 0.5
 
-local RECT_MASK = "Interface\\AddOns\\CouchMode\\Media\\3-2.blp"
+local RECT_MASK = "Interface\\AddOns\\CouchMode\\Resources\\Media\\3-2.blp"
 
 --#region ── Shape & masking ──────────────────────────────────────────────────
 
@@ -243,11 +243,13 @@ function map.createFrame()
         qsb:SetParent(map.container)
         qsb:ClearAllPoints()
         qsb:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", -2, -2)
-        hooksecurefunc(qsb, "UpdatePosition", function(self)
-            self:ClearAllPoints()
-            self:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", -2, -2)
-            qsb:SetFrameLevel(map.container:GetFrameLevel() + 2)
-        end)
+        if type(qsb.UpdatePosition) == "function" then
+            hooksecurefunc(qsb, "UpdatePosition", function(self)
+                self:ClearAllPoints()
+                self:SetPoint("TOPRIGHT", map.container, "TOPRIGHT", -2, -2)
+                qsb:SetFrameLevel(map.container:GetFrameLevel() + 2)
+            end)
+        end
     end
 
     -- Rescue tracking button before hiding MinimapCluster so its menu stays functional

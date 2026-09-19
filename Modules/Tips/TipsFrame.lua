@@ -54,7 +54,7 @@ local function buildContainer()
         childAlign = "CENTER",
     })
 
-    container.bg = container:AddBackground("Interface\\Addons\\CouchMode\\Media\\parchment_bg", {
+    container.bg = container:AddBackground("Interface\\AddOns\\CouchMode\\Resources\\Media\\parchment_bg", {
         alpha = 0.85,
         insets = { left = -16, right = 16, top = 12, bottom = -12 },
     })

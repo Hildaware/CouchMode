@@ -15,7 +15,7 @@ local CastUtil      = addon.CastUtil
 local ringHomePt    = { point = 'CENTER', x = 0, y = -150 }
 
 local MEDIA         = {
-    RING         = "Interface\\AddOns\\CouchMode\\Media\\CastRingSM.blp",
+    RING         = "Interface\\AddOns\\CouchMode\\Resources\\Media\\CastRingSM.blp",
     BORDER       = "interface/azerite/azerite",
     BORDER_ATLAS = "Azerite-Trait-Ring-Open",
     ICON_MASK    = "Interface\\CharacterFrame\\TempPortraitAlphaMask",

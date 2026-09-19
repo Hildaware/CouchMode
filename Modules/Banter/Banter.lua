@@ -12,7 +12,6 @@ local addonName = ...
 ---@field BanterData    BanterLookup
 ---@field BanterHistory BanterHistory
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
-local LSM = LibStub('LibSharedMedia-3.0')
 local LibEditMode = LibStub('LibEditMode')
 
 ---@class BanterModule
@@ -21,8 +20,6 @@ local banter = addon:NewModule('Banter', 'AceEvent-3.0')
 banter.history = {} ---@type BanterData[]
 
 --#region ── Constants ────────────────────────────────────────────────────────
-
-local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
 
 banter.EVENTS = {
     CHAT_MSG_MONSTER_YELL = 'CHAT_MSG_MONSTER_YELL',
@@ -180,11 +177,6 @@ end
 function banter:OnEnable()
     if not db().enabled then
         self:Disable(); return
-    end
-
-    -- Register custom font with LSM so it appears in the font picker.
-    if not LSM:IsValid(LSM.MediaType.FONT, 'Bebas Neue') then
-        LSM:Register(LSM.MediaType.FONT, 'Bebas Neue', FONT_PATH)
     end
 
     for _, event in ipairs(MONSTER_EVENTS) do
@@ -426,7 +418,7 @@ function banter:GetOptions()
                         order = 2,
                         style = 'dropdown',
                         dialogControl = 'LSM30_Font',
-                        values = LSM:HashTable(LSM.MediaType.FONT),
+                        values = addon.Media.GetFontOptions(),
                         get = function() return db().nameFontFace end,
                         set = function(_, val)
                             db().nameFontFace = val
@@ -471,7 +463,7 @@ function banter:GetOptions()
                         order = 6,
                         style = 'dropdown',
                         dialogControl = 'LSM30_Font',
-                        values = LSM:HashTable(LSM.MediaType.FONT),
+                        values = addon.Media.GetFontOptions(),
                         get = function() return db().msgFontFace end,
                         set = function(_, val)
                             db().msgFontFace = val

@@ -191,11 +191,12 @@ function tips.buildUnitInfo()
                     self.posttitle:SetText("")
                 else
                     local _, instanceType = IsInInstance()
-                    local pvpName = UnitPVPName(unit)
-                    if pvpName and not issecretvalue(pvpName) and pvpName ~= baseName and instanceType == "none" then
-                        local s2, e = pvpName:find(baseName, 1, true)
-                        self.pretitle:SetText(s2 and s2 > 1 and pvpName:sub(1, s2 - 1):match("^%s*(.-)%s*$") or "")
-                        self.posttitle:SetText(e and e < #pvpName and pvpName:sub(e + 1):match("^[%s,]*(.-)%s*$") or "")
+                    if instanceType == "none" then
+                        local preTitle, characterName, postTitle = addon.Utils.GetPlayerNameParts(unit)
+                        self.rawName = characterName
+                        self.name:SetText(nameColor .. characterName .. "|r")
+                        self.pretitle:SetText(preTitle:match("^%s*(.-)%s*$"))
+                        self.posttitle:SetText(postTitle:match("^[%s,]*(.-)%s*$"))
                     else
                         self.pretitle:SetText("")
                         self.posttitle:SetText("")

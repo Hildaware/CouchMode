@@ -52,12 +52,12 @@ function bagsModule:GetOptions()
                 order = 2,
                 type = 'select',
                 dialogControl = 'LSM30_Font',
-                values = LSM:HashTable(LSM.MediaType.FONT),
+                values = addon.Media.GetFontOptions(),
                 get = function()
                     return database:GetFont().name
                 end,
                 set = function(_, font)
-                    database:SetFont(font, LSM:HashTable(LSM.MediaType.FONT)[font])
+                    database:SetFont(font, LSM:Fetch(LSM.MediaType.FONT, font))
                 end
             },
             itemWidth = {

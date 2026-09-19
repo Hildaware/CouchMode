@@ -12,6 +12,9 @@ local database = addon:NewModule('Bags.Database')
 ---@class Enums: AceModule
 local enums = addon:GetModule('Bags.Enums')
 
+local ACCIDENTAL_PRESIDENCY_FONT_PATH = 'Interface\\AddOns\\CouchMode\\Resources\\Fonts\\AccidentalPresidency.ttf'
+local LEGACY_FONT_PATH = 'Interface\\AddOns\\Bags\\Fonts\\AccidentalPresidency.ttf'
+
 ---@class databaseOptions
 local defaults = {
     bags = {
@@ -21,7 +24,7 @@ local defaults = {
         BackgroundOpacity = 0.75,
         Font = {
             Name = 'Accidental Presidency',
-            Path = 'Interface\\AddOns\\Bags\\Fonts\\AccidentalPresidency.ttf',
+            Path = ACCIDENTAL_PRESIDENCY_FONT_PATH,
             Size = 12
         },
         InventoryFrame = {
@@ -78,6 +81,9 @@ end
 
 function database:OnInitialize()
     database.internal = addon.db.profile.bags
+    if database.internal.Font.Path == LEGACY_FONT_PATH then
+        database.internal.Font.Path = ACCIDENTAL_PRESIDENCY_FONT_PATH
+    end
 end
 
 ---@return SortField

@@ -9,7 +9,7 @@ local banter = addon:GetModule('Banter')
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local FONT_PATH = 'Interface/AddOns/CouchMode/Modules/Banter/Resources/Fonts/BebasNeue-Regular.ttf'
+local FONT_PATH = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
 local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widget
 
 --#endregion

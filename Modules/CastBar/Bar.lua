@@ -24,8 +24,8 @@ local MEDIA = {
     BG_ATLAS = 'plunderstorm-stormbar-background',
     SPARK_TEX = "interface\\questframe\\objectivewidget",
     SPARK_ATLAS = "objectivewidget-bar-spark-neutral",
-    ICON_MASK = "Interface\\AddOns\\CouchMode\\Media\\IconMask",
-    ICON_BORDER = "Interface\\AddOns\\CouchMode\\Media\\IconBorder",
+    ICON_MASK = "Interface\\AddOns\\CouchMode\\Resources\\Media\\IconMask",
+    ICON_BORDER = "Interface\\AddOns\\CouchMode\\Resources\\Media\\IconBorder",
 }
 
 ---@class PlayerCastBarGUI

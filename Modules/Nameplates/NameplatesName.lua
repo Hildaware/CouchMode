@@ -90,8 +90,13 @@ end
 
 --#region ── Name & guild display ─────────────────────────────────────────────
 
+local getZonePVPInfo = C_PvP and C_PvP.GetZonePVPInfo
+
 function nameplates.isInCity()
-    return GetZonePVPInfo() == "sanctuary" or GetZonePVPInfo() == "friendly"
+    if not getZonePVPInfo then return false end
+
+    local pvpType = getZonePVPInfo()
+    return pvpType == "sanctuary" or pvpType == "friendly"
 end
 
 function nameplates.isInInstance()
@@ -167,19 +172,11 @@ function nameplates.applyName(f, unit, plateType)
                 text = nc .. rpFullName .. COLOR_END
             end
         else
-            local fullStr = UnitPVPName(unit) or nameStr
-            local s, e = fullStr:find(nameStr, 1, true)
+            local preTitle, characterName, postTitle = addon.Utils.GetPlayerNameParts(unit)
             local nc = nameColor(unit)
-
-            if s and s > 1 then
-                local prefix = fullStr:sub(1, s - 1)
-                text = titleColor() .. prefix .. COLOR_END .. nc .. nameStr .. COLOR_END
-            elseif e and e < #fullStr then
-                local suffix = fullStr:sub(e + 1)
-                text = nc .. nameStr .. COLOR_END .. titleColor() .. suffix .. COLOR_END
-            else
-                text = nc .. nameStr .. COLOR_END
-            end
+            text = titleColor() .. preTitle .. COLOR_END
+                .. nc .. characterName .. COLOR_END
+                .. titleColor() .. postTitle .. COLOR_END
         end
     else
         local nc = isRare and COLOR_RARE or nameColor(unit)

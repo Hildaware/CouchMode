@@ -140,7 +140,7 @@ function tips:GetOptions()
                         type = 'select',
                         dialogControl = 'LSM30_Font',
                         order = 1,
-                        values = LSM:HashTable(LSM.MediaType.FONT),
+                        values = addon.Media.GetFontOptions(),
                         get = function() return tipsDB().font end,
                         set = function(_, value)
                             tipsDB().font = value

@@ -23,7 +23,7 @@ local PIP_H = 12
 local PIP_GAP = 1
 local PIP_MAX = 10
 
-local BAR_TEX = "Interface\\Addons\\CouchMode\\Media\\basic_bar.tga"
+local BAR_TEX = "Interface\\AddOns\\CouchMode\\Resources\\Media\\basic_bar.tga"
 
 local PlateType = { Full = 1, NameOnly = 2 }
 nameplates.PlateType = PlateType
@@ -131,7 +131,7 @@ function nameplates:GetOptions()
                         type = 'select',
                         dialogControl = 'LSM30_Font',
                         order = 1,
-                        values = LSM:HashTable(LSM.MediaType.FONT),
+                        values = addon.Media.GetFontOptions(),
                         get = function() return npDB().font end,
                         set = function(_, value)
                             npDB().font = value
