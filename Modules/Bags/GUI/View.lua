@@ -642,12 +642,14 @@ end
 ---@param value number?
 function view.proto:UpdateCurrency(currencyId, value)
     -- Generic Update
-    if not currencyId and not value then
-        local index = 1
+    if not currencyId then
         local trackedCurrencies = {}
-        repeat
+        local listSize = C_CurrencyInfo.GetCurrencyListSize() or 0
+        for index = 1, listSize do
             local currencyInfo = C_CurrencyInfo.GetCurrencyListInfo(index)
-            if currencyInfo.isShowInBackpack then
+            -- The currency list can contain unresolved entries while a new
+            -- character's data is initializing (and on some client variants).
+            if currencyInfo and currencyInfo.currencyID and currencyInfo.isShowInBackpack then
                 if not self.widget.currency.trackedCurrencies[currencyInfo.currencyID] then
                     -- Create
                     local frame = currency:Create()
@@ -657,15 +659,13 @@ function view.proto:UpdateCurrency(currencyId, value)
                     -- Update
                     self.widget.currency.trackedCurrencies[currencyInfo.currencyID]:Update(currencyInfo.quantity)
                 end
-                tinsert(trackedCurrencies, currencyInfo.currencyID)
+                trackedCurrencies[currencyInfo.currencyID] = true
             end
-            index = index + 1
-        until index > C_CurrencyInfo.GetCurrencyListSize()
-
+        end
 
         -- Remove untracked
         for currencyId, frame in pairs(self.widget.currency.trackedCurrencies) do
-            if not tContains(trackedCurrencies, currencyId) then
+            if not trackedCurrencies[currencyId] then
                 frame:Clear()
                 self.widget.currency.trackedCurrencies[currencyId] = nil
             end

@@ -100,6 +100,7 @@ function bags:OnEnable()
     table.insert(UISpecialFrames, bags.bags.Bank:GetName())
 
     self:SecureHook('ToggleAllBags')
+    self:SecureHook('ToggleBackpack')
     self:SecureHook('CloseSpecialWindows')
     self:SecureHook('OpenAllBags')
     self:SecureHook('CloseAllBags')
@@ -203,6 +204,10 @@ function bags:ToggleAllBags()
     end
 
     events:Send('ConsoleBagsToggle')
+end
+
+function bags:ToggleBackpack()
+    bags:ToggleAllBags()
 end
 
 function bags:OpenAllBags()

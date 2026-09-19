@@ -91,10 +91,8 @@ local function buildFrame()
     local overlay = CreateFrame("Frame", nil, f)
     overlay:SetAllPoints(f)
     overlay:SetFrameLevel(f.bar:GetFrameLevel() + 15)
+    f.overlay = overlay
 
-    nameplates.buildCastFrame(f, overlay)
-    nameplates.buildAurasFrame(f)
-    nameplates.buildPowerFrame(f)
     nameplates.buildNameFrame(f, overlay)
 
     f.roleIcon = overlay:CreateTexture(nil, "OVERLAY")
@@ -114,6 +112,13 @@ local function buildFrame()
     return f
 end
 
+local function ensureCombatFrames(f)
+    if f.cast then return end
+    nameplates.buildCastFrame(f, f.overlay)
+    nameplates.buildAurasFrame(f)
+    nameplates.buildPowerFrame(f)
+end
+
 local function acquire()
     local f = table.remove(pool) or buildFrame()
     f:SetParent(UIParent)
@@ -124,6 +129,9 @@ end
 local function release(f)
     f:SetScript("OnUpdate", nil)
     f.layoutTrans = nil
+    f.plateType = nil
+    f.isSelected = nil
+    f.showName = nil
     f:SetAlpha(1.0)
     f:Hide()
     f:ClearAllPoints()
@@ -137,17 +145,20 @@ local function release(f)
     f.guild:Hide()
     f.bar:Hide()
     f.bar.absorb:SetValue(0)
-    f.cast:Hide()
-    f.cast.spellName:SetText("")
-    f.cast.spellName:Hide()
-    f.cast.shield:SetAlpha(0)
-    nameplates.hideAuras(f)
-    nameplates.hideCC(f)
-    nameplates.hidePower(f)
+    if f.cast then
+        f.cast:Hide()
+        f.cast.spellName:SetText("")
+        f.cast.spellName:Hide()
+        f.cast.shield:SetAlpha(0)
+        nameplates.hideAuras(f)
+        nameplates.hideCC(f)
+        nameplates.hidePower(f)
+    end
     pool[#pool + 1] = f
 end
 
 nameplates.acquire = acquire
 nameplates.release = release
+nameplates.ensureCombatFrames = ensureCombatFrames
 
 --#endregion

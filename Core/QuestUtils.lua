@@ -8,6 +8,8 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 -- Cache per GUID: { isObjective = bool, quests = {{title, objectives[]},...}|nil }
 -- nil entry = not yet scanned
 local questCache = {}
+local questCacheCount = 0
+local QUEST_CACHE_MAX = 512
 
 local function isQuestColor(color)
     -- Quest gold is approx NORMAL_FONT_COLOR: (1, 0.82, 0)
@@ -28,7 +30,7 @@ local function scanGUID(guid, unit)
     end
 
     local isObjective = false
-    local quests = {}
+    local quests
     local currentQuest = nil
 
     local lines = tooltipData.lines or {}
@@ -49,26 +51,31 @@ local function scanGUID(guid, unit)
             -- Attach objective to the current quest entry
             if not currentQuest then
                 currentQuest = { title = nil, objectives = {} }
+                quests = quests or {}
                 quests[#quests + 1] = currentQuest
             end
             currentQuest.objectives[#currentQuest.objectives + 1] = { text = text, finished = finished }
         elseif line.leftText and line.leftText ~= "" and isQuestColor(line.leftColor) then
             currentQuest = { title = line.leftText, objectives = {} }
+            quests = quests or {}
             quests[#quests + 1] = currentQuest
         end
     end
 
     -- Only keep entries that have at least one objective (unit is actually involved)
-    local filtered = {}
-    for _, q in ipairs(quests) do
-        if #q.objectives > 0 then
-            filtered[#filtered + 1] = q
+    local filtered
+    if quests then
+        filtered = {}
+        for _, q in ipairs(quests) do
+            if #q.objectives > 0 then
+                filtered[#filtered + 1] = q
+            end
         end
     end
 
     questCache[guid] = {
         isObjective = isObjective,
-        quests = #filtered > 0 and filtered or nil,
+        quests = filtered and #filtered > 0 and filtered or nil,
     }
 end
 
@@ -77,7 +84,14 @@ local function getEntry(unit)
     if instanceType ~= "none" then return nil end
     local guid = UnitGUID(unit)
     if not guid then return nil end
-    if not questCache[guid] then scanGUID(guid, unit) end
+    if not questCache[guid] then
+        if questCacheCount >= QUEST_CACHE_MAX then
+            wipe(questCache)
+            questCacheCount = 0
+        end
+        scanGUID(guid, unit)
+        questCacheCount = questCacheCount + 1
+    end
     return questCache[guid]
 end
 
@@ -97,6 +111,7 @@ addon.QuestUtils = {
     --- Wipe the shared cache (call on zone change, quest log update, etc.)
     wipeCache = function()
         wipe(questCache)
+        questCacheCount = 0
     end,
 }
 

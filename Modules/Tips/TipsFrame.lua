@@ -175,6 +175,7 @@ end
 ---@param unit string|nil
 function tips.updateFrame(f, unit)
     releaseSections(f)
+    local isPlayer = UnitIsPlayer(unit)
 
     local headerAtlas = "StoryHeader-BG"
     if UnitCanAttack("player", unit) then
@@ -206,28 +207,32 @@ function tips.updateFrame(f, unit)
     end
 
     -- MountInfo: only if unit is mounted
-    local mo = mountPool.acquire()
-    mo:populate(unit)
-    if mo.hasData then
-        mo.frame:SetParent(f.frame)
-        mo.frame:Show()
-        f.mount = mo
-    else
-        mountPool.release(mo)
+    if isPlayer then
+        local mo = mountPool.acquire()
+        mo:populate(unit)
+        if mo.hasData then
+            mo.frame:SetParent(f.frame)
+            mo.frame:Show()
+            f.mount = mo
+        else
+            mountPool.release(mo)
+        end
     end
 
     -- QuestInfo: only for NPCs with active quests
-    local qu = questPool.acquire()
-    qu:populate(unit)
-    if qu.hasData then
-        qu.frame:SetParent(f.frame)
-        qu.frame:Show()
-        f.quest = qu
-    else
-        questPool.release(qu)
+    if not isPlayer then
+        local qu = questPool.acquire()
+        qu:populate(unit)
+        if qu.hasData then
+            qu.frame:SetParent(f.frame)
+            qu.frame:Show()
+            f.quest = qu
+        else
+            questPool.release(qu)
+        end
     end
 
-    buildLayout(f, UnitIsPlayer(unit))
+    buildLayout(f, isPlayer)
     tips.applyAnchor(f)
 end
 

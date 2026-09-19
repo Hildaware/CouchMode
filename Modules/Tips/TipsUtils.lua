@@ -19,8 +19,8 @@ local function cacheSpec(guid, unit)
     inspectCache[guid] = { specName = specName, specIcon = specIcon, time = GetTime() }
 end
 
-local function pruneCache()
-    local now = GetTime()
+local function pruneCache(now)
+    now = now or GetTime()
     for guid, entry in pairs(inspectCache) do
         if now - entry.time > CACHE_TTL then
             inspectCache[guid] = nil
@@ -45,6 +45,7 @@ local function getSpecData(unit)
 
     -- Others: look up the GUID cache populated by INSPECT_READY.
     local guid = UnitGUID(unit)
+    if guid and issecretvalue and issecretvalue(guid) then return nil end
     return guid and inspectCache[guid] or nil
 end
 
@@ -52,7 +53,12 @@ local function requestInspect(unit)
     if not UnitIsPlayer(unit) then return end
     if not CanInspect(unit) then return end
     local now = GetTime()
+    local guid = UnitGUID(unit)
+    if not guid or (issecretvalue and issecretvalue(guid)) then return end
+    local cached = inspectCache[guid]
+    if cached and now - cached.time <= CACHE_TTL then return end
     if now - lastInspect < INSPECT_THROTTLE then return end
+    pruneCache(now)
     lastInspect = now
     NotifyInspect(unit)
 end

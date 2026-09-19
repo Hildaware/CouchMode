@@ -6,6 +6,40 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class NameplatesModule: AceModule
 local nameplates = addon:GetModule('Nameplates')
 
+local AURA_TIMER_INTERVAL = 0.1
+local auraTimerElapsed = 0
+local auraTimerFrame = CreateFrame("Frame")
+auraTimerFrame:Hide()
+
+local function startAuraTimers()
+    auraTimerFrame:Show()
+end
+
+auraTimerFrame:SetScript("OnUpdate", function(self, elapsed)
+    auraTimerElapsed = auraTimerElapsed + elapsed
+    if auraTimerElapsed < AURA_TIMER_INTERVAL then return end
+    auraTimerElapsed = 0
+
+    local hasTimers = false
+    for _, f in pairs(nameplates.active) do
+        if f.auras and f.auras:IsShown() then
+            for i = 1, nameplates.AURA_MAX do
+                local icon = f.auras.icons[i]
+                if icon:IsShown() and icon.duration then
+                    hasTimers = true
+                    icon.timer:SetFormattedText("%.0f", icon.duration:GetRemainingDuration())
+                end
+            end
+        end
+        if f.cc and f.cc:IsShown() and f.cc.duration then
+            hasTimers = true
+            f.cc.timer:SetFormattedText("%.0f", f.cc.duration:GetRemainingDuration())
+        end
+    end
+
+    if not hasTimers then self:Hide() end
+end)
+
 function nameplates.buildAurasFrame(f)
     local AURA_MAX = nameplates.AURA_MAX
     local AURA_W = nameplates.AURA_W
@@ -50,15 +84,6 @@ function nameplates.buildAurasFrame(f)
         f.auras.icons[i] = icon
     end
 
-    f.auras:SetScript("OnUpdate", function(self)
-        for i = 1, AURA_MAX do
-            local icon = self.icons[i]
-            if icon:IsShown() and icon.duration then
-                icon.timer:SetText(string.format("%.0f", icon.duration:GetRemainingDuration()))
-            end
-        end
-    end)
-
     f.cc = CreateFrame("Frame", nil, f)
     f.cc:SetSize(AURA_W, AURA_H)
     f.cc:SetPoint("LEFT", f.bar, "RIGHT", 4, 0)
@@ -79,11 +104,6 @@ function nameplates.buildAurasFrame(f)
         addon.Utils.apply_font_shadow(f.cc.timer)
     end
 
-    f.cc:SetScript("OnUpdate", function(self)
-        if self.duration then
-            self.timer:SetText(string.format("%.0f", self.duration:GetRemainingDuration()))
-        end
-    end)
 end
 
 local AURA_MAX = nameplates.AURA_MAX
@@ -106,17 +126,33 @@ function nameplates.refreshAuras(f, unitToken)
             icon.tex:SetTexture(aura.icon)
             icon.duration = C_UnitAuras.GetAuraDuration(unitToken, aura.auraInstanceID)
             icon.timer:SetShown(icon.duration ~= nil)
+            if icon.duration then
+                icon.timer:SetFormattedText("%.0f", icon.duration:GetRemainingDuration())
+                startAuraTimers()
+            else
+                icon.timer:SetText("")
+            end
             local auraCountStr = C_UnitAuras.GetAuraApplicationDisplayCount(unitToken, aura.auraInstanceID, 2, 1000)
             icon.count:SetText(auraCountStr)
             icon:Show()
         end
     end
-    for i = shown + 1, AURA_MAX do f.auras.icons[i]:Hide() end
+    for i = shown + 1, AURA_MAX do
+        local icon = f.auras.icons[i]
+        icon:Hide()
+        icon.duration = nil
+        icon.timer:SetText("")
+    end
     f.auras:SetShown(shown > 0)
 end
 
 function nameplates.hideAuras(f)
-    for i = 1, AURA_MAX do f.auras.icons[i]:Hide() end
+    for i = 1, AURA_MAX do
+        local icon = f.auras.icons[i]
+        icon:Hide()
+        icon.duration = nil
+        icon.timer:SetText("")
+    end
     f.auras:Hide()
 end
 
@@ -127,6 +163,12 @@ function nameplates.refreshCC(f, unitToken)
         f.cc.icon:SetTexture(aura.icon)
         f.cc.duration = C_UnitAuras.GetAuraDuration(unitToken, aura.auraInstanceID)
         f.cc.timer:SetShown(f.cc.duration ~= nil)
+        if f.cc.duration then
+            f.cc.timer:SetFormattedText("%.0f", f.cc.duration:GetRemainingDuration())
+            startAuraTimers()
+        else
+            f.cc.timer:SetText("")
+        end
         f.cc:Show()
         return
     end
@@ -136,4 +178,5 @@ end
 function nameplates.hideCC(f)
     f.cc:Hide()
     f.cc.duration = nil
+    f.cc.timer:SetText("")
 end

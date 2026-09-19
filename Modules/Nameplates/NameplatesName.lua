@@ -39,6 +39,8 @@ end
 
 --#region ── Quest detection ──────────────────────────────────────────────────
 local subtitleCache = {}
+local subtitleCacheCount = 0
+local SUBTITLE_CACHE_MAX = 256
 
 function nameplates.isQuestUnit(unit)
     if nameplates.isInInstance() then return false end
@@ -48,6 +50,7 @@ end
 function nameplates.wipeQuestCache()
     addon.QuestUtils.wipeCache()
     wipe(subtitleCache)
+    subtitleCacheCount = 0
 end
 
 local partyGUIDs = {}
@@ -210,7 +213,12 @@ local function getSubtitle(unitToken)
     end
 
     if guid then
+        if subtitleCacheCount >= SUBTITLE_CACHE_MAX then
+            wipe(subtitleCache)
+            subtitleCacheCount = 0
+        end
         subtitleCache[guid] = { text = subtitle, isGuild = isGuild }
+        subtitleCacheCount = subtitleCacheCount + 1
     end
     return subtitle, isGuild
 end
@@ -221,6 +229,10 @@ end
 
 function nameplates.applyGuild(f, unitToken)
     local showName = nameplates.shouldShowName(unitToken)
+    if not showName then
+        f.guild:Hide()
+        return
+    end
 
     local subtitle
     if UnitIsPlayer(unitToken) then
@@ -229,7 +241,7 @@ function nameplates.applyGuild(f, unitToken)
         subtitle = getSubtitle(unitToken)
     end
 
-    if showName and subtitle then
+    if subtitle then
         local gc = ChatTypeInfo["GUILD"]
         f.guild:SetVertexColor(gc.r, gc.g, gc.b)
         f.guild:SetText(subtitle)

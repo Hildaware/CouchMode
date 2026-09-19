@@ -199,10 +199,12 @@ nameplates.applyShadowToAll = applyShadowToAll
 local function refreshBar(f, unitToken)
     local PlateType = nameplates.PlateType
     local plateType = getLayoutType(unitToken)
+    f.plateType = plateType
     f.bar:SetShown(plateType == PlateType.Full)
     nameplates.applyLayout(f, plateType)
     nameplates.applyName(f, unitToken, plateType)
     if plateType == PlateType.Full then
+        nameplates.ensureCombatFrames(f)
         updateBarColor(f, unitToken)
         updateHealth(f, unitToken)
         nameplates.updateCast(f, unitToken)
@@ -211,10 +213,12 @@ local function refreshBar(f, unitToken)
         nameplates.updatePower(f, unitToken)
         f.roleIcon:Hide()
     else
-        nameplates.hideCast(f)
-        nameplates.hideAuras(f)
-        nameplates.hideCC(f)
-        nameplates.hidePower(f)
+        if f.cast then
+            nameplates.hideCast(f)
+            nameplates.hideAuras(f)
+            nameplates.hideCC(f)
+            nameplates.hidePower(f)
+        end
         updateRoleIcon(f, unitToken)
     end
 end
@@ -226,9 +230,11 @@ local function showPlate(unitToken, np)
         active[unitToken] = f
     end
 
+    local selected = isSelected(unitToken)
+    f.isSelected = selected
     f:SetParent(np) -- inherit np's alpha so occlusion applies automatically
-    f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
-    f:SetFrameStrata(isSelected(unitToken) and "HIGH" or "MEDIUM")
+    f:SetScale(selected and 1.0 or DIMMED_SCALE)
+    f:SetFrameStrata(selected and "HIGH" or "MEDIUM")
     updateAlpha(f, unitToken)
     f:SetPoint("CENTER", np.UnitFrame, "CENTER")
     f.unitFrame = np.UnitFrame
@@ -236,8 +242,9 @@ local function showPlate(unitToken, np)
 
     f.name:SetFont(nameplates.currentFont())
     local hasQuest = nameplates.isQuestUnit(unitToken)
+    f.showName = nameplates.shouldShowName(unitToken)
     f.questIcon:SetShown(hasQuest)
-    f.name:SetShown(nameplates.shouldShowName(unitToken) or hasQuest)
+    f.name:SetShown(f.showName or hasQuest)
     nameplates.applyGuild(f, unitToken)
     nameplates.applyMusicIcon(f, unitToken)
     updateMark(f, unitToken)
@@ -257,15 +264,60 @@ end
 
 local function refreshAll()
     for unitToken, f in pairs(active) do
-        f:SetScale(isSelected(unitToken) and 1.0 or DIMMED_SCALE)
-        f:SetFrameStrata(isSelected(unitToken) and "HIGH" or "MEDIUM")
+        local selected = isSelected(unitToken)
+        f.isSelected = selected
+        f:SetScale(selected and 1.0 or DIMMED_SCALE)
+        f:SetFrameStrata(selected and "HIGH" or "MEDIUM")
         updateAlpha(f, unitToken)
-        f.name:SetShown(nameplates.shouldShowName(unitToken) or f.questIcon:IsShown())
+        f.showName = nameplates.shouldShowName(unitToken)
+        f.name:SetShown(f.showName or f.questIcon:IsShown())
         nameplates.applyGuild(f, unitToken)
         nameplates.applyMusicIcon(f, unitToken)
         updateMark(f, unitToken)
         updateElite(f, unitToken)
         refreshBar(f, unitToken) -- also calls applyName
+    end
+end
+
+local function refreshInteractionState()
+    for unitToken, f in pairs(active) do
+        local selected = isSelected(unitToken)
+        local plateType = getLayoutType(unitToken)
+        local selectionChanged = selected ~= f.isSelected
+
+        if selectionChanged then
+            f.isSelected = selected
+            f:SetScale(selected and 1.0 or DIMMED_SCALE)
+            f:SetFrameStrata(selected and "HIGH" or "MEDIUM")
+            updateAlpha(f, unitToken)
+        end
+
+        if plateType ~= f.plateType then
+            refreshBar(f, unitToken)
+            if plateType == nameplates.PlateType.NameOnly then
+                nameplates.applyGuild(f, unitToken)
+            end
+        elseif selectionChanged then
+            nameplates.applyName(f, unitToken, plateType)
+            if plateType == nameplates.PlateType.Full then
+                nameplates.updatePower(f, unitToken)
+            else
+                updateRoleIcon(f, unitToken)
+            end
+        end
+
+        local showName = nameplates.shouldShowName(unitToken)
+        if showName ~= f.showName then
+            f.showName = showName
+            f.name:SetShown(showName or f.questIcon:IsShown())
+            updateElite(f, unitToken)
+            if showName and plateType == nameplates.PlateType.NameOnly then
+                nameplates.applyName(f, unitToken, plateType)
+                nameplates.applyGuild(f, unitToken)
+            elseif not showName then
+                f.guild:Hide()
+            end
+        end
     end
 end
 
@@ -362,7 +414,7 @@ function nameplates:OnUnitRemoved(_, unitToken)
 end
 
 function nameplates:OnInteractionChanged()
-    refreshAll()
+    refreshInteractionState()
 end
 
 function nameplates:OnCombatChanged(event)
@@ -421,7 +473,17 @@ end
 function nameplates:OnUnitEngagement(_, unitToken)
     if not inCombat then return end
     local f = active[unitToken]
-    if f then refreshBar(f, unitToken) end
+    if not f then return end
+
+    local plateType = getLayoutType(unitToken)
+    if plateType ~= f.plateType then
+        refreshBar(f, unitToken)
+        if plateType == nameplates.PlateType.NameOnly then
+            nameplates.applyGuild(f, unitToken)
+        end
+    elseif plateType == nameplates.PlateType.Full then
+        updateBarColor(f, unitToken)
+    end
 end
 
 function nameplates:OnCastStart(_, unitToken)
@@ -431,7 +493,7 @@ end
 
 function nameplates:OnCastStop(_, unitToken)
     local f = active[unitToken]
-    if f then nameplates.hideCast(f) end
+    if f and f.cast then nameplates.hideCast(f) end
 end
 
 function nameplates:OnPlayerPower()
@@ -483,6 +545,7 @@ function nameplates:OnDisable()
     self:UnregisterEvent("UNIT_SPELLCAST_DELAYED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
     self:UnregisterEvent("UNIT_CLASSIFICATION_CHANGED")
+    self:UnregisterEvent("GROUP_ROSTER_UPDATE")
     self:UnregisterEvent("UNIT_AURA")
     self:UnregisterEvent("UNIT_TARGET")
     self:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE")
@@ -527,6 +590,7 @@ function nameplates.debugShow()
     debugFrame.bar.fill:SetMinMaxValues(0, 100)
     debugFrame.bar.fill:SetValue(65)
     nameplates.applyLayout(debugFrame, nameplates.PlateType.Full)
+    nameplates.ensureCombatFrames(debugFrame)
 
     SetRaidTargetIconTexture(debugFrame.mark, 8)
     debugFrame.mark:Show()

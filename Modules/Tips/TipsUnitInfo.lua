@@ -34,53 +34,32 @@ tips.CLASSIFICATION_ATLAS = {
     worldboss = "nameplates-icon-elite-gold",
 }
 
-local subtitleCache = {}
-local factionCache = {}
+local tooltipCache = {}
+local tooltipCacheCount = 0
+local TOOLTIP_CACHE_MAX = 128
 
 function tips.wipeSubtitleCache()
-    wipe(subtitleCache)
-    wipe(factionCache)
+    wipe(tooltipCache)
+    tooltipCacheCount = 0
     addon.QuestUtils.wipeCache()
 end
 
-function tips.getSubtitle(unit)
-    if UnitIsPlayer(unit) then
-        return GetGuildInfo(unit)
-    end
-
+local function getTooltipDetails(unit)
     local _, instanceType = IsInInstance()
     if instanceType ~= "none" then return nil end
 
     local guid = UnitGUID(unit)
-    if guid and subtitleCache[guid] ~= nil then
-        return subtitleCache[guid] or nil
-    end
+    if guid and tooltipCache[guid] then return tooltipCache[guid] end
 
-    local tooltipData = C_TooltipInfo.GetUnit(unit)
-    local subtitle
-    if tooltipData and tooltipData.lines and tooltipData.lines[2] then
-        local text = tooltipData.lines[2].leftText
-        if text and text ~= "" and not text:match("^Level %d") and not text:match("^%?%?") then
-            subtitle = text
-        end
-    end
-
-    if guid then subtitleCache[guid] = subtitle or false end
-    return subtitle
-end
-
-function tips.getFaction(unit)
-    local _, instanceType = IsInInstance()
-    if instanceType ~= "none" then return nil end
-
-    local guid = UnitGUID(unit)
-    if guid and factionCache[guid] ~= nil then
-        return factionCache[guid] or nil
-    end
-
-    local faction
+    local details = {}
     local tooltipData = C_TooltipInfo.GetUnit(unit)
     if tooltipData and tooltipData.lines then
+        local line2 = tooltipData.lines[2]
+        local subtitle = line2 and line2.leftText
+        if subtitle and subtitle ~= "" and not subtitle:match("^Level %d") and not subtitle:match("^%?%?") then
+            details.subtitle = subtitle
+        end
+
         local pastLevel = false
         for i = 2, #tooltipData.lines do
             local text = tooltipData.lines[i].leftText
@@ -88,15 +67,36 @@ function tips.getFaction(unit)
                 if text:match("^Level ") or text:match("^%?%?") then
                     pastLevel = true
                 elseif pastLevel and not tips.CREATURE_TYPE_SET[text] then
-                    faction = text
+                    details.faction = text
                     break
                 end
             end
         end
     end
 
-    if guid then factionCache[guid] = faction or false end
-    return faction
+    if guid then
+        if tooltipCacheCount >= TOOLTIP_CACHE_MAX then
+            wipe(tooltipCache)
+            tooltipCacheCount = 0
+        end
+        tooltipCache[guid] = details
+        tooltipCacheCount = tooltipCacheCount + 1
+    end
+    return details
+end
+
+function tips.getSubtitle(unit)
+    if UnitIsPlayer(unit) then
+        return GetGuildInfo(unit)
+    end
+
+    local details = getTooltipDetails(unit)
+    return details and details.subtitle or nil
+end
+
+function tips.getFaction(unit)
+    local details = getTooltipDetails(unit)
+    return details and details.faction or nil
 end
 
 --#region ── Section build ────────────────────────────────────────────────────

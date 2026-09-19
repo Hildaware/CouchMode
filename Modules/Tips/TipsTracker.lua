@@ -57,6 +57,20 @@ end
 --#region ── Show / hide ───────────────────────────────────────────────────────
 
 local currentUnit = nil
+local currentGUID = nil
+local INTERACTION_EVENT_UNITS = {
+    UPDATE_MOUSEOVER_UNIT = "mouseover",
+    PLAYER_TARGET_CHANGED = "target",
+    PLAYER_SOFT_ENEMY_CHANGED = "softenemy",
+    PLAYER_SOFT_FRIEND_CHANGED = "softfriend",
+    PLAYER_SOFT_INTERACT_CHANGED = "softinteract",
+}
+
+local function getPublicGUID(unit)
+    local guid = UnitGUID(unit)
+    if guid and issecretvalue and issecretvalue(guid) then return nil end
+    return guid
+end
 
 local function fadeInFrame(f)
     f:SetAlpha(0)
@@ -72,6 +86,7 @@ local function showTip(unit)
         tips.activeFrame = f
     end
     currentUnit = unit
+    currentGUID = getPublicGUID(unit)
     -- Request inspect for players so spec data can populate asynchronously.
     if UnitIsPlayer(unit) and addon.TipsUtils then
         addon.TipsUtils.requestInspect(unit)
@@ -85,6 +100,7 @@ local function hideTip()
         local f = tips.activeFrame
         tips.activeFrame = nil
         currentUnit = nil
+        currentGUID = nil
         UIFrameFadeOut(f, 0.25, f:GetAlpha(), 0)
         C_Timer.After(0.25, function()
             tips.release(f)
@@ -92,9 +108,17 @@ local function hideTip()
     end
 end
 
-local function refreshTip()
+local function refreshTip(changedUnit)
     local unit = getCurrentUnit()
     if unit then
+        if tips.activeFrame and unit == currentUnit and changedUnit and changedUnit ~= currentUnit then
+            return
+        end
+        local guid = getPublicGUID(unit)
+        if tips.activeFrame and guid and guid == currentGUID then
+            currentUnit = unit
+            return
+        end
         showTip(unit)
     else
         hideTip()
@@ -126,7 +150,7 @@ function tips:OnEnable()
     if not tooltipHooked then
         tooltipHooked = true
         GameTooltip:HookScript("OnShow", function(self)
-            if self:IsTooltipType(Enum.TooltipDataType.Unit) then self:Hide() end
+            if tips:IsEnabled() and self:IsTooltipType(Enum.TooltipDataType.Unit) then self:Hide() end
         end)
     end
 
@@ -213,8 +237,8 @@ function tips:OnDisable()
     hideTip()
 end
 
-function tips:OnInteractionChanged()
-    refreshTip()
+function tips:OnInteractionChanged(event)
+    refreshTip(INTERACTION_EVENT_UNITS[event])
 end
 
 function tips:OnWorldCursorUpdate(_, anchorType)
@@ -268,6 +292,7 @@ function tips:OnWorldCursorUpdate(_, anchorType)
         tips.activeFrame = f
     end
     currentUnit = nil
+    currentGUID = nil
     tips.updateFrameForObject(f, name, quests)
     if isNew then fadeInFrame(f) end
     GameTooltip:Hide()
