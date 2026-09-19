@@ -249,8 +249,10 @@ function healthBar:HandleBlizzPlayerFrame()
     PlayerFrame:SetParent(gui.frame)
     PlayerFrame:SetAllPoints(gui.frame)
     PlayerFrame:HookScript("OnShow", function(self) self:SetAlpha(0) end)
-    PlayerFrameBottomManagedFramesContainer:UnregisterAllEvents()
-    PlayerFrameBottomManagedFramesContainer:Hide()
+    if PlayerFrameBottomManagedFramesContainer then
+        PlayerFrameBottomManagedFramesContainer:UnregisterAllEvents()
+        PlayerFrameBottomManagedFramesContainer:Hide()
+    end
     if PlayerFrame.healthbar then PlayerFrame.healthbar:UnregisterAllEvents() end
     if PlayerFrame.manabar then PlayerFrame.manabar:UnregisterAllEvents() end
     if PlayerFrame.powerBarAlt then PlayerFrame.powerBarAlt:UnregisterAllEvents() end
