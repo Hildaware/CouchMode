@@ -138,7 +138,6 @@ function tips:GetOptions()
                     font = {
                         name = 'Font',
                         type = 'select',
-                        dialogControl = 'LSM30_Font',
                         order = 1,
                         values = addon.Media.GetFontOptions(),
                         get = function() return tipsDB().font end,

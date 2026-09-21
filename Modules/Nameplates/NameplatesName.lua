@@ -10,6 +10,7 @@ local nameplates = addon:GetModule('Nameplates')
 
 local COLOR_END = "|r"
 local COLOR_RARE = "|cFFFFD200"
+local COLOR_TAP_DENIED = "|cFF808080"
 local titleColorCache
 
 local hexColor = addon.Utils.hexColor
@@ -33,6 +34,13 @@ local function nameColor(unit)
     local reaction = UnitReaction(unit, "player")
     local c = reaction and FACTION_BAR_COLORS[reaction]
     return c and hexColor(c.r, c.g, c.b) or "|cFFFFFFFF"
+end
+
+local function isTapDenied(unit)
+    return not UnitIsPlayer(unit)
+        and UnitCanAttack("player", unit)
+        and UnitIsTapDenied
+        and UnitIsTapDenied(unit)
 end
 
 --#endregion
@@ -151,7 +159,9 @@ function nameplates.applyName(f, unit, plateType)
     local isRare = classification == "rare" or classification == "rareelite"
 
     if plateType == PlateType.Full then
-        if nameplates.isSelected(unit) then
+        if isTapDenied(unit) then
+            f.name:SetVertexColor(0.5, 0.5, 0.5)
+        elseif nameplates.isSelected(unit) then
             f.name:SetVertexColor(0.5, 0.8, 1.0)
         elseif isRare then
             f.name:SetVertexColor(1, 0.82, 0)
@@ -182,7 +192,7 @@ function nameplates.applyName(f, unit, plateType)
                 .. titleColor() .. postTitle .. COLOR_END
         end
     else
-        local nc = isRare and COLOR_RARE or nameColor(unit)
+        local nc = isTapDenied(unit) and COLOR_TAP_DENIED or (isRare and COLOR_RARE or nameColor(unit))
         text = nc .. nameStr .. COLOR_END
     end
 
@@ -234,16 +244,23 @@ function nameplates.applyGuild(f, unitToken)
         return
     end
 
-    local subtitle
+    local subtitle, isGuild
     if UnitIsPlayer(unitToken) then
-        subtitle = addon.TRPUtils.getRPFullTitle(unitToken) or getSubtitle(unitToken)
+        subtitle = addon.TRPUtils.getRPFullTitle(unitToken)
+        if not subtitle then
+            subtitle, isGuild = getSubtitle(unitToken)
+        end
     else
         subtitle = getSubtitle(unitToken)
     end
 
     if subtitle then
         local gc = ChatTypeInfo["GUILD"]
-        f.guild:SetVertexColor(gc.r, gc.g, gc.b)
+        if isGuild and addon.Utils.IsUnitInPlayerGuild(unitToken) then
+            f.guild:SetVertexColor(1, 0.82, 0)
+        else
+            f.guild:SetVertexColor(gc.r, gc.g, gc.b)
+        end
         f.guild:SetText(subtitle)
         f.guild:Show()
     else

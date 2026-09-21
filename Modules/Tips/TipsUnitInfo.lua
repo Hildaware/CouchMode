@@ -208,14 +208,25 @@ function tips.buildUnitInfo()
             end
 
             -- Subtitle
-            local subtitle = isPlayer
-                and (addon.TRPUtils.getRPFullTitle(unit) or tips.getSubtitle(unit))
-                or tips.getSubtitle(unit)
+            local subtitle, isGuild
+            if isPlayer then
+                subtitle = addon.TRPUtils.getRPFullTitle(unit)
+                if not subtitle then
+                    subtitle = tips.getSubtitle(unit)
+                    isGuild = subtitle ~= nil
+                end
+            else
+                subtitle = tips.getSubtitle(unit)
+            end
             if subtitle then
                 self.subtitle:SetText(subtitle)
                 if isPlayer then
                     local gc = ChatTypeInfo["GUILD"]
-                    self.subtitle:SetVertexColor(gc.r, gc.g, gc.b)
+                    if isGuild and addon.Utils.IsUnitInPlayerGuild(unit) then
+                        self.subtitle:SetVertexColor(1, 0.82, 0)
+                    else
+                        self.subtitle:SetVertexColor(gc.r, gc.g, gc.b)
+                    end
                 else
                     self.subtitle:SetVertexColor(0.7, 0.7, 0.7)
                 end

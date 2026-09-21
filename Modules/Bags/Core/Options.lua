@@ -51,7 +51,6 @@ function bagsModule:GetOptions()
                 desc = 'The font to use for the view.',
                 order = 2,
                 type = 'select',
-                dialogControl = 'LSM30_Font',
                 values = addon.Media.GetFontOptions(),
                 get = function()
                     return database:GetFont().name

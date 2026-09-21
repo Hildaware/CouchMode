@@ -417,7 +417,6 @@ function banter:GetOptions()
                         type = 'select',
                         order = 2,
                         style = 'dropdown',
-                        dialogControl = 'LSM30_Font',
                         values = addon.Media.GetFontOptions(),
                         get = function() return db().nameFontFace end,
                         set = function(_, val)
@@ -462,7 +461,6 @@ function banter:GetOptions()
                         type = 'select',
                         order = 6,
                         style = 'dropdown',
-                        dialogControl = 'LSM30_Font',
                         values = addon.Media.GetFontOptions(),
                         get = function() return db().msgFontFace end,
                         set = function(_, val)

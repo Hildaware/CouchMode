@@ -43,6 +43,42 @@ function addon.Utils.GetPlayerNameParts(unit)
     return preTitle, baseName, nameEnd < #pvpName and pvpName:sub(nameEnd + 1) or ""
 end
 
+--- Returns whether a player unit belongs to the current player's guild.
+--- UnitIsInMyGuild is the direct modern API; IsGuildMember accepts unit tokens
+--- and keeps the check working on older clients.
+---@param unit string
+---@return boolean
+function addon.Utils.IsUnitInPlayerGuild(unit)
+    if not UnitIsPlayer(unit) then return false end
+    if UnitIsInMyGuild then return UnitIsInMyGuild(unit) end
+    return IsGuildMember and IsGuildMember(unit) or false
+end
+
+--- Makes AceConfigDialog's legacy tooltip calls work on clients that require
+--- an explicit alpha argument before the wrap flag. This modifies only the
+--- dialog's private tooltip object, never the bundled Ace source.
+function addon.Utils.InstallAceConfigTooltipCompatibility()
+    local dialog = LibStub("AceConfigDialog-3.0", true)
+    local tooltip = dialog and dialog.tooltip
+    if not tooltip or tooltip.CouchModeSetTextCompatibilityInstalled then return end
+
+    -- Older clients accept (text, r, g, b, wrap); newer clients require
+    -- (text, r, g, b, alpha, wrap). Test the installed API rather than a
+    -- particular project/version so this works on WoW:Forever only when needed.
+    local supportsLegacySignature = pcall(tooltip.SetText, tooltip, "", 1, 0.82, 0, true)
+    tooltip:Hide()
+    if supportsLegacySignature then return end
+
+    local originalSetText = tooltip.SetText
+    tooltip.SetText = function(self, text, r, g, b, wrap, ...)
+        if type(r) == "number" and type(g) == "number" and type(b) == "number" and type(wrap) == "boolean" then
+            return originalSetText(self, text, r, g, b, 1, wrap, ...)
+        end
+        return originalSetText(self, text, r, g, b, wrap, ...)
+    end
+    tooltip.CouchModeSetTextCompatibilityInstalled = true
+end
+
 --- Creates four border textures (T, B, L, R) parented to `parent` and anchored to `anchor`.
 --- Call apply_border_textures to set size and color.
 ---@param parent Frame

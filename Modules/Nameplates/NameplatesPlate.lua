@@ -370,6 +370,8 @@ function nameplates:OnEnable()
     self:RegisterEvent("UNIT_HEALTH", "OnUnitHealth")
     self:RegisterEvent("UNIT_ABSORB_AMOUNT_CHANGED", "OnUnitHealth")
     self:RegisterEvent("UNIT_NAME_UPDATE", "OnNameUpdate")
+    self:RegisterEvent("PLAYER_GUILD_UPDATE", "OnNameUpdate")
+    self:RegisterEvent("UNIT_FACTION", "OnFactionChanged")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatChanged")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatChanged")
     self:RegisterEvent("UNIT_SPELLCAST_START", "OnCastStart")
@@ -519,6 +521,13 @@ function nameplates:OnNameUpdate(_, unitToken)
     end
 end
 
+function nameplates:OnFactionChanged(_, unitToken)
+    local f = active[unitToken]
+    if f then
+        nameplates.applyName(f, unitToken, getLayoutType(unitToken))
+    end
+end
+
 function nameplates:OnDisable()
     SetCVar("nameplateSelectedScale", 1.2)
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
@@ -534,6 +543,8 @@ function nameplates:OnDisable()
     self:UnregisterEvent("UNIT_HEALTH")
     self:UnregisterEvent("UNIT_ABSORB_AMOUNT_CHANGED")
     self:UnregisterEvent("UNIT_NAME_UPDATE")
+    self:UnregisterEvent("PLAYER_GUILD_UPDATE")
+    self:UnregisterEvent("UNIT_FACTION")
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:UnregisterEvent("UNIT_SPELLCAST_START")

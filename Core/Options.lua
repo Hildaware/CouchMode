@@ -56,6 +56,7 @@ function options:OnInitialize()
     settings.args['playerBars'] = playerBarsGroup
 
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, settings)
+    addon.Utils.InstallAceConfigTooltipCompatibility()
     LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Couch Mode')
 
     LibStub('AceConsole-3.0'):RegisterChatCommand('cm', function(args)
