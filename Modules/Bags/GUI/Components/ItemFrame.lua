@@ -88,6 +88,20 @@ function itemFrame.proto:Build(item, offset, parent)
     frame:ClearAllPoints()
     frame:SetPoint('TOP', 0, -((offset - 1) * itemHeight))
 
+    -- ContainerFrameItemButtonTemplate fixes its icon frames at 37px.  Our
+    -- catalog rows resize the button, so keep the item art, quality border,
+    -- and quest overlay in the same bounds at every row scale.
+    local iconSize = itemHeight - 6
+    frame.iconContainer:SetSize(session.Settings.Defaults.Columns.Icon * columnScale, iconSize)
+    frame.icon.frame:SetSize(iconSize, iconSize)
+    frame.icon:SetAllPoints(frame.icon.frame)
+    frame.icon:SetSize(iconSize, iconSize)
+    frame.icon.icon:SetAllPoints(frame.icon)
+    -- frame.icon.NormalTexture:SetAllPoints(frame.icon)
+    frame.icon.NormalTexture:SetSize(iconSize * 1.5, iconSize * 1.5)
+    frame.icon.IconBorder:SetAllPoints(frame.icon)
+    frame.icon.IconQuestTexture:SetAllPoints(frame.icon)
+
     local tooltipOwner = GameTooltip:GetOwner()
 
     frame.itemButton:SetID(item.slot)
@@ -152,12 +166,6 @@ function itemFrame.proto:Build(item, offset, parent)
         local cBags = Masque:Group('Bags')
         cBags:AddButton(frame.icon)
     end
-
-    local iconSize = itemHeight - 6
-    frame.iconContainer:SetSize(session.Settings.Defaults.Columns.Icon * columnScale, iconSize)
-    frame.icon.frame:SetSize(iconSize, iconSize)
-    frame.icon:SetAllPoints(frame.icon.frame)
-    frame.icon:SetSize(iconSize, iconSize)
 
     local stackString = (item.stackCount and item.stackCount > 1) and '(' .. item.stackCount .. ')' or nil
     local nameString = item.name
