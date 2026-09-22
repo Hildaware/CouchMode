@@ -95,6 +95,8 @@ function bags:OnEnable()
     bags.bags.Inventory = view:Create(enums.InventoryType.Inventory)
     bags.bags.Bank = view:Create(enums.InventoryType.Bank)
     bags.bags.FocusedNode = nil
+    bags.bags.Inventory:UpdateGUI(enums.InventoryType.Inventory)
+    bags.bags.Bank:UpdateGUI(enums.InventoryType.Bank)
 
     table.insert(UISpecialFrames, bags.bags.Inventory:GetName())
     table.insert(UISpecialFrames, bags.bags.Bank:GetName())
@@ -128,7 +130,7 @@ function bags.OnBankUpdate()
     if not bags.status.visitingBank then
         bags.bags.Bank:Hide()
 
-        bags.bags.Bank.widget.Header.Additions:SetAsBank()
+        bags.bags.Bank:SetAsBank()
 
         if bags.bags.Inventory:IsShown() then
             bags:ToggleAllBags()

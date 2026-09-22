@@ -144,13 +144,15 @@ function header:CreateAdditions(view, parent)
     searchBox:SetAutoFocus(false)
     searchBox:SetFrameLevel(5)
     searchBox:HookScript('OnTextChanged', function()
+        local bankView = bags.bags.Bank
+        if not bankView then return end
         local searchText = searchBox:GetText()
 
         local cb = function()
-            bags.bags.Bank:Update(searchText)
+            bankView:Update(searchText, true)
         end
 
-        bags.bags.Bank.filterContainer:OnSearch(cb)
+        bankView.filterContainer:OnSearch(cb)
     end)
 
     ---@class NewBankHeader

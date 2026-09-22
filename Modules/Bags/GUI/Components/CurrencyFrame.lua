@@ -4,9 +4,6 @@ local addon_name = ...
 local addon      = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 
----@class Bags: AceModule
-local bags         = addon:GetModule('Bags')
-
 ---@class Currency: AceModule
 local currency     = addon:NewModule('Bags.Currency')
 
@@ -135,7 +132,7 @@ function currency:_DoCreate()
     local fontSize = utils:GetFontScale()
 
     ---@type Icon|Button
-    local f = CreateFrame('Button', nil, bags.bags.Inventory.widget.currency.widget)
+    local f = CreateFrame('Button', nil, UIParent)
     f:SetSize(24, 24)
 
     f:RegisterForClicks('LeftButtonUp')

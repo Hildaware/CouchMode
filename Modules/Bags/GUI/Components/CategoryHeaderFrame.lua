@@ -30,23 +30,11 @@ local database            = addon:GetModule('Bags.Database')
 categoryHeaders.itemProto = {}
 
 function categoryHeaders:OnInitialize()
-    self._pool = CreateObjectPool(self._DoCreate, self._DoReset)
-    if self._pool.SetResetDisallowedIfNew then
-        self._pool:SetResetDisallowedIfNew()
-    end
-
-    ---@type CategoryHeader[]
-    local frames = {}
-    for i = 1, 40 do
-        frames[i] = self:Create()
-    end
-    for _, frame in pairs(frames) do
-        frame:Clear()
-    end
+    -- CatalogView owns pools so inventory, bank, and future catalogs stay isolated.
 end
 
 function categoryHeaders:Create()
-    return self._pool:Acquire()
+    return self:_DoCreate()
 end
 
 ---@param data CategorizedItemSet
@@ -105,9 +93,6 @@ function categoryHeaders.itemProto:Clear()
     self.widget:SetParent(nil)
     self.widget:ClearAllPoints()
 
-    if categoryHeaders._pool:IsActive(self) then
-        categoryHeaders._pool:Release(self)
-    end
 end
 
 ---@return CategoryHeader
@@ -165,9 +150,24 @@ function categoryHeaders:_DoCreate()
 end
 
 function categoryHeaders:_DoReset(item)
-    -- if categoryHeaders._pool:IsActive(item) then
-    --     categoryHeaders._pool:Release(item)
-    -- end
+end
+
+---Creates CatalogView renderer components; collapse state remains in Bags.
+function categoryHeaders:CreateRenderer(collapsedCategories, onCollapse)
+    return {
+        create = function()
+            local component = self:Create()
+            component.frame = component.widget
+            component.height = database:GetItemViewHeight()
+            function component:bind(section, offset, parent)
+                self:Build(section.data, math.floor(offset / database:GetItemViewHeight()) + 1, parent,
+                    collapsedCategories, onCollapse)
+                self.height = database:GetItemViewHeight()
+            end
+            function component:reset() self:Clear() end
+            return component
+        end
+    }
 end
 
 categoryHeaders:Enable()

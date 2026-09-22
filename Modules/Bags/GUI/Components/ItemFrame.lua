@@ -67,19 +67,7 @@ local Masque     = LibStub('Masque', true)
 itemFrame.proto  = {}
 
 function itemFrame:OnInitialize()
-    self._pool = CreateObjectPool(self._DoCreate, self._DoReset)
-    if self._pool.SetResetDisallowedIfNew then
-        self._pool:SetResetDisallowedIfNew()
-    end
-
-    ---@type ListItem[]
-    local frames = {}
-    for i = 1, 300 do
-        frames[i] = self:Create()
-    end
-    for _, frame in pairs(frames) do
-        frame:Clear()
-    end
+    -- CatalogView owns pools so inventory, bank, and future catalogs stay isolated.
 end
 
 ---@param item Item
@@ -267,9 +255,6 @@ function itemFrame.proto:Clear()
     self.widget:SetParent(nil)
     self.widget:ClearAllPoints()
 
-    if itemFrame._pool:IsActive(self) then
-        itemFrame._pool:Release(self)
-    end
 end
 
 ---@return ListItem
@@ -360,6 +345,14 @@ function itemFrame:_DoCreate()
     ---@class ItemIconButton
     local iconTexture = CreateFrame('ItemButton', nil, icon, 'ContainerFrameItemButtonTemplate')
     iconTexture:SetAllPoints(icon)
+    -- ConsolePort skips this because it has mouse input disabled. Native Smart
+    -- Navigation considers every Button focusable, so explicitly exclude this
+    -- display-only ItemButton and leave the full-width row as the sole target.
+    if _G.SmartNavigation_MarkFrameIgnored then
+        SmartNavigation_MarkFrameIgnored(iconTexture)
+    else
+        iconTexture.smartNavigationIgnored = true
+    end
 
     iconTexture.frame = icon
 
@@ -495,14 +488,28 @@ end
 
 ---@param item ListItem
 function itemFrame:_DoReset(item)
-    -- if itemFrame._pool:IsActive(item) then
-    --     itemFrame._pool:Release(item)
-    -- end
 end
 
 ---@return ListItem
 function itemFrame:Create()
-    return self._pool:Acquire()
+    return self:_DoCreate()
+end
+
+---Creates CatalogView renderer components; CatalogView owns their reuse.
+function itemFrame:CreateRenderer()
+    return {
+        create = function()
+            local component = self:Create()
+            component.frame = component.widget
+            component.height = database:GetItemViewHeight()
+            function component:bind(item, offset, parent)
+                self:Build(item, math.floor(offset / database:GetItemViewHeight()) + 1, parent)
+                self.height = database:GetItemViewHeight()
+            end
+            function component:reset() self:Clear() end
+            return component
+        end
+    }
 end
 
 itemFrame:Enable()
