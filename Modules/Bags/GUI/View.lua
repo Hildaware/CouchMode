@@ -180,22 +180,59 @@ function view.proto:SetupGamepadNavigation()
             _G.ConsolePortInputHandler:SetCommand('PADLSHOULDER', frame, true, 'LeftButton', 'UIControl', nil)
             if _G.Scrap then _G.ConsolePortInputHandler:SetCommand('PAD3', frame, true, 'LeftButton', 'UIControl', nil) end
         end
+        if HasNativeGamepadNavigation() and _G.SmartNavigation then
+            SmartNavigation:SetSmartNavPanelInfoAddedCallback(frame, GenerateClosure(self.SmartNavPanelInfoAdded, self))
+            EventRegistry:RegisterCallback('Gamepad.RefreshFrameFocus', self.RefreshNativeGamepadFocus, self)
+        end
     end)
     f:HookScript('OnHide', function(frame)
         if self.usesConsolePort and _G.ConsolePortInputHandler then
             _G.ConsolePortInputHandler:Release(frame)
         end
-    end)
-    f.FocusGamepad = function()
-        self:SetupNativeGamepadFooter()
-        if self.gamepadFooter then
-            securecallfunction(self.gamepadFooter.ShowAndActivateBindings, self.gamepadFooter)
-        end
-    end
-    f.UnfocusGamepad = function()
+        EventRegistry:UnregisterCallback('Gamepad.RefreshFrameFocus', self)
         if self.gamepadFooter then
             securecallfunction(self.gamepadFooter.HideAndDeactivateBindings, self.gamepadFooter)
         end
+    end)
+    f.SmartNavigationCloseHandler = function()
+        if CursorHasItem() then
+            ClearCursor()
+        elseif self.type == enums.InventoryType.Inventory then
+            bags:CloseAllBags()
+        else
+            bags:CloseBank()
+        end
+        return true
+    end
+end
+
+function view.proto:RefreshNativeGamepadFocus()
+    -- FrameControlsManager invokes a frame's FocusGamepad and UnfocusGamepad
+    -- methods directly, then continues into protected binding updates. Keep
+    -- addon callbacks behind EventRegistry's secure callback boundary instead.
+    local manager = GamepadMode.FrameControlsManager
+    local isFocused = manager.isUIFocused and manager:GetActiveFrame() == self.widget
+
+    if isFocused then
+        self:SetupNativeGamepadFooter()
+        securecallfunction(self.gamepadFooter.ShowAndActivateBindings, self.gamepadFooter)
+    elseif self.gamepadFooter then
+        securecallfunction(self.gamepadFooter.HideAndDeactivateBindings, self.gamepadFooter)
+    end
+end
+
+function view.proto:SmartNavPanelInfoAdded(_)
+    local firstItemButton
+    for _, row in ipairs(self.catalog.activeRows) do
+        local button = row.widget and row.widget.itemButton
+        if button and button:IsVisible() then
+            firstItemButton = button
+            break
+        end
+    end
+
+    if firstItemButton then
+        SmartNavigation:SetTargetButtonForFrame(self.widget, firstItemButton)
     end
 end
 
@@ -216,6 +253,7 @@ end
 
 function view.proto:LayoutChildren(catalog)
     local f, width = self.widget, catalog.frame:GetWidth()
+    if f == nil then return end
     f.Header:SetWidth(width - 42); f.scroller:SetWidth(width); f.ListView:SetWidth(width); f.footer:SetWidth(width - 20)
     if f.gold then f.gold:SetFont(database:GetFont().path, utils:GetFontScale()) end
 end
@@ -261,10 +299,18 @@ function view.proto:UpdateGUI(inventoryType)
 end
 function view.proto:IsShown() return self.catalog:IsShown() end
 function view.proto:Show()
-    if HasNativeGamepadNavigation() then ShowUIPanel(self.widget) else self.catalog:Show() end
+    if HasNativeGamepadNavigation() then
+        securecallfunction(ShowUIPanel, self.widget)
+    else
+        self.catalog:Show()
+    end
 end
 function view.proto:Hide()
-    if HasNativeGamepadNavigation() then HideUIPanel(self.widget) else self.catalog:Hide() end
+    if HasNativeGamepadNavigation() then
+        securecallfunction(HideUIPanel, self.widget)
+    else
+        self.catalog:Hide()
+    end
 end
 function view.proto:GetName() return self.catalog:GetName() end
 function view.proto:SetAsBank() if self.widget.Header.Additions then self.widget.Header.Additions:SetAsBank() end end
