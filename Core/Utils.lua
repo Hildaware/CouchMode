@@ -8,6 +8,78 @@ addon.Utils = {}
 local _, _, _, interfaceVersion = GetBuildInfo()
 local IS_WOW_FOREVER = interfaceVersion >= 16000 and interfaceVersion < 17000
 
+---@alias WowFlavor 'retail'|'forever'|'classic'
+
+--- Detects the running client flavor from its interface version.
+--- Retail (mainline) builds use 100000+, WoW: Forever uses 16000-16999, and
+--- the classic family uses lower numbers such as 11507.
+---@param version number
+---@return WowFlavor
+local function detectFlavor(version)
+    if version >= 16000 and version < 17000 then return 'forever' end
+    if version >= 100000 then return 'retail' end
+    return 'classic'
+end
+
+addon.Utils.INTERFACE_VERSION = interfaceVersion
+addon.Utils.FLAVOR = detectFlavor(interfaceVersion)
+
+--- Runs `fn` immediately when the current client flavor is one of `flavors`.
+--- Accepts either a single flavor string or an array of them. Returns whatever
+--- `fn` returns, or nil when the flavor does not match.
+---@param flavors WowFlavor|WowFlavor[]
+---@param fn fun(): any
+---@return any
+function addon.Utils.WhenFlavor(flavors, fn)
+    if type(flavors) == 'string' then flavors = { flavors } end
+    for i = 1, #flavors do
+        if flavors[i] == addon.Utils.FLAVOR then return fn() end
+    end
+end
+
+--- Alias for WhenFlavor, reading naturally at call sites: IfFlavor('retail', fn).
+addon.Utils.IfFlavor = addon.Utils.WhenFlavor
+
+--- Convenience predicate: is the current client this flavor?
+---@param flavor WowFlavor
+---@return boolean
+function addon.Utils.IsFlavor(flavor)
+    return addon.Utils.FLAVOR == flavor
+end
+
+--- Whether the client knows a given event. Uses the authoritative
+--- C_EventUtils.IsEventValid when available; otherwise probes RegisterEvent on a
+--- throwaway frame. Returns nil when validity cannot be determined.
+---@param event string
+---@return boolean?
+function addon.Utils.EventExists(event)
+    if type(event) ~= 'string' or event == '' then return false end
+    if C_EventUtils and C_EventUtils.IsEventValid then
+        return C_EventUtils.IsEventValid(event) == true
+    end
+    if type(CreateFrame) ~= 'function' then return nil end
+    local probe = addon.Utils._eventProbe
+    if not probe then
+        probe = CreateFrame('Frame')
+        addon.Utils._eventProbe = probe
+    end
+    local ok = pcall(probe.RegisterEvent, probe, event)
+    if ok then pcall(probe.UnregisterEvent, probe, event) end
+    return ok
+end
+
+--- Registers `event` on `frame` only when the client supports it.
+---@param frame Frame
+---@param event string
+---@return boolean registered
+function addon.Utils.RegisterEventIfValid(frame, event)
+    if not frame then return false end
+    local exists = addon.Utils.EventExists(event)
+    if exists == false then return false end
+    local ok = pcall(frame.RegisterEvent, frame, event)
+    return ok
+end
+
 ---@param r number
 ---@param g number
 ---@param b number

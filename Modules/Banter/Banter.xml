@@ -1,9 +1,0 @@
-<UI xmlns='http://www.blizzard.com/wow/ui/'
-    xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
-    xsi:schemaLocation='http://www.blizzard.com/wow/ui/'>
-    <Include file='Resources/Data.lua'/>
-    <Include file='Banter.lua'/>
-    <Include file='BanterController.lua'/>
-    <Include file='BanterContainer.lua'/>
-    <Include file='BanterHistory.lua'/>
-</UI>

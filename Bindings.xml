@@ -5,4 +5,28 @@
     <Binding name="COUCHMODE_MINIMAP_TOGGLE" category="CouchMode">
         CouchMode_MinimapToggle()
     </Binding>
+    <Binding name="COUCHMODE_CHAT_TOGGLE" category="CouchMode">
+        CouchMode_ChatToggle()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_FOCUS" category="CouchMode">
+        CouchMode_ChatFocus()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_FILTER_NEXT" category="CouchMode">
+        CouchMode_ChatFilterNext()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_FILTER_PREV" category="CouchMode">
+        CouchMode_ChatFilterPrev()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_SCROLL_UP" category="CouchMode">
+        CouchMode_ChatScrollUp()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_SCROLL_DOWN" category="CouchMode">
+        CouchMode_ChatScrollDown()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_BOTTOM" category="CouchMode">
+        CouchMode_ChatBottom()
+    </Binding>
+    <Binding name="COUCHMODE_CHAT_CLOSE" category="CouchMode">
+        CouchMode_ChatClose()
+    </Binding>
 </Bindings>

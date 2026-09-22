@@ -229,44 +229,65 @@
 ---@field draw            fun(self: QuestSection, w: number)
 ---@field reset           fun(self: QuestSection)
 
---#region ── Banter ───────────────────────────────────────────────────────────
+--#region ── Chat / Chat Bubbles ─────────────────────────────────────────────
 
----@class BanterData
----@field id        number
----@field displayId number?   Creature display ID (NPCs)
----@field unitToken string?   Unit token for player portrait (players)
----@field guid      string?   Raw GUID string (players only, for class color lookup)
----@field channel   string?   "SAY"|"YELL"|"PARTY"|"RAID"|"INSTANCE" (players only)
----@field pinned    boolean?  If true, the bant never expires automatically
----@field name      string
----@field message   string
----@field type      string   CHAT_MSG_* event name
----@field duration  number
----@field timestamp string?   Wall-clock time when received, formatted as HH:MM:SS
+---@class ChatMessage
+---@field event       string   Raw CHAT_MSG_* event
+---@field type        string   Short type, e.g. 'SAY' or 'YELL'
+---@field category    string   NPC|WHISPER|GROUP|GUILD|PUBLIC|SYSTEM
+---@field direction   string   'in'|'out'
+---@field timestamp   number   GetTime() when received
+---@field clock       string   Wall-clock HH:MM:SS
+---@field lineID      number?  Blizzard line id (nil when unavailable/secret)
+---@field text        string   Raw display text (may be a secret value)
+---@field sender      string?  Sender display name
+---@field guid        string?  Sender GUID
+---@field channelName string?
+---@field channelBase string?
+---@field channelID   number?
+---@field language    string?
+---@field flags       string?
+---@field unitToken   string?  Unit token when the sender is accessible
+---@field npcId       number?  Creature id (NPCs)
+---@field displayId   number?  Creature display id (NPCs)
+---@field classFile   string?  English class token (players)
+---@field raceFile    string?
+---@field guild       string?  Best-effort guild name
+---@field blocked     boolean?
 
----@class BanterContainerFrame: Frame
----@field bg Texture
+---@class ChatGroup
+---@field messages ChatMessage[]
 
----@class BanterController.Instance
----@field widget          BanterContainerFrame
----@field bants           BanterContainerMain[]
----@field currentBantsId  number|nil
+---@class ChatBubblesWidget: Frame
+---@field subWidgets table
 
----@class BanterModule: AceModule, AceEvent-3.0
+---@class ChatBubblesInstance
+---@field id             number
+---@field data           ChatMessage
+---@field minimumHeight  number
+---@field expiryTime     number?
+---@field pinned         boolean?
+---@field noPortrait     boolean?
+---@field widget         ChatBubblesWidget
+---@field animationGroup AnimationGroup?
+---@field controller     table
+
+---@class ChatBubblesModule: AceModule, AceEvent-3.0
 ---@field CalculateDisplayDuration fun(message: string): number
----@field padding         number
----@field bantProto       { minimumHeight: number }
----@field _pool           ObjectPoolMixin
----@field _messagePool    ObjectPoolMixin
----@field instance        BanterController.Instance?
----@field Create          fun(self: BanterModule): BanterContainerMain
----@field Release         fun(self: BanterModule, bant: BanterContainerMain)
----@field InitPools       fun(self: BanterModule)
----@field AddBants        fun(self: BanterModule, data: BanterData)
----@field RemoveBant      fun(self: BanterModule, bant: BanterContainerMain)
----@field RepositionBants fun(self: BanterModule)
----@field ToggleLock      fun(self: BanterModule)
----@field Refresh         fun(self: BanterModule)
+---@field _pool ObjectPoolMixin
+---@field _messagePool ObjectPoolMixin
+---@field active ChatBubblesInstance[]
+---@field CreateBubble fun(self: ChatBubblesModule): ChatBubblesInstance
+---@field ReleaseBubble fun(self: ChatBubblesModule, bubble: ChatBubblesInstance)
+---@field InitPools fun(self: ChatBubblesModule)
+---@field RemoveChatBubble fun(self: ChatBubblesModule, bubble: ChatBubblesInstance)
+---@field GetNpcMode fun(self: ChatBubblesModule): string?
+
+---@class ChatModule: AceModule, AceEvent-3.0
+---@field session ChatMessage[]
+---@field groups ChatGroup[]
+---@field panel Frame?
+---@field feed table?
 
 ---@class ObjectPoolMixin
 ---@field Acquire              fun(self: ObjectPoolMixin): any, boolean

@@ -4,8 +4,8 @@ local addonName = ...
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LSM = LibStub('LibSharedMedia-3.0')
 
----@class BanterModule
-local banter = addon:GetModule('Banter')
+---@class ChatBubblesModule
+local bubbles = addon:GetModule('ChatBubbles')
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -16,7 +16,7 @@ local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widg
 
 --#region ── Helpers ──────────────────────────────────────────────────────────
 
-local function db() return addon.db.profile.banter end
+local function db() return addon.db.profile.chatBubbles end
 
 local function fetchFont(face)
     return LSM:Fetch(LSM.MediaType.FONT, face) or FONT_PATH
@@ -26,26 +26,16 @@ end
 
 --#region ── Message widget ───────────────────────────────────────────────────
 
----@class BanterContainerMessage
+---@class ChatBubblesMessage
 ---@field widget        Frame
 ---@field message       FontString
 ---@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
 ---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
----@field Format         fun(self: BanterContainerMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?)
-
+---@field Format        fun(self: ChatBubblesMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?)
 
 local messageProto = {}
 messageProto.__index = messageProto
-
--- Maps player chat event names to their ChatTypeInfo key for message coloring.
-local PLAYER_CHAT_INFO_KEY = {
-    [banter.EVENTS.CHAT_MSG_SAY] = 'SAY',
-    [banter.EVENTS.CHAT_MSG_YELL] = 'YELL',
-    [banter.EVENTS.CHAT_MSG_PARTY] = 'PARTY',
-    [banter.EVENTS.CHAT_MSG_RAID] = 'RAID',
-    [banter.EVENTS.CHAT_MSG_INSTANCE_CHAT] = 'INSTANCE_CHAT',
-}
 
 ---@param text string
 ---@param type string  CHAT_MSG_* event name
@@ -55,22 +45,14 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     local r, g, b, a = d.msgFontColor.r, d.msgFontColor.g, d.msgFontColor.b, d.msgFontColor.a
     local messageSize = d.msgFontSize
 
-    local chatKey = PLAYER_CHAT_INFO_KEY[type]
-    if chatKey then
-        -- Player channel: always use WoW's canonical ChatTypeInfo color.
-        local ci = ChatTypeInfo[chatKey]
-        if ci then r, g, b, a = ci.r, ci.g, ci.b, 1 end
-    elseif d.styleByType then
-        -- NPC monster messages: color by type.
-        if type == banter.EVENTS.CHAT_MSG_MONSTER_YELL then
-            r, g, b, a = 1, 0.2, 0.2, 1 -- red
+    -- NPC messages may be colored by their canonical chat type. Player colors
+    -- are never reached here: overhead replacement is NPC-only.
+    local chatKey = addon.ChatSources and addon.ChatSources.ChatTypeKey(type)
+    local ci = chatKey and ChatTypeInfo and ChatTypeInfo[chatKey]
+    if d.styleByType and ci then
+        r, g, b, a = ci.r, ci.g, ci.b, 1
+        if type == 'CHAT_MSG_MONSTER_YELL' then
             messageSize = math.floor(d.msgFontSize * 1.25)
-        elseif type == banter.EVENTS.CHAT_MSG_MONSTER_WHISPER then
-            r, g, b, a = 1, 0.5, 1, 1   -- pink
-        elseif type == banter.EVENTS.CHAT_MSG_MONSTER_PARTY then
-            r, g, b, a = 0.6, 0.8, 1, 1 -- light blue
-        else
-            r, g, b, a = 1, 1, 1, 1     -- white (SAY)
         end
     end
 
@@ -83,7 +65,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetText(text)
 
     local contentHeight, topPad
-    if issecretvalue(text) then
+    if issecretvalue and issecretvalue(text) then
         -- Can't measure a secret-aspected FontString; use safe defaults
         self.message:SetFont(fontPath, messageSize, 'OUTLINE')
         contentHeight = MIN_MESSAGE_HEIGHT
@@ -117,7 +99,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', leftPad, -topPad)
     self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -rightPad, -topPad)
 
-    if d.revealText and not issecretvalue(text) then
+    if d.revealText and not (issecretvalue and issecretvalue(text)) then
         self.message:SetText('')
         local total = #text
         local shown = 0
@@ -172,7 +154,7 @@ local function _MessageCreate()
 end
 
 ---@param pool ObjectPoolMixin
----@param msg  BanterContainerMessage
+---@param msg  ChatBubblesMessage
 local function _MessageReset(pool, msg)
     if not msg or not msg.widget then return end
     if msg.revealTicker then
@@ -193,20 +175,20 @@ end
 
 --#region ── Item controller ──────────────────────────────────────────────────
 
----@class BanterContainerController
----@field parent             BanterContainerMain
----@field CreateMessage      fun(self: BanterContainerController): BanterContainerMessage
----@field RepositionMessages fun(self: BanterContainerController)
----@field RemoveMessage      fun(self: BanterContainerController, msg: BanterContainerMessage)
----@field FormatMessage      fun(self: BanterContainerController, msg: BanterContainerMessage, text: string, type: string): number
+---@class ChatBubblesController
+---@field parent             ChatBubblesWidget
+---@field CreateMessage      fun(self: ChatBubblesController): ChatBubblesMessage
+---@field RepositionMessages fun(self: ChatBubblesController)
+---@field RemoveMessage      fun(self: ChatBubblesController, msg: ChatBubblesMessage)
+---@field FormatMessage      fun(self: ChatBubblesController, msg: ChatBubblesMessage, text: string, type: string): number
 
 local controllerProto = {}
 controllerProto.__index = controllerProto
 
----@return BanterContainerMessage
+---@return ChatBubblesMessage
 function controllerProto:CreateMessage()
-    ---@type BanterContainerMessage
-    local msg = banter._messagePool:Acquire()
+    ---@type ChatBubblesMessage
+    local msg = bubbles._messagePool:Acquire()
     msg.widget:SetParent(self.parent.widget)
     table.insert(self.parent.widget.subWidgets.messages, msg)
     return msg
@@ -234,12 +216,12 @@ function controllerProto:RepositionMessages()
     end
 end
 
----@param msg BanterContainerMessage
+---@param msg ChatBubblesMessage
 function controllerProto:RemoveMessage(msg)
     local messages = self.parent.widget.subWidgets.messages
 
     if #messages == 1 and messages[1] == msg then
-        banter:RemoveBant(self.parent)
+        bubbles:RemoveChatBubble(self.parent)
         return
     end
 
@@ -289,8 +271,8 @@ function controllerProto:RemoveMessage(msg)
     fadeAlpha:SetSmoothing('OUT')
     fadeAg:SetScript('OnFinished', function()
         msg.widget:SetFrameLevel(origLevel)
-        banter._messagePool:Release(msg)
-        if #messages == 0 then banter:RemoveBant(self.parent) end
+        bubbles._messagePool:Release(msg)
+        if #messages == 0 then bubbles:RemoveChatBubble(self.parent) end
     end)
     fadeAg:Play()
 
@@ -301,9 +283,6 @@ function controllerProto:RemoveMessage(msg)
         return
     end
 
-    -- OnUpdate-based slide: actual positions change each frame via ClearAllPoints + SetPoint,
-    -- so topContainer (anchored to messages[#messages].TOPLEFT) and messageBg (anchored to
-    -- topContainer.BOTTOMRIGHT) follow automatically — no explicit topContainer animation needed.
     local DURATION = 0.5
     local startParentH = parentWidget:GetHeight()
     local elapsed = 0
@@ -329,7 +308,7 @@ function controllerProto:RemoveMessage(msg)
     end)
 end
 
----@param msg  BanterContainerMessage
+---@param msg  ChatBubblesMessage
 ---@param text string
 ---@param type string
 ---@return number duration
@@ -340,17 +319,16 @@ function controllerProto:FormatMessage(msg, text, type)
     self.parent.widget:SetWidth(w)
     sw.textureBottom:SetWidth(w)
     sw.textureTop:SetWidth(w)
-    -- messageBg is anchored by two points (BOTTOMLEFT/TOPRIGHT) so its width follows automatically.
 
-    local duration = banter.CalculateDisplayDuration(text)
-    msg:Format(text, type, self.parent.noPortrait, self.parent.data and self.parent.data.pinned)
+    local duration = bubbles.CalculateDisplayDuration(text)
+    msg:Format(text, type, self.parent.noPortrait, self.parent.pinned)
 
     local expiryTime = GetTime() + duration
-    msg.expiryTime = expiryTime         -- per-message, so multiple messages don't trample each other
-    self.parent.expiryTime = expiryTime -- parent-level, for BanterController's duration-extension logic
+    msg.expiryTime = expiryTime
+    self.parent.expiryTime = expiryTime
 
     local function onExpire()
-        if self.parent.data and self.parent.data.pinned then return end
+        if self.parent.pinned then return end
         local remaining = msg.expiryTime - GetTime()
         if remaining > 0.05 then
             C_Timer.After(remaining, onExpire)
@@ -363,8 +341,8 @@ function controllerProto:FormatMessage(msg, text, type)
     return duration
 end
 
----@param parent BanterContainerMain
----@return BanterContainerController
+---@param parent ChatBubblesWidget
+---@return ChatBubblesController
 local function newController(parent)
     local i = setmetatable({}, controllerProto)
     i.parent = parent
@@ -373,40 +351,40 @@ end
 
 --#endregion
 
---#region ── Bant widget ──────────────────────────────────────────────────────
+--#region ── Bubble widget ─────────────────────────────────────────────────────
 
----@class BanterContainerSubWidgets
+---@class ChatBubblesSubWidgets
 ---@field portraitFrame Frame
 ---@field portrait3D    PlayerModel
 ---@field name          FontString
 ---@field channelLabel  FontString
----@field messages      BanterContainerMessage[]
+---@field messages      ChatBubblesMessage[]
 ---@field textureBottom Frame
 ---@field textureTop    Frame
 
----@class BanterContainerWidget: Frame
----@field subWidgets BanterContainerSubWidgets
+---@class ChatBubblesWidget: Frame
+---@field subWidgets ChatBubblesSubWidgets
 
----@class BanterContainerMain
+---@class ChatBubblesInstance
 ---@field id             number
----@field data           BanterData
+---@field data           ChatMessage
 ---@field minimumHeight  number
 ---@field expiryTime     number?
----@field isBubbleMode   boolean?
+---@field pinned         boolean?
 ---@field noPortrait     boolean?
 ---@field _bubbleToken   table?
 ---@field shownAt        number?
 ---@field bubbleDuration number?
----@field widget         BanterContainerWidget
+---@field widget         ChatBubblesWidget
 ---@field animationGroup AnimationGroup?
----@field controller     BanterContainerController
+---@field controller     ChatBubblesController
 
-banter.bantProto = {
+bubbles.bubbleProto = {
     minimumHeight = 64,
 }
 
-local function _BantCreate()
-    local i = setmetatable({}, { __index = banter.bantProto })
+local function _BubbleCreate()
+    local i = setmetatable({}, { __index = bubbles.bubbleProto })
     i.controller = newController(i)
 
     local d = db()
@@ -484,7 +462,7 @@ local function _BantCreate()
     name.fs:SetShadowColor(0, 0, 0, 1)
     name.fs:SetShadowOffset(2, -2)
 
-    -- Channel label (players only; empty for NPCs)
+    -- Channel label (NPCs use it for the speech type, e.g. YELL)
     local channelLabel = L:FontString(nameOverlay, { justifyH = 'RIGHT', maxLines = 1 })
     channelLabel.fs:SetFont(fetchFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
     channelLabel.fs:SetTextColor(1, 1, 1, 0.75)
@@ -492,7 +470,7 @@ local function _BantCreate()
     channelLabel.fs:SetShadowColor(0, 0, 0, 1)
     channelLabel.fs:SetShadowOffset(2, -2)
 
-    local widget = container.frame --[[@as BanterContainerWidget]]
+    local widget = container.frame --[[@as ChatBubblesWidget]]
     widget.subWidgets = {
         portraitFrame = portraitContainer.frame,
         portrait3D = portrait3D,
@@ -508,63 +486,63 @@ local function _BantCreate()
 end
 
 ---@param pool ObjectPoolMixin
----@param bant BanterContainerMain
-local function _BantReset(pool, bant)
-    if not bant or not bant.widget then return end
+---@param bubble ChatBubblesInstance
+local function _BubbleReset(pool, bubble)
+    if not bubble or not bubble.widget then return end
 
     -- Release messages directly — no animations during pool reset.
-    local messages = bant.widget.subWidgets.messages
+    local messages = bubble.widget.subWidgets.messages
     for i = #messages, 1, -1 do
-        banter._messagePool:Release(table.remove(messages, i))
+        bubbles._messagePool:Release(table.remove(messages, i))
     end
 
     -- Park topContainer directly above the bottom bar so messageBg collapses to zero height.
-    local sw = bant.widget.subWidgets
+    local sw = bubble.widget.subWidgets
     sw.textureTop:ClearAllPoints()
     sw.textureTop:SetPoint('BOTTOMLEFT', sw.textureBottom, 'TOPLEFT', 0, 0)
 
-    bant._bubbleToken = nil
-    bant.shownAt = nil
-    bant.bubbleDuration = nil
-    bant.widget:SetScript('OnUpdate', nil)
-    bant.expiryTime = nil
-    bant.widget:SetHeight(bant.minimumHeight)
-    bant.widget:SetScale(1)
-    bant.widget:Hide()
-    bant.widget:ClearAllPoints()
-    bant.widget:SetParent(UIParent)
-    bant.widget:SetIgnoreParentAlpha(false)
-    bant.widget:SetAlpha(1)
-    bant.isBubbleMode = nil
-    bant.data = nil
-    bant.widget.subWidgets.name:SetText('')
-    bant.widget.subWidgets.name:Show()
-    bant.widget.subWidgets.channelLabel:SetText('')
-    bant.widget.subWidgets.portrait3D:ClearModel()
-    bant.widget.subWidgets.portraitFrame:Show()
+    bubble._bubbleToken = nil
+    bubble.shownAt = nil
+    bubble.bubbleDuration = nil
+    bubble.widget:SetScript('OnUpdate', nil)
+    bubble.expiryTime = nil
+    bubble.widget:SetHeight(bubble.minimumHeight)
+    bubble.widget:SetScale(1)
+    bubble.widget:Hide()
+    bubble.widget:ClearAllPoints()
+    bubble.widget:SetParent(UIParent)
+    bubble.widget:SetIgnoreParentAlpha(false)
+    bubble.widget:SetAlpha(1)
+    bubble.data = nil
+    bubble.pinned = nil
+    bubble.widget.subWidgets.name:SetText('')
+    bubble.widget.subWidgets.name:Show()
+    bubble.widget.subWidgets.channelLabel:SetText('')
+    bubble.widget.subWidgets.portrait3D:ClearModel()
+    bubble.widget.subWidgets.portraitFrame:Show()
 end
 
 --#endregion
 
 --#region ── Public API ───────────────────────────────────────────────────────
 
----@return BanterContainerMain
-function banter:Create()
+---@return ChatBubblesInstance
+function bubbles:CreateBubble()
     return (self._pool:Acquire())
 end
 
----@param bant BanterContainerMain
-function banter:Release(bant)
-    self._pool:Release(bant)
+---@param bubble ChatBubblesInstance
+function bubbles:ReleaseBubble(bubble)
+    self._pool:Release(bubble)
 end
 
-function banter:InitPools()
+function bubbles:InitPools()
     self._messagePool = CreateObjectPool(_MessageCreate, _MessageReset)
     if self._messagePool.SetResetDisallowedIfNew then
         self._messagePool:SetResetDisallowedIfNew()
     end
 
-    self._pool = CreateObjectPool(_BantCreate, _BantReset)
+    self._pool = CreateObjectPool(_BubbleCreate, _BubbleReset)
     if self._pool.SetResetDisallowedIfNew then
         self._pool:SetResetDisallowedIfNew()
     end

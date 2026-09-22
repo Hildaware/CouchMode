@@ -14,7 +14,7 @@ local options = addon:NewModule('Options')
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
 local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'PlayerPowerBar',
-    'PlayerManaBar', 'Banter' }
+    'PlayerManaBar', 'Chat', 'ChatBubbles' }
 
 -- Modules whose options are nested together under a single "Player Bars" group.
 local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerPowerBar = true, PlayerManaBar = true }
@@ -32,6 +32,9 @@ function options:OnInitialize()
     end
 
     addon.db = LibStub("AceDB-3.0"):New("CouchModeDB", defaults, true)
+
+    -- Migrate legacy profiles before any module reads its settings.
+    if addon.ChatMigration then addon.ChatMigration.Run(addon.db) end
 
     -- Collect settings panels from each module.
     local settings = { type = 'group', args = {} }
@@ -60,6 +63,15 @@ function options:OnInitialize()
     LibStub("AceConfigDialog-3.0"):AddToBlizOptions(addonName, 'Couch Mode')
 
     LibStub('AceConsole-3.0'):RegisterChatCommand('cm', function(args)
+        local cmd, rest = tostring(args or ''):match('^%s*(%S*)%s*(.-)%s*$')
+        -- `/cm chat ...` drives the Chat module's mock/testing subcommands.
+        if cmd == 'chat' then
+            local sub, arg = rest:match('^%s*(%S*)%s*(.-)%s*$')
+            if addon.Chat and addon.Chat.HandleCommand then
+                addon.Chat:HandleCommand(sub or '', arg or '')
+            end
+            return
+        end
         LibStub("AceConfigDialog-3.0"):Open(addonName)
     end)
     LibStub('AceConsole-3.0'):RegisterChatCommand('couchmode',
