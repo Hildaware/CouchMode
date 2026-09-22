@@ -10,6 +10,7 @@
     <Include file='Mock.lua'/>
     <Include file='ChatBubbles.lua'/>
     <Include file='ChatBubblesContainer.lua'/>
+    <Include file='ChatFeedLayout.lua'/>
     <Include file='ChatFeed.lua'/>
     <Include file='ChatInput.lua'/>
     <Include file='Chat.lua'/>

@@ -1,13 +1,14 @@
 --[[ ChatFeed.lua
 A pooled, variable-height scrolling list of grouped chat messages.
 
-The feed owns no policy: it renders the groups it is handed and reports its
-scroll state. Styling is delegated to `addon.Chat` so colors, fonts, icons and
-aliases stay in one place.
+Message admission is delegated to `ChatFeedLayout`; this file owns rendering,
+pooling, scrolling and motion. Styling stays in `addon.Chat` so colors, fonts,
+icons and aliases remain in one place.
 ]]
 
 local addonName, addon = ...
 local addon = addon or LibStub('AceAddon-3.0'):GetAddon(addonName)
+local LayoutPolicy = addon.ChatFeedLayout
 
 local Feed = {}
 Feed.__index = Feed
@@ -35,6 +36,38 @@ local DIVIDER_BAND      = DIVIDER_THICKNESS + DIVIDER_GAP * 2
 local DIVIDER_ALPHA     = 0.5
 local MESSAGE_FADE_TIME = 0.25
 local LAYOUT_ANIMATION_TIME = 0.3
+
+-- Blizzard's ChatFrameMixin sends clicks through SetItemRef, but forwards
+-- hover independently. Keep that distinction here: only links whose normal
+-- presentation is a GameTooltip may open one on hover. In particular,
+-- journal/dungeonScore and trade links have LinkUtil click handlers that open
+-- panels, so they deliberately stay click-only.
+local HOVER_TOOLTIP_LINK_TYPES = {
+    achievement = true,
+    battlepet = true,
+    currency = true,
+    enchant = true,
+    item = true,
+    quest = true,
+    spell = true,
+}
+
+---@param link string
+---@return string|nil
+local function getLinkType(link)
+    if type(link) ~= 'string' then return nil end
+
+    -- FontString hyperlink callbacks normally supply the bare link
+    -- ("item:..."). Support complete markup too so this remains robust for
+    -- clients/widgets that pass the original chat token.
+    return link:match('^([^:|]+):') or link:match('|H([^:|]+):')
+end
+
+---@param link string
+---@return boolean
+local function supportsHoverTooltip(link)
+    return HOVER_TOOLTIP_LINK_TYPES[getLinkType(link)] == true
+end
 
 --#endregion
 
@@ -174,15 +207,22 @@ local function createGroup(parent)
     g:SetScript('OnHyperlinkClick', function(_, link, text, button)
         if SetItemRef then SetItemRef(link, text, button, g) end
     end)
+
     g:SetScript('OnHyperlinkEnter', function(_, link)
-        if GameTooltip and link then
-            GameTooltip:SetOwner(g, 'ANCHOR_CURSOR')
-            GameTooltip:SetHyperlink(link)
+        if not supportsHoverTooltip(link) or not GameTooltip then return end
+
+        GameTooltip:SetOwner(g, 'ANCHOR_CURSOR')
+        local ok = pcall(GameTooltip.SetHyperlink, GameTooltip, link)
+        if ok then
             GameTooltip:Show()
+        else
+            GameTooltip:Hide()
         end
     end)
+
     g:SetScript('OnHyperlinkLeave', function()
-        if GameTooltip then GameTooltip:Hide() end
+        -- Do not dismiss a tooltip which another widget took ownership of.
+        if GameTooltip and GameTooltip:GetOwner() == g then GameTooltip:Hide() end
     end)
 
     return g
@@ -224,6 +264,8 @@ function Feed.New(parent)
         },
         showDividers = true,
         historyMode = false,
+        historyPreview = false,
+        liveContentLimit = 300,
         onScrollChanged = nil,
     }, Feed)
 
@@ -276,10 +318,7 @@ end
 ---@return boolean hasVisibleMessages
 function Feed:UpdateMessageFade(now, delay, enabled)
     local hasVisibleMessages = false
-    local visibleContentHeight = 0
-    local visibleGroupCount = 0
     local needsLiveLayout = false
-    local groupsToReflow = {}
 
     for groupIndex = 1, #self.widgets do
         local g = self.widgets[groupIndex]
@@ -311,7 +350,7 @@ function Feed:UpdateMessageFade(now, delay, enabled)
         firstVisibleMessage = firstVisibleMessage or #group.messages
         if g._firstVisibleMessage ~= firstVisibleMessage then
             g._firstVisibleMessage = firstVisibleMessage
-            groupsToReflow[#groupsToReflow + 1] = groupIndex
+            needsLiveLayout = true
         end
 
         -- The shared speaker identity disappears only when every message in
@@ -327,10 +366,8 @@ function Feed:UpdateMessageFade(now, delay, enabled)
             g._hasVisibleMessages = hasVisibleGroup
             needsLiveLayout = true
         end
-
-        if hasVisibleGroup then
-            visibleContentHeight = visibleContentHeight + g:GetHeight()
-            visibleGroupCount = visibleGroupCount + 1
+        if g._metrics then
+            g._metrics.firstEligible = hasVisibleGroup and firstVisibleMessage or nil
         end
 
         for dividerIndex = 1, #g.dividers do
@@ -340,18 +377,10 @@ function Feed:UpdateMessageFade(now, delay, enabled)
         end
     end
 
-    if visibleGroupCount > 1 then
-        visibleContentHeight = visibleContentHeight + GROUP_GAP * (visibleGroupCount - 1)
-    end
-    self.visibleContentHeight = visibleContentHeight
-    if #groupsToReflow > 0 then
-        for i = 1, #groupsToReflow do
-            local groupIndex = groupsToReflow[i]
-            self:RenderGroup(self.widgets[groupIndex], self.groups[groupIndex], false, groupIndex == 1)
-        end
-        self:Layout(not self.historyMode)
-    elseif needsLiveLayout and not self.historyMode then
-        self:Layout()
+    if needsLiveLayout and not self:IsHistoryVisible() then
+        local snapshot = self:CaptureLayoutPositions()
+        self.pendingResizeSnapshot = snapshot
+        self:Layout(true, snapshot)
     end
     return hasVisibleMessages
 end
@@ -376,18 +405,43 @@ function Feed:IsAtBottom()
     return offset >= (range - 1)
 end
 
---- History mode persists after a reader scrolls upward, including when they
---- later reach the bottom. A new live message explicitly resumes live mode.
+--- Whether the reader has moved away from the live bottom position.
 ---@return boolean
 function Feed:IsBrowsingHistory()
     return self.historyMode == true
 end
 
-function Feed:ResumeLive()
-    self.historyMode = false
+function Feed:IsHistoryVisible()
+    return self.historyMode == true or self.historyPreview == true
 end
 
-function Feed:ScrollToBottom()
+function Feed:SetHistoryPreview(active)
+    active = active == true
+    if self.historyPreview == active then return end
+    self.historyPreview = active
+    self:Layout(false)
+    if self.onScrollChanged then self.onScrollChanged() end
+end
+
+function Feed:SetLiveContentLimit(height)
+    height = math.max(height or 0, 0)
+    if math.abs((self.liveContentLimit or 0) - height) < 0.5 then return end
+    self.liveContentLimit = height
+    if #self.widgets > 0 and not self:IsHistoryVisible() then self:Layout(false) end
+end
+
+function Feed:ResumeLive()
+    if not self.historyMode then return end
+    self.historyMode = false
+    self:Layout(false)
+end
+
+---@param preserveHistory boolean? Keep the browse latch while repositioning.
+function Feed:ScrollToBottom(preserveHistory)
+    if not preserveHistory and self.historyMode then
+        self.historyMode = false
+        self:Layout(false)
+    end
     local function go()
         self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
         if self.onScrollChanged then self.onScrollChanged() end
@@ -395,6 +449,24 @@ function Feed:ScrollToBottom()
     go()
     -- The scroll range lags a frame behind content changes; re-apply once.
     if C_Timer then C_Timer.After(0, go) end
+end
+
+function Feed:GetScrollOffset()
+    return self.scrollFrame:GetVerticalScroll() or 0
+end
+
+--- Restores a history offset after a full rebuild, including the deferred
+--- pass needed after WoW recalculates the scroll range.
+---@param offset number
+function Feed:RestoreScrollOffset(offset)
+    local function restore()
+        if not self.historyMode then return end
+        local range = self.scrollFrame:GetVerticalScrollRange() or 0
+        self.scrollFrame:SetVerticalScroll(math.max(0, math.min(offset or 0, range)))
+        if self.onScrollChanged then self.onScrollChanged() end
+    end
+    restore()
+    if C_Timer then C_Timer.After(0, restore) end
 end
 
 --- Scrolls the viewport. Positive `upAmount` reveals older messages.
@@ -410,6 +482,10 @@ function Feed:ScrollBy(upAmount)
     local offset = self.scrollFrame:GetVerticalScroll() or 0
     offset = math.max(0, math.min(range, offset - upAmount))
     self.scrollFrame:SetVerticalScroll(offset)
+    if upAmount < 0 and self.historyMode and self:IsAtBottom() then
+        self.historyMode = false
+        self:Layout(false)
+    end
     if self.onScrollChanged then self.onScrollChanged() end
 end
 
@@ -421,11 +497,14 @@ function Feed:AcquireGroup()
     local g = table.remove(self.groupPool)
     if not g then g = createGroup(self.scrollChild) end
     g:SetParent(self.scrollChild)
-    g:Show()
+    -- A pooled widget may still have an anchor from its former logical group.
+    -- Keep it hidden until Layout assigns its final position.
+    g:Hide()
     return g
 end
 
 function Feed:ReleaseGroup(g)
+    g:Hide()
     local chat = addon.Chat
     for i = 1, #g.lines do
         if chat then chat:CancelReveal(g.lines[i]) end
@@ -467,6 +546,10 @@ function Feed:ReleaseGroup(g)
     g._displayed = nil
     g._firstVisibleMessage = nil
     g._lineAlphas = nil
+    g._lineHeights = nil
+    g._metrics = nil
+    g._firstDisplayedMessage = nil
+    g.groupData = nil
     g:SetPoint('TOPLEFT', self.scrollChild, 'TOPLEFT')
     g:SetPoint('TOPRIGHT', self.scrollChild, 'TOPRIGHT')
     g:Hide()
@@ -521,13 +604,12 @@ end
 ---@param g Frame
 ---@param group ChatGroup
 ---@param animate boolean?  reveal text character-by-character (new messages)
----@param isFirst boolean?  first group in the feed (suppresses its top divider)
+---@param isFirst boolean?  first displayed group (suppresses its top divider)
+---@param firstMessage number? first message displayed from this group
 ---@return number height
-function Feed:RenderGroup(g, group, animate, isFirst)
+function Feed:RenderGroup(g, group, animate, isFirst, firstMessage)
     local chat = addon.Chat
     local first = group.messages[1]
-    local indent = 0
-    local y = 0
     g.groupData = group
     g._renderedAsFirst = isFirst == true
 
@@ -546,8 +628,7 @@ function Feed:RenderGroup(g, group, animate, isFirst)
     -- Layout insets every group by PADDING, so derive the width from the feed.
     local groupWidth = math.max((self.width or 400) - PADDING * 2, 40)
 
-    -- Between groups: a divider sits above this group's header (the previous
-    -- group's message already ends the block above).
+    -- Between groups: a divider sits above this group's header.
     local top = 0
     g.hasTopDivider = not isFirst and self.showDividers
     if not isFirst and self.showDividers then
@@ -555,37 +636,23 @@ function Feed:RenderGroup(g, group, animate, isFirst)
         top = DIVIDER_BAND
     end
 
-    -- The divider reserves space above every group after the first.  The text
-    -- header already uses `top`, but the portrait's original construction-time
-    -- anchor did not; that left it visually inside the divider band.  Anchor it
-    -- for this render pass so the entire identity block moves together.
-    g.icon:ClearAllPoints()
-    g.icon:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -(top + ICON_TOP_PAD))
-
     local showsIdentity = chat:GroupShowsIdentity(group)
-
-    -- Identity block. With an icon: channel and name sit to the right of it and
-    -- the message list starts below the icon at full width. Without an icon the
-    -- icon column is dropped entirely, collapsing to:
-    --
-    --     CHANNEL
-    --     NAME
-    --     message...
     local hasIcon = false
+    local channelH = self.fonts.channel.size
+    local nameH = self.fonts.name.size
     if showsIdentity then
         hasIcon = chat:StyleIdentity(g, first) == true
-
         local headerX = hasIcon and (ICON_SIZE + ICON_GAP) or 0
         local channelTop = top + (hasIcon and ICON_TOP_PAD or 0)
 
+        g.icon:ClearAllPoints()
+        g.icon:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -(top + ICON_TOP_PAD))
         g.channel:ClearAllPoints()
         g.channel:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
         g.channel:SetPoint('RIGHT', g, 'RIGHT', -4, 0)
 
-        -- Measure against the full text *before* revealing so heights (and the
-        -- name's position) stay stable while characters appear.
-        local channelH = math.max(g.channel:GetHeight() or 0, self.fonts.channel.size)
-        local nameH = math.max(g.name:GetHeight() or 0, self.fonts.name.size)
+        channelH = math.max(g.channel:GetHeight() or 0, self.fonts.channel.size)
+        nameH = math.max(g.name:GetHeight() or 0, self.fonts.name.size)
 
         g.name:ClearAllPoints()
         g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -(channelTop + channelH + NAME_GAP))
@@ -593,13 +660,11 @@ function Feed:RenderGroup(g, group, animate, isFirst)
 
         local textBottom = channelTop + channelH + NAME_GAP + nameH
         local iconBottom = top + (hasIcon and (ICON_TOP_PAD + ICON_SIZE) or 0)
-
-        y = math.max(textBottom, iconBottom) + MSG_TOP_GAP
-        indent = 0
+        local messageTop = math.max(textBottom, iconBottom) + MSG_TOP_GAP
 
         g.identityMenu:ClearAllPoints()
         g.identityMenu:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -top)
-        g.identityMenu:SetPoint('BOTTOMRIGHT', g, 'TOPRIGHT', 0, -(y - MSG_TOP_GAP))
+        g.identityMenu:SetPoint('BOTTOMRIGHT', g, 'TOPRIGHT', 0, -(messageTop - MSG_TOP_GAP))
         g.identityMenu:Show()
 
         applyHeader(g.channel, animate ~= false)
@@ -617,31 +682,61 @@ function Feed:RenderGroup(g, group, animate, isFirst)
         g.channel._fadedText = nil
         g.name:SetAlpha(1)
         g.channel:SetAlpha(1)
-        indent = 0
-        y = top
     end
 
-    -- Consecutive messages in a group share one identity block. They do not
-    -- receive dividers; once an older line fades, later lines reflow upward.
-    local available = math.max(self.width - PADDING * 2 - indent, 40)
-    local firstVisibleMessage = self.historyMode and 1 or (g._firstVisibleMessage or 1)
-    for i = firstVisibleMessage, #group.messages do
+    local function messageTopFor(groupTop)
+        if not showsIdentity then return groupTop end
+        local channelTop = groupTop + (hasIcon and ICON_TOP_PAD or 0)
+        local textBottom = channelTop + channelH + NAME_GAP + nameH
+        local iconBottom = groupTop + (hasIcon and (ICON_TOP_PAD + ICON_SIZE) or 0)
+        return math.max(textBottom, iconBottom) + MSG_TOP_GAP
+    end
+
+    -- Measure every line against its complete text. The admission planner uses
+    -- these cached heights to trim within a grouped speaker block.
+    local available = math.max(self.width - PADDING * 2, 40)
+    g._lineHeights = g._lineHeights or {}
+    for i = 1, #group.messages do
         local msg = group.messages[i]
         local fs = acquireLine(g, i)
-        fs:SetAlpha((g._lineAlphas and g._lineAlphas[i]) or 1)
         chat:StyleLine(fs, msg, i == 1 and showsIdentity)
         fs:SetFont(self.fonts.msg.face, self.fonts.msg.size, 'OUTLINE')
         fs:SetWidth(available)
         chat:SetTextPlain(fs, msg.text)
-        local lineHeight = fs:GetHeight() or self.fonts.msg.size
+        g._lineHeights[i] = fs:GetHeight() or self.fonts.msg.size
+    end
+
+    local plainHeights, dividedHeights = {}, {}
+    local suffixHeight = 0
+    for i = #group.messages, 1, -1 do
+        suffixHeight = suffixHeight + g._lineHeights[i] + LINE_GAP
+        plainHeights[i] = math.max(messageTopFor(0) + suffixHeight, ICON_TOP_PAD + ICON_SIZE)
+        local dividedTop = self.showDividers and DIVIDER_BAND or 0
+        dividedHeights[i] = math.max(messageTopFor(dividedTop) + suffixHeight, ICON_TOP_PAD + ICON_SIZE)
+    end
+    g._metrics = {
+        firstEligible = g._hasVisibleMessages == false and nil or (g._firstVisibleMessage or 1),
+        lastMessage = #group.messages,
+        plainHeights = plainHeights,
+        dividedHeights = dividedHeights,
+    }
+
+    firstMessage = math.max(1, math.min(firstMessage or g._metrics.firstEligible or 1, #group.messages))
+    g._firstDisplayedMessage = firstMessage
+    local y = messageTopFor(top)
+    for i = firstMessage, #group.messages do
+        local msg = group.messages[i]
+        local fs = g.lines[i]
+        fs:SetAlpha(self:IsHistoryVisible() and 1 or ((g._lineAlphas and g._lineAlphas[i]) or 1))
         applyText(fs, msg.text, animate ~= false)
         fs:ClearAllPoints()
-        fs:SetPoint('TOPLEFT', g, 'TOPLEFT', indent, -y)
-        y = y + lineHeight + LINE_GAP
+        fs:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -y)
+        fs:Show()
+        y = y + g._lineHeights[i] + LINE_GAP
     end
-    -- Hide faded lines and stale pooled lines.
+
     for i = 1, #g.lines do
-        if i < firstVisibleMessage or i > #group.messages then
+        if i < firstMessage or i > #group.messages then
             chat:CancelReveal(g.lines[i])
             g.lines[i]._revealedText = nil
             g.lines[i]:Hide()
@@ -653,7 +748,8 @@ function Feed:RenderGroup(g, group, animate, isFirst)
         g.dividers[i]:Hide()
     end
 
-    local height = math.max(y, ICON_TOP_PAD + ICON_SIZE)
+    local heights = isFirst and plainHeights or dividedHeights
+    local height = heights[firstMessage]
     g:SetHeight(height)
     return height
 end
@@ -666,6 +762,7 @@ end
 ---@param groups ChatGroup[]
 function Feed:Rebuild(groups)
     self:StopLayoutAnimation()
+    self.pendingResizeSnapshot = nil
     for i = #self.widgets, 1, -1 do
         self:ReleaseGroup(table.remove(self.widgets, i))
     end
@@ -673,20 +770,27 @@ function Feed:Rebuild(groups)
     for i = 1, #groups do
         local g = self:AcquireGroup()
         self.widgets[i] = g
-        self:RenderGroup(g, groups[i], false, i == 1)
+        g._hasVisibleMessages = true
+        g._firstVisibleMessage = 1
+        self:RenderGroup(g, groups[i], false, i == 1, 1)
     end
-    self:Layout()
+    self:Layout(false)
 end
 
 --- Appends a single rendered group to the end of the list.
 ---@param group ChatGroup
 function Feed:AppendGroup(group)
-    self.groups[#self.groups + 1] = group
+    local snapshot = self:CaptureLayoutPositions()
+    self.pendingResizeSnapshot = snapshot
+    -- Chat and Feed intentionally share the grouped history table. The Chat
+    -- owner may already have appended this logical group.
+    if self.groups[#self.groups] ~= group then self.groups[#self.groups + 1] = group end
     local g = self:AcquireGroup()
     self.widgets[#self.widgets + 1] = g
     g._hasVisibleMessages = true
-    self:RenderGroup(g, group, true, #self.widgets == 1)
-    self:Layout(true)
+    g._firstVisibleMessage = 1
+    self:RenderGroup(g, group, true, #self.widgets == 1, 1)
+    self:Layout(true, snapshot)
     return g
 end
 
@@ -695,13 +799,21 @@ end
 function Feed:RefreshLastGroup(group)
     local g = self.widgets[#self.widgets]
     if not g then return end
+    local snapshot = self:CaptureLayoutPositions()
+    self.pendingResizeSnapshot = snapshot
+    if g._hasVisibleMessages == false then
+        g._firstVisibleMessage = #group.messages
+    end
     g._hasVisibleMessages = true
-    self:RenderGroup(g, group, true, #self.widgets == 1)
-    self:Layout(true)
+    g._lineAlphas = g._lineAlphas or {}
+    g._lineAlphas[#group.messages] = 1
+    self:RenderGroup(g, group, true, #self.widgets == 1, g._firstDisplayedMessage or 1)
+    self:Layout(true, snapshot)
 end
 
 function Feed:Clear()
     self:StopLayoutAnimation()
+    self.pendingResizeSnapshot = nil
     self.historyMode = false
     for i = #self.widgets, 1, -1 do
         self:ReleaseGroup(table.remove(self.widgets, i))
@@ -713,6 +825,26 @@ end
 function Feed:StopLayoutAnimation()
     if self.layoutDriver then self.layoutDriver:Hide() end
     self.layoutMoves = nil
+end
+
+function Feed:FinishLayoutTransaction()
+    self.pendingResizeSnapshot = nil
+end
+
+--- Captures only visible widgets that still represent their current logical
+--- group. Hidden or recycled frames must never provide animation origins.
+function Feed:CaptureLayoutPositions()
+    local snapshot = {}
+    for i = 1, #self.widgets do
+        local g = self.widgets[i]
+        if g._displayed and g:IsShown() and g.groupData == self.groups[i] then
+            local _, relativeTo, _, _, y = g:GetPoint(1)
+            if relativeTo == self.scrollChild and type(y) == 'number' then
+                snapshot[g] = { y = y, group = g.groupData }
+            end
+        end
+    end
+    return snapshot
 end
 
 function Feed:AnimateLayout(moves)
@@ -740,115 +872,89 @@ function Feed:AnimateLayout(moves)
     self.layoutDriver:Show()
 end
 
---- Anchors all group widgets top-to-bottom, bottom-aligning short content.
----@param animate boolean?  tween existing groups to their new positions
-function Feed:Layout(animate, skipDividerRefresh)
+--- Anchors admitted group widgets top-to-bottom, bottom-aligning short content.
+---@param animate boolean? tween stable displayed groups to new positions
+---@param snapshot table? positions captured before rendering/pool mutations
+function Feed:Layout(animate, snapshot)
+    snapshot = snapshot or (animate and self:CaptureLayoutPositions() or {})
     self:StopLayoutAnimation()
-    local previousY = {}
-    if animate then
-        for i = 1, #self.widgets do
-            local g = self.widgets[i]
-            if g._wasLaidOut then
-                local _, relativeTo, _, _, y = g:GetPoint(1)
-                if relativeTo == self.scrollChild and type(y) == 'number' then
-                    previousY[g] = y
-                end
-            end
-        end
-    end
 
-    -- Live chat never relies on the scroll frame to crop partial rows. Starting
-    -- with the newest group, admit complete visible groups only while they fit.
-    -- History mode restores every group for normal scrollback.
-    local displayed = {}
-    if self.historyMode then
-        for i = 1, #self.widgets do displayed[i] = true end
-    else
-        local available = math.max((self.scrollFrame:GetHeight() or 0) - PADDING * 2, 0)
-        local used = 0
-        for i = #self.widgets, 1, -1 do
-            local g = self.widgets[i]
-            if g._hasVisibleMessages ~= false then
-                local required = g:GetHeight() + (used > 0 and GROUP_GAP or 0)
-                -- Always retain the newest visible group, even if it is taller
-                -- than the viewport, so a newly received message is never
-                -- discarded by the admission policy.
-                if used == 0 or used + required <= available then
-                    displayed[i] = true
-                    used = used + required
-                end
-            end
-        end
-    end
-
-    local contentHeight = 0
-    local displayedCount = 0
+    local measured = {}
+    for i = 1, #self.widgets do measured[i] = self.widgets[i]._metrics end
+    local plan = LayoutPolicy.Plan(measured, self.liveContentLimit, self:IsHistoryVisible(), GROUP_GAP)
+    local displayed = plan.displayed
     local firstDisplayed
     for i = 1, #self.widgets do
-        local g = self.widgets[i]
-        local isDisplayed = displayed[i] == true
-        g._displayed = isDisplayed
-        g:SetShown(isDisplayed)
-        if isDisplayed then
-            firstDisplayed = firstDisplayed or i
-            contentHeight = contentHeight + g:GetHeight()
-            displayedCount = displayedCount + 1
-        end
+        if displayed[i] then firstDisplayed = firstDisplayed or i end
     end
-    if displayedCount > 1 then contentHeight = contentHeight + GROUP_GAP * (displayedCount - 1) end
 
-    -- A group can become the first displayed item after older live messages
-    -- are hidden. Re-render changed groups so only an item with content above
-    -- it reserves and draws a leading divider.
-    if not skipDividerRefresh then
-        local refreshed = false
-        for i = 1, #self.widgets do
-            if displayed[i] then
-                local isFirstDisplayed = i == firstDisplayed
-                if self.widgets[i]._renderedAsFirst ~= isFirstDisplayed then
-                    self:RenderGroup(self.widgets[i], self.groups[i], false, isFirstDisplayed)
-                    refreshed = true
-                end
+    -- Apply the plan before showing anything. This gives newly acquired and
+    -- newly restored widgets their final geometry while they are still hidden.
+    for i = 1, #self.widgets do
+        local g = self.widgets[i]
+        if displayed[i] then
+            local desiredFirst = plan.firstByGroup[i]
+            local isFirst = i == firstDisplayed
+            if g._firstDisplayedMessage ~= desiredFirst or g._renderedAsFirst ~= isFirst then
+                self:RenderGroup(g, self.groups[i], false, isFirst, desiredFirst)
             end
-        end
-        if refreshed then
-            self:Layout(animate, true)
-            return
+        else
+            g:Hide()
         end
     end
+
+    local contentHeight = plan.contentHeight
     self.contentHeight = contentHeight
+    if not self:IsHistoryVisible() then self.visibleContentHeight = contentHeight end
 
     local viewHeight = self.scrollFrame:GetHeight() or 0
     local spacerHeight = math.max(viewHeight - contentHeight - PADDING * 2, 0)
     self.spacer:SetHeight(spacerHeight)
 
-    local y = PADDING
+    local y = 0
     local moves = {}
     for i = 1, #self.widgets do
         local g = self.widgets[i]
         if displayed[i] then
             local targetY = -(spacerHeight + PADDING + y)
-            local startY = previousY[g]
-            if startY and math.abs(startY - targetY) > 0.5 then
+            local origin = snapshot[g]
+            local startY = origin and origin.group == self.groups[i] and origin.y or nil
+            if animate and startY and math.abs(startY - targetY) > 0.5 then
                 anchorGroup(g, self.scrollChild, startY)
                 moves[#moves + 1] = { group = g, fromY = startY, toY = targetY }
             else
                 anchorGroup(g, self.scrollChild, targetY)
             end
             y = y + g:GetHeight() + GROUP_GAP
+            g:Show()
         end
-        g._wasLaidOut = true
+        g._displayed = displayed[i] == true
     end
 
     self.scrollChild:SetHeight(math.max(spacerHeight + contentHeight + PADDING * 2, viewHeight))
-    if animate then self:AnimateLayout(moves) end
+    if animate and #moves > 0 then self:AnimateLayout(moves) end
 end
 
 --- Sets the height of the feed viewport (called when the panel resizes).
 ---@param animate boolean?  preserve and tween current group positions
 function Feed:SetViewportHeight(height, animate)
+    local oldHeight = self.viewportHeight or height
+    local snapshot
+    if animate then
+        snapshot = self.pendingResizeSnapshot or self:CaptureLayoutPositions()
+        local delta = height - oldHeight
+        if math.abs(delta) > 0.5 then
+            for _, origin in pairs(snapshot) do
+                -- The panel is bottom-anchored. Compensate for its top edge
+                -- moving so existing widgets start at the same screen point.
+                origin.y = origin.y - delta
+            end
+        end
+    end
+    self.viewportHeight = height
+    self.pendingResizeSnapshot = nil
     self.scrollFrame:SetHeight(height)
-    self:Layout(animate)
+    self:Layout(animate, snapshot)
 end
 
 if addon then addon.ChatFeedProto = Feed end

@@ -17,7 +17,7 @@ addon = addon or (LibStub and LibStub('AceAddon-3.0'):GetAddon(addonName))
 
 local M = {}
 
-M.CURRENT_VERSION = 3
+M.CURRENT_VERSION = 4
 
 --- Computes the routing/enablement decisions for Chat Bubbles.
 ---@param old table  the legacy `profile.banter` table
@@ -72,6 +72,21 @@ local function splitChatFonts(profile)
     chat.fontSize = nil
 end
 
+--- v3 -> v4: browsing height and the compact live-feed cap are independent.
+--- Only migrate a physically stored legacy value; profiles that used the old
+--- implicit default receive the new 400px defaults from AceDB.
+---@param profile table
+local function splitChatHeights(profile)
+    local chat = profile.chat
+    if not chat then return end
+    local oldHeight = rawget(chat, 'height')
+    if oldHeight ~= nil then
+        if rawget(chat, 'historyHeight') == nil then chat.historyHeight = oldHeight end
+        if rawget(chat, 'maxHeight') == nil then chat.maxHeight = oldHeight end
+    end
+    chat.height = nil
+end
+
 --- Runs the migration against an AceDB instance. Safe to call repeatedly.
 ---@param db table  AceDB instance (must expose `.profile`)
 ---@return boolean migrated  whether any change was applied
@@ -102,6 +117,10 @@ function M.Run(db)
 
     if version < 3 then
         splitChatFonts(profile)
+    end
+
+    if version < 4 then
+        splitChatHeights(profile)
     end
 
     profile.schemaVersion = M.CURRENT_VERSION

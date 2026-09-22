@@ -26,8 +26,10 @@ local PAD = 8
 local FILTER_BAR_H = 22
 local INPUT_STRIP_H = 28
 local PANEL_ORDER = 10
-local MIN_PANEL_HEIGHT = 300
 local PANEL_CHROME_HEIGHT = (PAD + FILTER_BAR_H + PAD) + (PAD + INPUT_STRIP_H + PAD)
+local MIN_LIVE_PANEL_HEIGHT = PANEL_CHROME_HEIGHT + 20
+local DEFAULT_HISTORY_HEIGHT = 400
+local DEFAULT_MAX_HEIGHT = 400
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
 
@@ -262,7 +264,7 @@ function chat:BuildPanel()
     end
 
     local frame = CreateFrame('Frame', 'CouchModeChat', UIParent)
-    frame:SetSize(db().width, db().height)
+    frame:SetSize(db().width, db().historyHeight or DEFAULT_HISTORY_HEIGHT)
     frame:SetScale(db().scale or 1)
     frame:SetFrameStrata('LOW')
     frame:EnableMouse(true)
@@ -294,12 +296,8 @@ function chat:BuildPanel()
     strip:SetAlpha(0)
     self.inputStrip = strip
 
-    local function onEnter() chat.hovering = true; chat:Touch() end
-    local function onLeave() chat.hovering = false; chat:Touch() end
     for _, region in ipairs({ frame, scrollArea, strip }) do
         region:EnableMouse(true)
-        region:SetScript('OnEnter', onEnter)
-        region:SetScript('OnLeave', onLeave)
     end
 
     local returnBtn = CreateFrame('Button', nil, frame)
@@ -336,11 +334,21 @@ function chat:BuildPanel()
         },
         {
             kind = LibEditMode.SettingType.Slider,
-            name = 'Browsing Height', desc = 'Maximum panel height and its height while scrolling history.',
-            default = 320, minValue = MIN_PANEL_HEIGHT, maxValue = 900, valueStep = 10,
-            get = function() return db().height end,
+            name = 'History Height', desc = 'Panel height while hovering or scrolling through history.',
+            default = DEFAULT_HISTORY_HEIGHT, minValue = 300, maxValue = 900, valueStep = 10,
+            get = function() return db().historyHeight end,
             set = function(_, value, fromReset)
-                db().height = (fromReset and 320 or value)
+                db().historyHeight = (fromReset and DEFAULT_HISTORY_HEIGHT or value)
+                chat:ApplyLayout(true)
+            end,
+        },
+        {
+            kind = LibEditMode.SettingType.Slider,
+            name = 'Live Maximum Height', desc = 'Largest automatic height of the live message feed.',
+            default = DEFAULT_MAX_HEIGHT, minValue = 150, maxValue = 900, valueStep = 10,
+            get = function() return db().maxHeight end,
+            set = function(_, value, fromReset)
+                db().maxHeight = (fromReset and DEFAULT_MAX_HEIGHT or value)
                 chat:ApplyLayout(true)
             end,
         },
@@ -433,20 +441,18 @@ function chat:BuildPanel()
     self:Recompute()
 end
 
-local function panelMaxHeight()
-    return math.max(db().height or MIN_PANEL_HEIGHT, MIN_PANEL_HEIGHT)
-end
-
 function chat:ApplyLayout(rebuild, panelHeight, animate)
     local frame = self.panel
     if not frame then return end
-    panelHeight = math.max(panelHeight or panelMaxHeight(), MIN_PANEL_HEIGHT)
+    panelHeight = math.max(panelHeight or db().historyHeight or DEFAULT_HISTORY_HEIGHT, MIN_LIVE_PANEL_HEIGHT)
     frame:SetSize(db().width, panelHeight)
     frame:SetScale(db().scale or 1)
     frame.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
 
     local viewport = panelHeight - PANEL_CHROME_HEIGHT
     self.feed:SetWidth(db().width - PAD * 2)
+    self.feed:SetLiveContentLimit(math.max(
+        (db().maxHeight or DEFAULT_MAX_HEIGHT) - PANEL_CHROME_HEIGHT - PAD * 2, 0))
     self.feed:SetViewportHeight(math.max(viewport, 20), animate)
 
     if rebuild then self:Recompute() end
@@ -478,32 +484,39 @@ function chat:FadeRegion(region, stateKey, target, dt)
     region:SetAlpha(current)
 end
 
---- Resizes the panel to current visible content at the bottom of the feed.
---- Scrolling away from the bottom restores `height`, the normal history view.
+--- Applies either the fixed history height or the content-sized live height.
 function chat:UpdatePanelSize()
     if self.updatingPanelSize or not self.panel or not self.feed then return end
 
-    local browsingHistory = self.feed:IsBrowsingHistory()
-    local contentHeight = browsingHistory and self.feed:GetContentHeight()
-        or self.feed:GetVisibleContentHeight()
-    local maxHeight = panelMaxHeight()
-    local targetHeight = browsingHistory and maxHeight
-        or math.max(MIN_PANEL_HEIGHT, math.min(maxHeight, contentHeight + PANEL_CHROME_HEIGHT + PAD * 2))
+    local historyVisible = self.feed:IsHistoryVisible()
+    local contentHeight = self.feed:GetVisibleContentHeight()
+    local targetHeight = historyVisible and (db().historyHeight or DEFAULT_HISTORY_HEIGHT)
+        or math.max(MIN_LIVE_PANEL_HEIGHT, contentHeight + PANEL_CHROME_HEIGHT + PAD * 2)
     local currentHeight = self.panel:GetHeight() or 0
-    if math.abs(currentHeight - targetHeight) < 0.5 then return end
+    if math.abs(currentHeight - targetHeight) < 0.5 then
+        self.feed:FinishLayoutTransaction()
+        return
+    end
 
     self.updatingPanelSize = true
-    self:ApplyLayout(false, targetHeight, not browsingHistory)
-    if not browsingHistory then self.feed:ScrollToBottom() end
+    self:ApplyLayout(false, targetHeight, not historyVisible)
+    if not historyVisible then self.feed:ScrollToBottom(true) end
     self.updatingPanelSize = false
 end
 
 function chat:UpdateFade(dt)
     if not self.panel then return end
+    local hovering = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
+    if hovering ~= self.hovering then
+        self.hovering = hovering
+        self.feed:SetHistoryPreview(hovering)
+        if hovering and not self.feed:IsBrowsingHistory() then self.feed:ScrollToBottom(true) end
+        self:Touch()
+    end
     local now = (type(GetTime) == 'function') and GetTime() or 0
-    local browsingHistory = self.feed and self.feed:IsBrowsingHistory()
+    local historyVisible = self.feed and self.feed:IsHistoryVisible()
     local hasVisibleMessages = self.feed and self.feed:UpdateMessageFade(
-        now, db().fadeDelay or 15, db().fadeEnabled == true and not browsingHistory
+        now, db().fadeDelay or 15, db().fadeEnabled == true and not historyVisible
     ) or false
     self:UpdatePanelSize()
     local tabsHovered = self.filterBar and self.filterBar:IsMouseOver()
@@ -517,7 +530,7 @@ function chat:UpdateFade(dt)
     -- Individual lines expire from their own receive times. The panel remains
     -- active while a line, tab interaction, or focused input is visible.
     local target = db().activeOpacity
-    if db().fadeEnabled and not hasVisibleMessages and not tabsHovered and not inputFocused then
+    if db().fadeEnabled and not historyVisible and not hasVisibleMessages and not tabsHovered and not inputFocused then
         target = db().backgroundOpacity
     end
     local current = self.fadeAlpha
@@ -1049,8 +1062,7 @@ function chat:ChatMessage(msg)
         return
     end
 
-    local atBottom = self.feed and self.feed:IsAtBottom()
-    if atBottom then self.feed:ResumeLive() end
+    local followBottom = self.feed and not self.feed:IsBrowsingHistory()
     if self.lastVisible and Grouping.ShouldGroup(self.lastVisible, msg, db().groupWindow) and self.lastGroup then
         self.lastGroup.messages[#self.lastGroup.messages + 1] = msg
         if self.feed then self.feed:RefreshLastGroup(self.lastGroup) end
@@ -1063,13 +1075,16 @@ function chat:ChatMessage(msg)
     self.lastVisible = msg
 
     if self.feed then
-        if atBottom ~= false then self.feed:ScrollToBottom() end
+        if followBottom then self.feed:ScrollToBottom(true) end
         self:OnFeedChanged()
     end
     self:Touch()
 end
 
 function chat:Recompute()
+    local preserveBrowse = self.feed and self.feed:IsBrowsingHistory()
+    local previousOffset = preserveBrowse and self.feed:GetScrollOffset() or 0
+    local previousContentHeight = preserveBrowse and self.feed:GetContentHeight() or 0
     local filtered = {}
     for i = 1, #self.session do
         local msg = self.session[i]
@@ -1085,7 +1100,12 @@ function chat:Recompute()
         self.feed:SetFonts(self:FontMetrics())
         self.feed.showDividers = db().dividers ~= false
         self.feed:Rebuild(groups)
-        self.feed:ScrollToBottom()
+        if preserveBrowse then
+            local removedHeight = math.max(previousContentHeight - self.feed:GetContentHeight(), 0)
+            self.feed:RestoreScrollOffset(math.max(previousOffset - removedHeight, 0))
+        else
+            self.feed:ScrollToBottom()
+        end
     end
     self:OnFeedChanged()
 end
@@ -1093,7 +1113,7 @@ end
 function chat:OnFeedChanged()
     self:UpdatePanelSize()
     if not self.returnButton or not self.feed then return end
-    if self.feed:IsAtBottom() then
+    if not self.feed:IsBrowsingHistory() or self.feed:IsAtBottom() then
         self.returnButton:Hide()
     else
         self.returnButton:Show()
@@ -1234,7 +1254,8 @@ function chat:GetDefaults()
             positions = {},
             -- Sizing / appearance
             width = 520,
-            height = 320,
+            historyHeight = DEFAULT_HISTORY_HEIGHT,
+            maxHeight = DEFAULT_MAX_HEIGHT,
             scale = 1,
             activeOpacity = 1,
             backgroundOpacity = 0,
@@ -1361,11 +1382,17 @@ function chat:BuildArgs()
                     get = function() return db().width end,
                     set = function(_, v) db().width = v; chat:ApplyLayout(true) end,
                 },
-                height = {
-                    name = 'Browsing Height', desc = 'Maximum panel height and its height while scrolling history.',
-                    type = 'range', min = MIN_PANEL_HEIGHT, max = 900, step = 10, order = 2,
-                    get = function() return db().height end,
-                    set = function(_, v) db().height = v; chat:ApplyLayout(true) end,
+                historyHeight = {
+                    name = 'History Height', desc = 'Panel height while hovering or scrolling through history.',
+                    type = 'range', min = 300, max = 900, step = 10, order = 2,
+                    get = function() return db().historyHeight end,
+                    set = function(_, v) db().historyHeight = v; chat:ApplyLayout(true) end,
+                },
+                maxHeight = {
+                    name = 'Live Maximum Height', desc = 'Largest automatic height of the live message feed.',
+                    type = 'range', min = 150, max = 900, step = 10, order = 2.5,
+                    get = function() return db().maxHeight end,
+                    set = function(_, v) db().maxHeight = v; chat:ApplyLayout(true) end,
                 },
                 scale = {
                     name = 'Scale', desc = 'Overall panel scale.',
