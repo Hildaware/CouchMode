@@ -16,6 +16,7 @@ local Input = {}
 local editBox = nil
 local saved = nil
 local headerHooked = false
+local focusBorderHooked = false
 local aliasProvider = nil
 
 --#region ── Helpers ───────────────────────────────────────────────────────────
@@ -79,6 +80,17 @@ local function installHeaderHook(frame)
     end)
 end
 
+local function installFocusBorderHook(frame)
+    if focusBorderHooked or not frame.SetFocusRegionsShown then return end
+    focusBorderHooked = true
+
+    -- Blizzard shows these textures again whenever chat input is activated.
+    -- The embedded input uses the Diamond Metal strip as its chrome instead.
+    hooksecurefunc(frame, 'SetFocusRegionsShown', function(self)
+        if editBox == self then setBordersShown(self, false) end
+    end)
+end
+
 ---@param provider fun(): string?
 function Input:SetAliasProvider(provider)
     aliasProvider = provider
@@ -102,6 +114,7 @@ function Input:Attach(parent, anchor)
     end
 
     installHeaderHook(frame)
+    installFocusBorderHook(frame)
 
     frame:SetParent(anchor or parent)
     frame:ClearAllPoints()

@@ -50,13 +50,13 @@ end
 
 local function npcSet()
     return {
-        { event = 'CHAT_MSG_MONSTER_SAY', sender = 'Lorewalker Cho', text = 'Stay a while, and listen.' },
-        { event = 'CHAT_MSG_MONSTER_YELL', sender = 'Warchief', text = 'For the Horde!' },
-        { event = 'CHAT_MSG_MONSTER_WHISPER', sender = "Xal'atath", text = 'You carry such a fragile little world.' },
-        { event = 'CHAT_MSG_MONSTER_PARTY', sender = 'Arator', text = 'The road ahead is dark, but we walk it together.' },
-        { event = 'CHAT_MSG_MONSTER_EMOTE', sender = 'Lorewalker Cho', text = 'pauses to consider his words.' },
-        { event = 'CHAT_MSG_RAID_BOSS_EMOTE', sender = 'Dimensius the All-Devouring', text = 'The sky tears open above you.' },
-        { event = 'CHAT_MSG_RAID_BOSS_WHISPER', sender = "Xal'atath", text = 'You were never meant to win this.' },
+        { event = 'CHAT_MSG_MONSTER_SAY', sender = 'Worg Pup', text = 'Stay a while, and listen.' },
+        { event = 'CHAT_MSG_MONSTER_YELL', sender = 'Mocha', text = 'For the Horde!' },
+        { event = 'CHAT_MSG_MONSTER_WHISPER', sender = 'Bebe', text = 'You carry such a fragile little world.' },
+        { event = 'CHAT_MSG_MONSTER_PARTY', sender = 'Panda Cub', text = 'The road ahead is dark, but we walk it together.' },
+        { event = 'CHAT_MSG_MONSTER_EMOTE', sender = 'Weevil K. Neevil', text = 'pauses to consider his words.' },
+        { event = 'CHAT_MSG_RAID_BOSS_EMOTE', sender = 'Sinister Squashling', text = 'The sky tears open above you.' },
+        { event = 'CHAT_MSG_RAID_BOSS_WHISPER', sender = 'Baby Crocolisk', text = 'You were never meant to win this.' },
     }
 end
 

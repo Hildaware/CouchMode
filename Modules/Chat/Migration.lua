@@ -17,7 +17,8 @@ addon = addon or (LibStub and LibStub('AceAddon-3.0'):GetAddon(addonName))
 
 local M = {}
 
-M.CURRENT_VERSION = 4
+M.CURRENT_VERSION = 5
+local DEFAULT_CHAT_HEIGHT = 400
 
 --- Computes the routing/enablement decisions for Chat Bubbles.
 ---@param old table  the legacy `profile.banter` table
@@ -87,6 +88,18 @@ local function splitChatHeights(profile)
     chat.height = nil
 end
 
+--- v4 -> v5: the chat panel now has one fixed height setting.
+--- This is an unreleased layout change, so old experimental height values are
+--- discarded and the new control starts at its default.
+---@param profile table
+local function resetChatHeight(profile)
+    local chat = profile.chat
+    if not chat then return end
+    chat.height = DEFAULT_CHAT_HEIGHT
+    chat.historyHeight = nil
+    chat.maxHeight = nil
+end
+
 --- Runs the migration against an AceDB instance. Safe to call repeatedly.
 ---@param db table  AceDB instance (must expose `.profile`)
 ---@return boolean migrated  whether any change was applied
@@ -121,6 +134,10 @@ function M.Run(db)
 
     if version < 4 then
         splitChatHeights(profile)
+    end
+
+    if version < 5 then
+        resetChatHeight(profile)
     end
 
     profile.schemaVersion = M.CURRENT_VERSION

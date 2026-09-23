@@ -60,8 +60,10 @@ function Feed.New(parent)
             channel = { face = nil, size = 10 },
         },
         historyMode = false,
-        historyPreview = false,
+        fadePaused = false,
+        fadePausedAt = nil,
         liveContentLimit = 300,
+        scrollRequest = 0,
         onScrollChanged = nil,
     }, Feed)
 
@@ -102,18 +104,13 @@ end
 function Feed:UpdateMessageFade(now, delay, enabled)
     local hasVisibleMessages = false
     local needsLiveLayout = false
-    local fadingHistory = self.historyExitFade == true
-    local exitProgress = 1
-    if fadingHistory then
-        self.historyExitStartedAt = self.historyExitStartedAt or now
-        exitProgress = math.min((now - self.historyExitStartedAt) / MESSAGE_FADE_TIME, 1)
-    end
+    local historyVisible = self:IsHistoryVisible()
 
     local widgets, groups = self.widgets, self.groups
     for groupIndex = 1, #widgets do
         local g = widgets[groupIndex]
         local group = groups[groupIndex]
-        local headerAlpha = 0
+        local liveHeaderAlpha = 0
         local firstVisibleMessage
         local lineAlphas = g._lineAlphas
         if not lineAlphas then
@@ -121,40 +118,26 @@ function Feed:UpdateMessageFade(now, delay, enabled)
             g._lineAlphas = lineAlphas
         end
         local messages = group.messages
-        if fadingHistory and not g._historyExitAlphas then
-            g._historyExitAlphas = {}
-            for i = 1, #messages do
-                g._historyExitAlphas[i] = lineAlphas[i] or 1
-            end
-        end
-        local exitAlphas = g._historyExitAlphas
         local lines = g.lines
 
         for messageIndex = 1, #messages do
             local msg = messages[messageIndex]
             local alpha = 1
-            if enabled and delay >= 0 and type(msg.timestamp) == 'number' then
+            if not self.fadePaused and enabled and delay >= 0 and type(msg.timestamp) == 'number' then
                 local elapsed = now - msg.timestamp - delay
                 if elapsed > 0 then
                     alpha = math.max(1 - elapsed / MESSAGE_FADE_TIME, 0)
                 end
             end
 
-            -- History rows are forced opaque while browsing. When browsing
-            -- ends, interpolate from that displayed alpha to each row's live
-            -- alpha before the live layout removes expired rows.
-            if fadingHistory then
-                local startAlpha = exitAlphas[messageIndex] or 1
-                alpha = startAlpha + (alpha - startAlpha) * exitProgress
-            end
-
-            -- GetAlpha is authoritative and cheap: this skips the (dirty)
-            -- SetAlpha in the common steady state where every row's alpha is
-            -- already settled at 0 or 1.
+            -- Keep the live alpha current while browsing, but display history
+            -- rows fully opaque. This lets the live layout collapse expired
+            -- rows immediately when the reader returns to the bottom.
+            local displayAlpha = historyVisible and 1 or alpha
             local line = lines[messageIndex]
-            if line and line:GetAlpha() ~= alpha then line:SetAlpha(alpha) end
+            if line and line:GetAlpha() ~= displayAlpha then line:SetAlpha(displayAlpha) end
             lineAlphas[messageIndex] = alpha
-            headerAlpha = math.max(headerAlpha, alpha)
+            liveHeaderAlpha = math.max(liveHeaderAlpha, alpha)
             if alpha > 0 then
                 hasVisibleMessages = true
                 firstVisibleMessage = firstVisibleMessage or messageIndex
@@ -168,15 +151,16 @@ function Feed:UpdateMessageFade(now, delay, enabled)
         end
 
         -- The shared speaker identity disappears only when every message in
-        -- its group has faded.
-        if g.background:GetAlpha() ~= headerAlpha then g.background:SetAlpha(headerAlpha) end
-        if g.name:GetAlpha() ~= headerAlpha then g.name:SetAlpha(headerAlpha) end
-        if g.channel:GetAlpha() ~= headerAlpha then g.channel:SetAlpha(headerAlpha) end
-        if g.icon:GetAlpha() ~= headerAlpha then g.icon:SetAlpha(headerAlpha) end
-        if g.iconBorder:GetAlpha() ~= headerAlpha then g.iconBorder:SetAlpha(headerAlpha) end
-        if g.spec:GetAlpha() ~= headerAlpha then g.spec:SetAlpha(headerAlpha) end
+        -- its group has faded, except while browsing where it stays opaque.
+        local displayHeaderAlpha = historyVisible and 1 or liveHeaderAlpha
+        if g.background:GetAlpha() ~= displayHeaderAlpha then g.background:SetAlpha(displayHeaderAlpha) end
+        if g.name:GetAlpha() ~= displayHeaderAlpha then g.name:SetAlpha(displayHeaderAlpha) end
+        if g.channel:GetAlpha() ~= displayHeaderAlpha then g.channel:SetAlpha(displayHeaderAlpha) end
+        if g.icon:GetAlpha() ~= displayHeaderAlpha then g.icon:SetAlpha(displayHeaderAlpha) end
+        if g.iconBorder:GetAlpha() ~= displayHeaderAlpha then g.iconBorder:SetAlpha(displayHeaderAlpha) end
+        if g.spec:GetAlpha() ~= displayHeaderAlpha then g.spec:SetAlpha(displayHeaderAlpha) end
 
-        local hasVisibleGroup = headerAlpha > 0
+        local hasVisibleGroup = liveHeaderAlpha > 0
         if g._hasVisibleMessages ~= hasVisibleGroup then
             g._hasVisibleMessages = hasVisibleGroup
             needsLiveLayout = true
@@ -187,24 +171,35 @@ function Feed:UpdateMessageFade(now, delay, enabled)
 
     end
 
-    if fadingHistory and exitProgress >= 1 then
-        self.historyExitFade = false
-        self.historyExitStartedAt = nil
-        for i = 1, #widgets do widgets[i]._historyExitAlphas = nil end
-        -- Apply the live admission plan only after every visible history row
-        -- has reached its intended alpha.
-        self:Layout(false)
-    elseif needsLiveLayout and not self:IsHistoryVisible() then
+    if needsLiveLayout and not historyVisible then
         local snapshot = self:CaptureLayoutPositions()
-        self.pendingResizeSnapshot = snapshot
         self:Layout(true, snapshot)
     end
     return hasVisibleMessages
 end
 
----@return number
-function Feed:GetVisibleContentHeight()
-    return self.visibleContentHeight or 0
+--- Pauses message aging while the chat is being read or navigated.
+---@param paused boolean
+---@param now number
+function Feed:SetFadePaused(paused, now)
+    paused = paused == true
+    if paused == self.fadePaused then return end
+    self.fadePaused = paused
+    if paused then
+        self.fadePausedAt = now
+        return
+    end
+
+    local elapsed = math.max(0, now - (self.fadePausedAt or now))
+    self.fadePausedAt = nil
+    if elapsed == 0 then return end
+    for i = 1, #self.groups do
+        local messages = self.groups[i].messages
+        for j = 1, #messages do
+            local msg = messages[j]
+            if type(msg.timestamp) == 'number' then msg.timestamp = msg.timestamp + elapsed end
+        end
+    end
 end
 
 ---@return number
@@ -229,56 +224,19 @@ function Feed:IsBrowsingHistory()
 end
 
 function Feed:IsHistoryVisible()
-    return self.historyMode == true or self.historyPreview == true or self.historyExitFade == true
-end
-
-function Feed:IsFadingHistoryOut()
-    return self.historyExitFade == true
-end
-
---- Shows all history while active. On exit, retain the current geometry until
---- the visible lines have faded to their normal live alpha.
----@param active boolean
----@param fadeOut boolean? Whether the history-to-live handoff should animate.
-function Feed:SetHistoryPreview(active, fadeOut)
-    active = active == true
-    if active then
-        if self.historyPreview and not self.historyExitFade then return end
-        self.historyPreview = true
-        self.historyExitFade = false
-        self.historyExitStartedAt = nil
-        for i = 1, #self.widgets do self.widgets[i]._historyExitAlphas = nil end
-        self:Layout(false)
-    elseif self.historyPreview or self.historyMode or self.historyExitFade then
-        self.historyPreview = false
-        self.historyMode = false
-        if fadeOut then
-            self.historyExitFade = true
-            self.historyExitStartedAt = nil
-        else
-            self.historyExitFade = false
-            self.historyExitStartedAt = nil
-            self:Layout(false)
-        end
-    else
-        return
-    end
-    if self.onScrollChanged then self.onScrollChanged() end
+    return self.historyMode == true
 end
 
 function Feed:SetLiveContentLimit(height)
     height = math.max(height or 0, 0)
-    if math.abs((self.liveContentLimit or 0) - height) < 0.5 then return end
     self.liveContentLimit = height
-    if #self.widgets > 0 and not self:IsHistoryVisible() then self:Layout(false) end
 end
 
 function Feed:ResumeLive()
-    if not self.historyMode and not self.historyExitFade then return end
+    if not self.historyMode then return end
     self.historyMode = false
-    self.historyExitFade = false
-    self.historyExitStartedAt = nil
     self:Layout(false)
+    self:ScrollToBottom(true)
 end
 
 ---@param preserveHistory boolean? Keep the browse latch while repositioning.
@@ -288,7 +246,10 @@ function Feed:ScrollToBottom(preserveHistory, defer)
         self.historyMode = false
         self:Layout(false)
     end
+    self.scrollRequest = self.scrollRequest + 1
+    local request = self.scrollRequest
     local function go()
+        if self.scrollRequest ~= request then return end
         self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
         if self.onScrollChanged then self.onScrollChanged() end
     end
@@ -305,8 +266,10 @@ end
 --- pass needed after WoW recalculates the scroll range.
 ---@param offset number
 function Feed:RestoreScrollOffset(offset)
+    self.scrollRequest = self.scrollRequest + 1
+    local request = self.scrollRequest
     local function restore()
-        if not self.historyMode then return end
+        if self.scrollRequest ~= request or not self.historyMode then return end
         local range = self.scrollFrame:GetVerticalScrollRange() or 0
         self.scrollFrame:SetVerticalScroll(math.max(0, math.min(offset or 0, range)))
         if self.onScrollChanged then self.onScrollChanged() end
@@ -318,23 +281,32 @@ end
 --- Scrolls the viewport. Positive `upAmount` reveals older messages.
 ---@param upAmount number
 function Feed:ScrollBy(upAmount)
-    if upAmount > 0 and not self.historyMode then
-        self.historyExitFade = false
-        self.historyExitStartedAt = nil
+    self.scrollRequest = self.scrollRequest + 1
+    local request = self.scrollRequest
+    local enteringHistory = upAmount > 0 and not self.historyMode
+    if enteringHistory then
         self.historyMode = true
-        -- Expanding history changes the scroll range. Do that first so the
-        -- wheel/controller action that entered history also scrolls it.
+        -- Reveal the retained rows before applying this first scroll action.
+        -- The panel itself stays at its configured size.
+        self:Layout(false)
+    end
+    local function applyScroll()
+        if self.scrollRequest ~= request then return end
+        local range = self.scrollFrame:GetVerticalScrollRange() or 0
+        local offset = enteringHistory and range or (self.scrollFrame:GetVerticalScroll() or 0)
+        offset = math.max(0, math.min(range, offset - upAmount))
+        self.scrollFrame:SetVerticalScroll(offset)
         if self.onScrollChanged then self.onScrollChanged() end
     end
-    local range = self.scrollFrame:GetVerticalScrollRange() or 0
-    local offset = self.scrollFrame:GetVerticalScroll() or 0
-    offset = math.max(0, math.min(range, offset - upAmount))
-    self.scrollFrame:SetVerticalScroll(offset)
+    applyScroll()
+    -- The range may update on the next frame after history rows are exposed.
+    if enteringHistory and C_Timer then C_Timer.After(0, applyScroll) end
+
     if upAmount < 0 and self.historyMode and self:IsAtBottom() then
         self.historyMode = false
         self:Layout(false)
+        self:ScrollToBottom(true)
     end
-    if self.onScrollChanged then self.onScrollChanged() end
 end
 
 --#endregion
@@ -364,7 +336,6 @@ end
 ---@param groups ChatGroup[]
 function Feed:Rebuild(groups)
     self:StopLayoutAnimation()
-    self.pendingResizeSnapshot = nil
     for i = #self.widgets, 1, -1 do
         self:ReleaseGroup(table.remove(self.widgets, i))
     end
@@ -383,7 +354,6 @@ end
 ---@param group ChatGroup
 function Feed:AppendGroup(group)
     local snapshot = self:CaptureLayoutPositions()
-    self.pendingResizeSnapshot = snapshot
     -- Chat and Feed intentionally share the grouped history table. The Chat
     -- owner may already have appended this logical group.
     if self.groups[#self.groups] ~= group then self.groups[#self.groups + 1] = group end
@@ -402,7 +372,6 @@ function Feed:RefreshLastGroup(group)
     local g = self.widgets[#self.widgets]
     if not g then return end
     local snapshot = self:CaptureLayoutPositions()
-    self.pendingResizeSnapshot = snapshot
     if g._hasVisibleMessages == false then
         g._firstVisibleMessage = #group.messages
     end
@@ -415,11 +384,8 @@ end
 
 function Feed:Clear()
     self:StopLayoutAnimation()
-    self.pendingResizeSnapshot = nil
+    self.scrollRequest = self.scrollRequest + 1
     self.historyMode = false
-    self.historyPreview = false
-    self.historyExitFade = false
-    self.historyExitStartedAt = nil
     for i = #self.widgets, 1, -1 do
         self:ReleaseGroup(table.remove(self.widgets, i))
     end
@@ -434,10 +400,6 @@ end
 function Feed:StopLayoutAnimation()
     if self.layoutDriver then self.layoutDriver:Hide() end
     self.layoutMoves = nil
-end
-
-function Feed:FinishLayoutTransaction()
-    self.pendingResizeSnapshot = nil
 end
 
 --- Captures only visible widgets that still represent their current logical
@@ -489,9 +451,10 @@ function Feed:Layout(animate, snapshot)
     snapshot = snapshot or (animate and self:CaptureLayoutPositions() or {})
     self:StopLayoutAnimation()
 
+    local historyVisible = self:IsHistoryVisible()
     local measured = {}
     for i = 1, #self.widgets do measured[i] = self.widgets[i]._metrics end
-    local plan = LayoutPolicy.Plan(measured, self.liveContentLimit, self:IsHistoryVisible(), GROUP_GAP)
+    local plan = LayoutPolicy.Plan(measured, self.liveContentLimit, historyVisible, GROUP_GAP)
     local displayed = plan.displayed
     -- Apply the plan before showing anything. This gives newly acquired and
     -- newly restored widgets their final geometry while they are still hidden.
@@ -509,7 +472,6 @@ function Feed:Layout(animate, snapshot)
 
     local contentHeight = plan.contentHeight
     self.contentHeight = contentHeight
-    if not self:IsHistoryVisible() then self.visibleContentHeight = contentHeight end
 
     local viewHeight = self.scrollFrame:GetHeight() or 0
     local spacerHeight = math.max(viewHeight - contentHeight - PADDING * 2, 0)
@@ -531,6 +493,7 @@ function Feed:Layout(animate, snapshot)
             end
             y = y + g:GetHeight() + GROUP_GAP
             g:Show()
+            Widgets.ApplyDisplayAlpha(g, historyVisible)
         end
         g._displayed = displayed[i] == true
     end
@@ -539,26 +502,11 @@ function Feed:Layout(animate, snapshot)
     if animate and #moves > 0 then self:AnimateLayout(moves) end
 end
 
---- Sets the height of the feed viewport (called when the panel resizes).
----@param animate boolean?  preserve and tween current group positions
-function Feed:SetViewportHeight(height, animate)
-    local oldHeight = self.viewportHeight or height
-    local snapshot
-    if animate then
-        snapshot = self.pendingResizeSnapshot or self:CaptureLayoutPositions()
-        local delta = height - oldHeight
-        if math.abs(delta) > 0.5 then
-            for _, origin in pairs(snapshot) do
-                -- The panel is bottom-anchored. Compensate for its top edge
-                -- moving so existing widgets start at the same screen point.
-                origin.y = origin.y - delta
-            end
-        end
-    end
-    self.viewportHeight = height
-    self.pendingResizeSnapshot = nil
+--- Sets the fixed feed viewport height and reflows rows to its new budget.
+function Feed:SetViewportHeight(height)
     self.scrollFrame:SetHeight(height)
-    self:Layout(animate, snapshot)
+    self:Layout(false)
+    if not self:IsHistoryVisible() then self:ScrollToBottom(true) end
 end
 
 --#endregion

@@ -23,16 +23,23 @@ local Input = addon.ChatInput
 
 local FALLBACK_FONT = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
 local PAD = 8
-local FILTER_BAR_H = 22
+local FILTER_BAR_H = 32
 local INPUT_STRIP_H = 28
 local PANEL_ORDER = 10
 local PANEL_CHROME_HEIGHT = (PAD + FILTER_BAR_H + PAD) + (PAD + INPUT_STRIP_H + PAD)
-local MIN_LIVE_PANEL_HEIGHT = PANEL_CHROME_HEIGHT + 20
-local DEFAULT_HISTORY_HEIGHT = 400
-local DEFAULT_MAX_HEIGHT = 400
-local PANEL_RESIZE_RATE = 12
+local DEFAULT_HEIGHT = 400
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
+
+local CATEGORY_PLACEHOLDER_ICONS = {
+    SYSTEM = 136235,
+    GUILD = 135026,
+    GROUP = 134149,
+    WHISPER = 134148,
+    NPC = 512617,
+    PUBLIC = 134330,
+}
+local TOTAL_FALLBACK_ICON = 134400
 
 --#endregion
 
@@ -58,8 +65,6 @@ chat.lastActivity = 0
 chat.fadeAlpha = 1
 chat.tabsAlpha = 0
 chat.inputAlpha = 0
-chat.hovering = false
-chat.panelSizeTransition = false
 chat.suppressed = nil     ---@type table<Frame, table>?
 
 --#endregion
@@ -232,6 +237,14 @@ function chat:FontMetrics()
     }
 end
 
+--- Applies the configured panel background, with a temporary hover minimum.
+function chat:ApplyPanelBackgroundOpacity()
+    if not self.panel or not self.panel.bg then return end
+    local opacity = db().backgroundOpacity or 0
+    if self.backgroundHovered then opacity = math.max(opacity, 0.25) end
+    self.panel.bg:SetColorTexture(0, 0, 0, opacity)
+end
+
 function chat:BuildFilterBar(parent)
     local bar = CreateFrame('Frame', nil, parent)
     bar:SetPoint('TOPLEFT', parent, 'TOPLEFT', PAD, -PAD)
@@ -240,18 +253,43 @@ function chat:BuildFilterBar(parent)
     bar:EnableMouse(true)
     bar:SetAlpha(0)
 
+    -- Match the minimap toolbar's continuous Diamond Metal header treatment.
+    local bgLeft = bar:CreateTexture(nil, 'BACKGROUND', nil, 1)
+    bgLeft:SetAtlas('UI-Frame-DiamondMetal-Header-CornerLeft', true)
+    bgLeft:SetSize(32, 39)
+    bgLeft:SetScale(0.8)
+    bgLeft:SetPoint('LEFT', bar, 'LEFT', -7, 0)
+
+    local bgRight = bar:CreateTexture(nil, 'BACKGROUND', nil, 1)
+    bgRight:SetAtlas('UI-Frame-DiamondMetal-Header-CornerRight', true)
+    bgRight:SetSize(32, 39)
+    bgRight:SetScale(0.8)
+    bgRight:SetPoint('RIGHT', bar, 'RIGHT', 7, 0)
+
+    local bgTile = bar:CreateTexture(nil, 'BACKGROUND')
+    bgTile:SetAtlas('_UI-Frame-DiamondMetal-Header-Tile')
+    bgTile:SetHorizTile(true)
+    bgTile:SetPoint('TOPLEFT', bgLeft, 'TOPRIGHT')
+    bgTile:SetPoint('BOTTOMRIGHT', bgRight, 'BOTTOMLEFT')
+
     local prev
     for _, filter in ipairs(Sources.FILTERS) do
-        local btn = CreateFrame('Button', nil, bar, 'UIPanelButtonTemplate')
-        btn:SetSize(64, 20)
-        btn:SetText(filter.label)
+        -- Plain text buttons keep the atlas header visually continuous.
+        local btn = CreateFrame('Button', nil, bar)
+        btn:SetSize(60, 22)
+        local label = btn:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
+        label:SetPoint('CENTER')
+        label:SetText(filter.label)
+        btn.label = label
         if prev then
-            btn:SetPoint('LEFT', prev, 'RIGHT', 4, 0)
+            btn:SetPoint('LEFT', prev, 'RIGHT', 2, 0)
         else
-            btn:SetPoint('LEFT', bar, 'LEFT', 0, 0)
+            btn:SetPoint('LEFT', bar, 'LEFT', 12, 0)
         end
         btn:RegisterForClicks('LeftButtonUp')
         btn:SetScript('OnClick', function() chat:SetFilter(filter.key) end)
+        btn:SetScript('OnEnter', function() label:SetTextColor(1, 1, 1) end)
+        btn:SetScript('OnLeave', function() chat:RefreshFilterButtons() end)
         self.filterBtns[filter.key] = btn
         prev = btn
     end
@@ -266,14 +304,16 @@ function chat:BuildPanel()
     end
 
     local frame = CreateFrame('Frame', 'CouchModeChat', UIParent)
-    frame:SetSize(db().width, db().historyHeight or DEFAULT_HISTORY_HEIGHT)
+    frame:SetSize(db().width, db().height or DEFAULT_HEIGHT)
     frame:SetScale(db().scale or 1)
     frame:SetFrameStrata('LOW')
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
 
     local bg = frame:CreateTexture(nil, 'BACKGROUND')
-    bg:SetAllPoints()
+    bg:SetPoint('CENTER', frame, 'CENTER', 0, -6)
+    bg:SetWidth(frame:GetWidth() - 12)
+    bg:SetHeight(frame:GetHeight() - 30)
     bg:SetColorTexture(0, 0, 0, 1)
     frame.bg = bg
 
@@ -292,9 +332,23 @@ function chat:BuildPanel()
     strip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, PAD)
     strip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD)
     strip:SetHeight(INPUT_STRIP_H)
-    local stripBg = strip:CreateTexture(nil, 'BACKGROUND')
-    stripBg:SetAllPoints()
-    stripBg:SetColorTexture(0, 0, 0, 0.4)
+    local stripBgLeft = strip:CreateTexture(nil, 'BACKGROUND', nil, 1)
+    stripBgLeft:SetAtlas('UI-Frame-DiamondMetal-Header-CornerLeft', true)
+    stripBgLeft:SetSize(32, 39)
+    stripBgLeft:SetScale(0.8)
+    stripBgLeft:SetPoint('LEFT', strip, 'LEFT', -7, 0)
+
+    local stripBgRight = strip:CreateTexture(nil, 'BACKGROUND', nil, 1)
+    stripBgRight:SetAtlas('UI-Frame-DiamondMetal-Header-CornerRight', true)
+    stripBgRight:SetSize(32, 39)
+    stripBgRight:SetScale(0.8)
+    stripBgRight:SetPoint('RIGHT', strip, 'RIGHT', 7, 0)
+
+    local stripBgTile = strip:CreateTexture(nil, 'BACKGROUND')
+    stripBgTile:SetAtlas('_UI-Frame-DiamondMetal-Header-Tile')
+    stripBgTile:SetHorizTile(true)
+    stripBgTile:SetPoint('TOPLEFT', stripBgLeft, 'TOPRIGHT')
+    stripBgTile:SetPoint('BOTTOMRIGHT', stripBgRight, 'BOTTOMLEFT')
     strip:SetAlpha(0)
     self.inputStrip = strip
 
@@ -342,21 +396,11 @@ function chat:BuildPanel()
         },
         {
             kind = LibEditMode.SettingType.Slider,
-            name = 'History Height', desc = 'Panel height while hovering or scrolling through history.',
-            default = DEFAULT_HISTORY_HEIGHT, minValue = 300, maxValue = 900, valueStep = 10,
-            get = function() return db().historyHeight end,
+            name = 'Height', desc = 'Fixed height of the chat panel.',
+            default = DEFAULT_HEIGHT, minValue = 200, maxValue = 900, valueStep = 10,
+            get = function() return db().height end,
             set = function(_, value, fromReset)
-                db().historyHeight = (fromReset and DEFAULT_HISTORY_HEIGHT or value)
-                chat:ApplyLayout(true)
-            end,
-        },
-        {
-            kind = LibEditMode.SettingType.Slider,
-            name = 'Live Maximum Height', desc = 'Largest automatic height of the live message feed.',
-            default = DEFAULT_MAX_HEIGHT, minValue = 150, maxValue = 900, valueStep = 10,
-            get = function() return db().maxHeight end,
-            set = function(_, value, fromReset)
-                db().maxHeight = (fromReset and DEFAULT_MAX_HEIGHT or value)
+                db().height = (fromReset and DEFAULT_HEIGHT or value)
                 chat:ApplyLayout(true)
             end,
         },
@@ -387,7 +431,7 @@ function chat:BuildPanel()
             get = function() return db().backgroundOpacity end,
             set = function(_, value, fromReset)
                 db().backgroundOpacity = (fromReset and 0 or value)
-                if chat.panel then chat.panel.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity) end
+                chat:ApplyPanelBackgroundOpacity()
                 chat:Touch()
             end,
         },
@@ -449,19 +493,19 @@ function chat:BuildPanel()
     self:Recompute()
 end
 
-function chat:ApplyLayout(rebuild, panelHeight, animate)
+function chat:ApplyLayout(rebuild)
     local frame = self.panel
     if not frame then return end
-    panelHeight = math.max(panelHeight or db().historyHeight or DEFAULT_HISTORY_HEIGHT, MIN_LIVE_PANEL_HEIGHT)
+    local panelHeight = db().height or DEFAULT_HEIGHT
     frame:SetSize(db().width, panelHeight)
     frame:SetScale(db().scale or 1)
-    frame.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
+    frame.bg:SetSize(db().width - 12, panelHeight - 30)
+    self:ApplyPanelBackgroundOpacity()
 
     local viewport = panelHeight - PANEL_CHROME_HEIGHT
     self.feed:SetWidth(db().width - PAD * 2)
-    self.feed:SetLiveContentLimit(math.max(
-        (db().maxHeight or DEFAULT_MAX_HEIGHT) - PANEL_CHROME_HEIGHT - PAD * 2, 0))
-    self.feed:SetViewportHeight(math.max(viewport, 20), animate)
+    self.feed:SetLiveContentLimit(math.max(viewport - PAD * 2, 0))
+    self.feed:SetViewportHeight(viewport)
 
     if rebuild then self:Recompute() end
 end
@@ -492,78 +536,40 @@ function chat:FadeRegion(region, stateKey, target, dt)
     region:SetAlpha(current)
 end
 
---- Applies either the fixed history height or the content-sized live height.
---- Hover transitions resize over successive frames so the existing live rows
---- remain visually fixed while older history is revealed above them.
----@param dt number? Frame elapsed time when called from OnUpdate.
-function chat:UpdatePanelSize(dt)
-    if self.updatingPanelSize or not self.panel or not self.feed then return end
-
-    local historyVisible = self.feed:IsHistoryVisible()
-    local contentHeight = self.feed:GetVisibleContentHeight()
-    local targetHeight = historyVisible and (db().historyHeight or DEFAULT_HISTORY_HEIGHT)
-        or math.max(MIN_LIVE_PANEL_HEIGHT, contentHeight + PANEL_CHROME_HEIGHT + PAD * 2)
-    local currentHeight = self.panel:GetHeight() or 0
-    if math.abs(currentHeight - targetHeight) < 0.5 then
-        if not self.feed:IsFadingHistoryOut() then self.panelSizeTransition = false end
-        self.feed:FinishLayoutTransaction()
-        return
-    end
-
-    -- Calls from data changes should retain the existing immediate layout.
-    -- Only the hover/history handoff is stepped by the panel's OnUpdate.
-    if self.panelSizeTransition and not dt then return end
-    local nextHeight = targetHeight
-    if self.panelSizeTransition then
-        nextHeight = currentHeight + (targetHeight - currentHeight) * math.min(dt * PANEL_RESIZE_RATE, 1)
-        if math.abs(nextHeight - targetHeight) < 0.5 then
-            nextHeight = targetHeight
-            if not self.feed:IsFadingHistoryOut() then self.panelSizeTransition = false end
-        end
-    end
-
-    self.updatingPanelSize = true
-    self:ApplyLayout(false, nextHeight, false)
-    if self.hovering and not self.feed:IsBrowsingHistory() then
-        -- Keep the newest live rows at their current screen position while
-        -- the bottom-anchored viewport grows upward into history.
-        self.feed:ScrollToBottom(true, false)
-    elseif not historyVisible and not self.panelSizeTransition then
-        self.feed:ScrollToBottom(true)
-    end
-    self.updatingPanelSize = false
-end
-
 function chat:UpdateFade(dt)
     if not self.panel then return end
-    local hovering = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
-    if hovering ~= self.hovering then
-        self.hovering = hovering
-        self.panelSizeTransition = true
-        self.feed:SetHistoryPreview(hovering, db().fadeEnabled == true)
-        if hovering and not self.feed:IsBrowsingHistory() then self.feed:ScrollToBottom(true) end
-        self:Touch()
-    end
     local now = (type(GetTime) == 'function') and GetTime() or 0
     local historyVisible = self.feed and self.feed:IsHistoryVisible()
+    local panelHovered = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
+    local backgroundHovered = panelHovered
+    if backgroundHovered ~= self.backgroundHovered then
+        self.backgroundHovered = backgroundHovered
+        self:ApplyPanelBackgroundOpacity()
+    end
+    local inputFocused = Input:HasFocus()
+    local gamepadFocused = false
+    local gamepadMode = _G.GamepadMode
+    local focusManager = gamepadMode and gamepadMode.FrameControlsManager
+    if focusManager and focusManager.isUIFocused and focusManager.GetActiveFrame then
+        gamepadFocused = focusManager:GetActiveFrame() == self.panel
+    end
+    local engaged = historyVisible or panelHovered or inputFocused or gamepadFocused
+    if self.feed then self.feed:SetFadePaused(engaged, now) end
     local hasVisibleMessages = self.feed and self.feed:UpdateMessageFade(
         now, db().fadeDelay or 15,
-        db().fadeEnabled == true and (not historyVisible or self.feed:IsFadingHistoryOut())
+        db().fadeEnabled == true
     ) or false
     historyVisible = self.feed and self.feed:IsHistoryVisible()
-    self:UpdatePanelSize(dt)
-    local tabsHovered = self.filterBar and self.filterBar:IsMouseOver()
-    local inputFocused = Input:HasFocus()
 
     -- The filter controls are discoverable from their own hover region, while
     -- the input strip only exists while Blizzard's edit box is active.
-    self:FadeRegion(self.filterBar, 'tabsAlpha', tabsHovered and 1 or 0, dt)
+    self:FadeRegion(self.filterBar, 'tabsAlpha', panelHovered and 1 or 0, dt)
     self:FadeRegion(self.inputStrip, 'inputAlpha', inputFocused and 1 or 0, dt)
 
     -- Individual lines expire from their own receive times. The panel remains
     -- active while a line, tab interaction, or focused input is visible.
     local target = db().activeOpacity
-    if db().fadeEnabled and not historyVisible and not hasVisibleMessages and not tabsHovered and not inputFocused then
+    if db().fadeEnabled and not engaged and not hasVisibleMessages then
         target = db().backgroundOpacity
     end
     local current = self.fadeAlpha
@@ -595,8 +601,11 @@ end
 function chat:RefreshFilterButtons()
     for key, btn in pairs(self.filterBtns) do
         local active = key == (db().filter or 'ALL')
-        btn:GetFontString():SetTextColor(active and 1 or 0.55, active and 1 or 0.55, active and 1 or 0.55, 1)
-        if active then btn:LockHighlight() else btn:UnlockHighlight() end
+        if active then
+            btn.label:SetTextColor(1, 0.82, 0, 1)
+        else
+            btn.label:SetTextColor(0.65, 0.65, 0.65, 1)
+        end
     end
 end
 
@@ -947,7 +956,11 @@ function chat:StyleIdentity(g, msg)
     self:SetTextPlain(g.name, name)
     g.name:SetFont(fetchFont(db().nameFontFace), db().nameFontSize, 'OUTLINE')
 
-    local class = msg.classFile or (msg.guid and self:ResolveIdentity(msg) and self.identByGuid[msg.guid].classFile)
+    local identity
+    if msg.guid and not isSecret(msg.guid) then
+        identity = self.identByGuid[msg.guid] or self:ResolveIdentity(msg)
+    end
+    local class = msg.classFile or (identity and identity.classFile)
     local cc = classColor(class)
     if cc then
         g.name:SetTextColor(cc.r, cc.g, cc.b, 1)
@@ -982,27 +995,34 @@ function chat:StyleIdentity(g, msg)
             iconKey = 'u:' .. unit
             apply = function() SetPortraitTexture(g.icon, unit) end
         end
-    elseif msg.category == 'SYSTEM' then
-        iconKey = ('c:%d:%d:%d'):format(math.floor(r * 100), math.floor(gg * 100), math.floor(b * 100))
-        apply = function()
-            g.icon:SetTexture(nil)
-            g.icon:SetColorTexture(r, gg, b, 0.9)
-        end
     elseif unit and SetPortraitTexture then
         iconKey = 'u:' .. unit
         apply = function() SetPortraitTexture(g.icon, unit) end
     else
-        local atlas = raceAtlas(msg.raceFile or (self:ResolveIdentity(msg) or {}).raceFile, msg.sex)
-        local coords = classAtlasCoords(class)
+        local atlas = raceAtlas(msg.raceFile or (identity and identity.raceFile), msg.sex)
         if atlas then
             iconKey = 'a:' .. atlas
             apply = function() g.icon:SetAtlas(atlas) end
-        elseif coords then
-            iconKey = 'k:' .. tostring(class)
-            apply = function()
-                g.icon:SetTexture('Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes')
-                g.icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+        else
+            local coords = classAtlasCoords(class)
+            if coords then
+                iconKey = 'k:' .. class
+                apply = function()
+                    g.icon:SetTexture('Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes')
+                    g.icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+                end
             end
+        end
+    end
+
+    -- Every source category gets a recognizable icon when no identity portrait
+    -- is available. Keep a generic final fallback for unknown future sources.
+    if not iconKey then
+        local fileID = CATEGORY_PLACEHOLDER_ICONS[msg.category] or TOTAL_FALLBACK_ICON
+        iconKey = 'f:' .. fileID
+        apply = function()
+            g.icon:SetTexture(fileID)
+            g.icon:SetTexCoord(0, 1, 0, 1)
         end
     end
 
@@ -1019,11 +1039,20 @@ function chat:StyleIdentity(g, msg)
         g._iconKey = nil
     end
 
-    -- Specialization badge.
-    local id = msg.guid and self.identByGuid[msg.guid]
-    if shown and id and id.spec and id.spec.icon then
-        g.spec:SetTexture(id.spec.icon)
+    -- Keep specialization/class art in the small corner badge. The primary
+    -- icon remains the unit/race portrait (or the NPC creature portrait).
+    local specIcon = identity and identity.spec and identity.spec.icon
+    if shown and specIcon then
+        g.spec:SetTexture(specIcon)
+        g.spec:SetTexCoord(0, 1, 0, 1)
         g.spec:Show()
+    elseif shown then
+        local coords = classAtlasCoords(class)
+        if coords then
+            g.spec:SetTexture('Interface\\Glues\\CharacterCreate\\UI-CharacterCreate-Classes')
+            g.spec:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+            g.spec:Show()
+        end
     end
 
     if unit then
@@ -1148,7 +1177,6 @@ function chat:Recompute()
 end
 
 function chat:OnFeedChanged()
-    self:UpdatePanelSize()
     if not self.returnButton or not self.feed then return end
     if not self.feed:IsBrowsingHistory() or self.feed:IsAtBottom() then
         self.returnButton:Hide()
@@ -1291,8 +1319,7 @@ function chat:GetDefaults()
             positions = {},
             -- Sizing / appearance
             width = 520,
-            historyHeight = DEFAULT_HISTORY_HEIGHT,
-            maxHeight = DEFAULT_MAX_HEIGHT,
+            height = DEFAULT_HEIGHT,
             scale = 1,
             activeOpacity = 1,
             backgroundOpacity = 0,
@@ -1417,17 +1444,11 @@ function chat:BuildArgs()
                     get = function() return db().width end,
                     set = function(_, v) db().width = v; chat:ApplyLayout(true) end,
                 },
-                historyHeight = {
-                    name = 'History Height', desc = 'Panel height while hovering or scrolling through history.',
-                    type = 'range', min = 300, max = 900, step = 10, order = 2,
-                    get = function() return db().historyHeight end,
-                    set = function(_, v) db().historyHeight = v; chat:ApplyLayout(true) end,
-                },
-                maxHeight = {
-                    name = 'Live Maximum Height', desc = 'Largest automatic height of the live message feed.',
-                    type = 'range', min = 150, max = 900, step = 10, order = 2.5,
-                    get = function() return db().maxHeight end,
-                    set = function(_, v) db().maxHeight = v; chat:ApplyLayout(true) end,
+                height = {
+                    name = 'Height', desc = 'Fixed height of the chat panel.',
+                    type = 'range', min = 200, max = 900, step = 10, order = 2,
+                    get = function() return db().height end,
+                    set = function(_, v) db().height = v; chat:ApplyLayout(true) end,
                 },
                 scale = {
                     name = 'Scale', desc = 'Overall panel scale.',
@@ -1445,7 +1466,7 @@ function chat:BuildArgs()
                     name = 'Background Opacity', desc = 'Panel opacity after all visible messages fade.',
                     type = 'range', min = 0, max = 1, step = 0.05, order = 5,
                     get = function() return db().backgroundOpacity end,
-                    set = function(_, v) db().backgroundOpacity = v; chat:ApplyLayout() end,
+                    set = function(_, v) db().backgroundOpacity = v; chat:ApplyPanelBackgroundOpacity() end,
                 },
                 fadeEnabled = {
                     name = 'Auto-fade', desc = 'Fade each message after its delay, then fade the panel when none remain.',

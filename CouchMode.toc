@@ -1,4 +1,4 @@
-## Interface: 120005, 16001
+## Interface: 120105
 ## Title: CouchMode
 ## Notes: Utilities to make WoW a more 'Console-like' experience
 ## Author: Sel
@@ -11,5 +11,7 @@
 
 Libs/Libs.xml
 Core/Core.xml
+Modules/Chat/Resources/Data.lua
+Modules/Chat/Resources/CreatureDataRetail.lua
 Modules/Modules.xml
 CouchMode.lua

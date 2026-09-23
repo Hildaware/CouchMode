@@ -129,8 +129,8 @@ function M.CreateGroup(parent)
     iconBorder:SetAtlas(ICON_BORDER_ATLAS)
     -- The atlas's visual frame is offset within its bounds. Anchor opposite
     -- corners so it grows evenly around the portrait by 10px in each axis.
-    iconBorder:SetPoint('TOPRIGHT', icon, 'TOPRIGHT', 5, 5)
-    iconBorder:SetPoint('BOTTOMLEFT', icon, 'BOTTOMLEFT', -5, -5)
+    iconBorder:SetPoint('TOPRIGHT', icon, 'TOPRIGHT', 2, 2)
+    iconBorder:SetPoint('BOTTOMLEFT', icon, 'BOTTOMLEFT', -12, -6)
     iconBorder:Hide()
     g.iconBorder = iconBorder
 
@@ -240,6 +240,32 @@ function M.ResetGroup(g)
     g:SetPoint('TOPLEFT', parent, 'TOPLEFT')
     g:SetPoint('TOPRIGHT', parent, 'TOPRIGHT')
     g:Hide()
+end
+
+--- Applies the current live/history alpha state after a group becomes visible.
+---@param g Frame
+---@param historyVisible boolean
+function M.ApplyDisplayAlpha(g, historyVisible)
+    local messages = g.groupData and g.groupData.messages or {}
+    local lineAlphas = g._lineAlphas
+    local headerAlpha = 0
+
+    for i = 1, #messages do
+        local liveAlpha = (lineAlphas and lineAlphas[i]) or 1
+        local alpha = historyVisible and 1 or liveAlpha
+        local line = g.lines[i]
+        if line and line:IsShown() and line:GetAlpha() ~= alpha then
+            line:SetAlpha(alpha)
+        end
+        headerAlpha = math.max(headerAlpha, alpha)
+    end
+
+    if g.background:GetAlpha() ~= headerAlpha then g.background:SetAlpha(headerAlpha) end
+    if g.name:GetAlpha() ~= headerAlpha then g.name:SetAlpha(headerAlpha) end
+    if g.channel:GetAlpha() ~= headerAlpha then g.channel:SetAlpha(headerAlpha) end
+    if g.icon:GetAlpha() ~= headerAlpha then g.icon:SetAlpha(headerAlpha) end
+    if g.iconBorder:GetAlpha() ~= headerAlpha then g.iconBorder:SetAlpha(headerAlpha) end
+    if g.spec:GetAlpha() ~= headerAlpha then g.spec:SetAlpha(headerAlpha) end
 end
 
 --#endregion
