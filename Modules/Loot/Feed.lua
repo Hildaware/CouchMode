@@ -20,6 +20,8 @@ local PADDING = 4
 local ICON_SIZE = 22
 local ICON_LEFT = 6
 local ICON_GAP = 6
+local QUEST_ICON_SIZE = 16
+local QUEST_ICON_GAP = 4
 local TEXT_PAD = 6
 local FADE_TIME = 0.25
 
@@ -43,6 +45,11 @@ local function createRow(parent)
     icon:SetPoint('LEFT', row, 'LEFT', ICON_LEFT, 0)
     icon:Hide()
     row.icon = icon
+
+    local questIcon = row:CreateTexture(nil, 'ARTWORK')
+    questIcon:SetSize(QUEST_ICON_SIZE, QUEST_ICON_SIZE)
+    questIcon:Hide()
+    row.questIcon = questIcon
 
     local label = row:CreateFontString(nil, 'OVERLAY', 'ChatFontNormal')
     label:SetJustifyH('LEFT')
@@ -179,6 +186,8 @@ function Feed:ReleaseRow(row)
     row.label:SetTextColor(1, 1, 1, 1)
     row.icon:Hide()
     row.icon:SetTexture(nil)
+    row.questIcon:Hide()
+    row.questIcon:SetTexture(nil)
     row:Hide()
     row:ClearAllPoints()
     self.rowPool[#self.rowPool + 1] = row
@@ -207,15 +216,29 @@ function Feed:RenderRow(row, entry)
     addon.Utils.apply_border_textures(row, row.border, true, 1,
         border and border[1] or 0.3, border and border[2] or 0.3, border and border[3] or 0.3, 1)
 
-    row.label:ClearAllPoints()
+    local labelOffset = TEXT_PAD
     if presented.icon then
         row.icon:SetTexture(presented.icon)
         row.icon:Show()
-        row.label:SetPoint('LEFT', row, 'LEFT', ICON_LEFT + ICON_SIZE + ICON_GAP, 0)
+        labelOffset = ICON_LEFT + ICON_SIZE + ICON_GAP
     else
         row.icon:Hide()
-        row.label:SetPoint('LEFT', row, 'LEFT', TEXT_PAD, 0)
+        row.icon:SetTexture(nil)
     end
+
+    row.questIcon:ClearAllPoints()
+    if presented.questIconAtlas then
+        row.questIcon:SetAtlas(presented.questIconAtlas)
+        row.questIcon:SetPoint('LEFT', row, 'LEFT', labelOffset, 0)
+        row.questIcon:Show()
+        labelOffset = labelOffset + QUEST_ICON_SIZE + QUEST_ICON_GAP
+    else
+        row.questIcon:Hide()
+        row.questIcon:SetTexture(nil)
+    end
+
+    row.label:ClearAllPoints()
+    row.label:SetPoint('LEFT', row, 'LEFT', labelOffset, 0)
     row.label:SetPoint('RIGHT', row, 'RIGHT', -TEXT_PAD, 0)
 end
 

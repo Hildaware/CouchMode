@@ -369,6 +369,7 @@ end
 ---@field progressMax number?   Reputation tier width (nextReactionThreshold - currentReactionThreshold)
 ---@field count       number?   Carried item count
 ---@field itemID      number?   Item id
+---@field isQuestItem boolean? Whether the item is flagged as a quest item in the bags
 ---@field currencyID  number?   Currency id
 ---@field needsRefresh boolean? Item data or count still pending
 

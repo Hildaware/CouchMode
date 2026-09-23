@@ -30,6 +30,8 @@ local DEFAULT_HEIGHT = 300
 local NEUTRAL = { r = 0.16, g = 0.16, b = 0.16 }
 local MONEY = { r = 0.83, g = 0.68, b = 0.21 }
 local REPUTATION = { r = 0.30, g = 0.58, b = 0.95 }
+local QUEST = { r = 1, g = 0.82, b = 0 }
+local QUEST_ICON_ATLAS = 'QuestNormal'
 local REPUTATION_ICON = 'Interface\\Icons\\achievement_reputation_01'
 
 -- Row backgrounds are semi-transparent so the feed behind them shows through.
@@ -303,12 +305,49 @@ end
 --#region ── Item data refresh ─────────────────────────────────────────────────
 
 --- Re-resolves uncached item rows (data load) and refreshes carried counts.
+local function getQuestItemIDsInBags()
+    local questItemIDs = {}
+    local containers = C_Container
+    if not containers or type(containers.GetContainerNumSlots) ~= 'function'
+        or type(containers.GetContainerItemInfo) ~= 'function'
+        or type(containers.GetContainerItemQuestInfo) ~= 'function' then
+        return questItemIDs
+    end
+
+    local firstBag = BACKPACK_CONTAINER or 0
+    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+    for bag = firstBag, lastBag do
+        local ok, slotCount = pcall(containers.GetContainerNumSlots, bag)
+        if ok and type(slotCount) == 'number' then
+            for slot = 1, slotCount do
+                local itemOk, itemInfo = pcall(containers.GetContainerItemInfo, bag, slot)
+                local itemID = itemOk and itemInfo and itemInfo.itemID
+                if type(itemID) == 'number' and not Sources.isSecret(itemID) then
+                    local questOk, questInfo = pcall(containers.GetContainerItemQuestInfo, bag, slot)
+                    if questOk and questInfo and questInfo.isQuestItem == true then
+                        questItemIDs[itemID] = true
+                    end
+                end
+            end
+        end
+    end
+    return questItemIDs
+end
+
 function loot:RefreshItems()
     if not db().enabled then return end
     local changed = false
+    local questItemIDs
     for i = 1, #self.session do
         local entry = self.session[i]
         if entry.kind == 'items' and entry.needsRefresh then
+            questItemIDs = questItemIDs or getQuestItemIDsInBags()
+            local itemID = entry.itemID
+            if type(itemID) == 'number' and not Sources.isSecret(itemID)
+                and questItemIDs[itemID] and not entry.isQuestItem then
+                entry.isQuestItem = true
+                changed = true
+            end
             if Sources.EnrichItem(entry, { withCount = true }) then changed = true end
             if Sources.IsItemResolved(entry) then entry.needsRefresh = nil end
         end
@@ -434,6 +473,10 @@ function loot:PresentEntry(entry)
         if not r or not quality or quality < 2 then
             r, g, b = NEUTRAL.r, NEUTRAL.g, NEUTRAL.b
         end
+        local isQuestItem = entry.isQuestItem == true
+        if isQuestItem then
+            r, g, b = QUEST.r, QUEST.g, QUEST.b
+        end
         local text = entry.name or 'Item'
         if entry.count and entry.count > 0 then
             text = ('%s (%d)'):format(text, entry.count)
@@ -441,6 +484,7 @@ function loot:PresentEntry(entry)
         return {
             text = text,
             icon = entry.icon,
+            questIconAtlas = isQuestItem and QUEST_ICON_ATLAS or nil,
             hyperlink = entry.hyperlink,
             bg = { r * 0.35, g * 0.35, b * 0.35, ROW_BG_ALPHA },
             border = { r, g, b },
