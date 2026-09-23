@@ -122,11 +122,11 @@ function map.applyToolbarPosition()
     local db = addon.db.profile.minimap ---@type MinimapDB
     map.toolbar:ClearAllPoints()
     if db.toolbarDock == "bottom" then
-        map.toolbar:SetPoint("TOPLEFT", map.container, "BOTTOMLEFT", 0, db.borderSize)
-        map.toolbar:SetPoint("TOPRIGHT", map.container, "BOTTOMRIGHT", 0, 0)
+        map.toolbar:SetPoint("TOPLEFT", map.container, "BOTTOMLEFT", 0, 8)
+        map.toolbar:SetPoint("TOPRIGHT", map.container, "BOTTOMRIGHT", 0, 8)
     else
-        map.toolbar:SetPoint("BOTTOMLEFT", map.container, "TOPLEFT", 0, -db.borderSize)
-        map.toolbar:SetPoint("BOTTOMRIGHT", map.container, "TOPRIGHT", 0, 0)
+        map.toolbar:SetPoint("BOTTOMLEFT", map.container, "TOPLEFT", 0, -14)
+        map.toolbar:SetPoint("BOTTOMRIGHT", map.container, "TOPRIGHT", 0, -14)
     end
     map.applyBorder()
 end
@@ -135,17 +135,29 @@ function map.createToolbar()
     local db = addon.db.profile.minimap ---@type MinimapDB
 
     map.toolbar = CreateFrame("Frame", "CTMinimapToolbar", UIParent)
-    map.toolbar:SetHeight(24)
+    map.toolbar:SetHeight(50)
     map.applyToolbarPosition()
     map.toolbar:SetFrameStrata("DIALOG")
     map.toolbar:SetFrameLevel(map.container:GetFrameLevel() + 50)
     map.toolbar:Hide()
 
-    local toolbar_bg = map.toolbar:CreateTexture(nil, "BACKGROUND")
-    toolbar_bg:SetAllPoints(map.toolbar)
-    toolbar_bg:SetColorTexture(0, 0, 0, 0.6)
+    local toolbar_bg_left = map.toolbar:CreateTexture(nil, "BACKGROUND", nil, 1)
+    toolbar_bg_left:SetAtlas("UI-Frame-DiamondMetal-Header-CornerLeft", true)
+    toolbar_bg_left:SetSize(32, 39)
+    toolbar_bg_left:SetScale(0.8)
+    toolbar_bg_left:SetPoint("LEFT", map.toolbar, "LEFT", -7, 0)
 
-    map.toolbarBorders = map.MapUtils.create_border_textures(map.toolbar, map.toolbar)
+    local toolbar_bg_right = map.toolbar:CreateTexture(nil, "BACKGROUND", nil, 1)
+    toolbar_bg_right:SetAtlas("UI-Frame-DiamondMetal-Header-CornerRight", true)
+    toolbar_bg_right:SetSize(32, 39)
+    toolbar_bg_right:SetScale(0.8)
+    toolbar_bg_right:SetPoint("RIGHT", map.toolbar, "RIGHT", 7, 0)
+
+    local toolbar_bg = map.toolbar:CreateTexture(nil, "BACKGROUND")
+    toolbar_bg:SetAtlas("_UI-Frame-DiamondMetal-Header-Tile")
+    toolbar_bg:SetHorizTile(true)
+    toolbar_bg:SetPoint("TOPLEFT", toolbar_bg_left, "TOPRIGHT")
+    toolbar_bg:SetPoint("BOTTOMRIGHT", toolbar_bg_right, "BOTTOMLEFT")
 
     -- Settings button
     local settings_btn = map.MapUtils.create_toolbar_button(map.toolbar, "echoes-icon", function()

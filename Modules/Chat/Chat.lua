@@ -30,6 +30,7 @@ local PANEL_CHROME_HEIGHT = (PAD + FILTER_BAR_H + PAD) + (PAD + INPUT_STRIP_H + 
 local MIN_LIVE_PANEL_HEIGHT = PANEL_CHROME_HEIGHT + 20
 local DEFAULT_HISTORY_HEIGHT = 400
 local DEFAULT_MAX_HEIGHT = 400
+local PANEL_RESIZE_RATE = 12
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
 
@@ -58,6 +59,7 @@ chat.fadeAlpha = 1
 chat.tabsAlpha = 0
 chat.inputAlpha = 0
 chat.hovering = false
+chat.panelSizeTransition = false
 chat.suppressed = nil     ---@type table<Frame, table>?
 
 --#endregion
@@ -318,7 +320,13 @@ function chat:BuildPanel()
     end
 
     LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
-        db().positions[layoutName] = { point = point, x = x, y = y }
+        -- LibEditMode can dispatch a frame-position callback before it has
+        -- resolved the active layout name. There is nowhere valid to persist
+        -- that position yet, so wait for a layout-scoped callback instead.
+        if not layoutName then return end
+        local settings = db()
+        settings.positions = settings.positions or {}
+        settings.positions[layoutName] = { point = point, x = x, y = y }
     end, { point = 'BOTTOMLEFT', x = 40, y = 220 }, 'CouchMode Chat')
 
     LibEditMode:AddFrameSettings(frame, {
@@ -485,7 +493,10 @@ function chat:FadeRegion(region, stateKey, target, dt)
 end
 
 --- Applies either the fixed history height or the content-sized live height.
-function chat:UpdatePanelSize()
+--- Hover transitions resize over successive frames so the existing live rows
+--- remain visually fixed while older history is revealed above them.
+---@param dt number? Frame elapsed time when called from OnUpdate.
+function chat:UpdatePanelSize(dt)
     if self.updatingPanelSize or not self.panel or not self.feed then return end
 
     local historyVisible = self.feed:IsHistoryVisible()
@@ -494,13 +505,32 @@ function chat:UpdatePanelSize()
         or math.max(MIN_LIVE_PANEL_HEIGHT, contentHeight + PANEL_CHROME_HEIGHT + PAD * 2)
     local currentHeight = self.panel:GetHeight() or 0
     if math.abs(currentHeight - targetHeight) < 0.5 then
+        if not self.feed:IsFadingHistoryOut() then self.panelSizeTransition = false end
         self.feed:FinishLayoutTransaction()
         return
     end
 
+    -- Calls from data changes should retain the existing immediate layout.
+    -- Only the hover/history handoff is stepped by the panel's OnUpdate.
+    if self.panelSizeTransition and not dt then return end
+    local nextHeight = targetHeight
+    if self.panelSizeTransition then
+        nextHeight = currentHeight + (targetHeight - currentHeight) * math.min(dt * PANEL_RESIZE_RATE, 1)
+        if math.abs(nextHeight - targetHeight) < 0.5 then
+            nextHeight = targetHeight
+            if not self.feed:IsFadingHistoryOut() then self.panelSizeTransition = false end
+        end
+    end
+
     self.updatingPanelSize = true
-    self:ApplyLayout(false, targetHeight, not historyVisible)
-    if not historyVisible then self.feed:ScrollToBottom(true) end
+    self:ApplyLayout(false, nextHeight, false)
+    if self.hovering and not self.feed:IsBrowsingHistory() then
+        -- Keep the newest live rows at their current screen position while
+        -- the bottom-anchored viewport grows upward into history.
+        self.feed:ScrollToBottom(true, false)
+    elseif not historyVisible and not self.panelSizeTransition then
+        self.feed:ScrollToBottom(true)
+    end
     self.updatingPanelSize = false
 end
 
@@ -509,16 +539,19 @@ function chat:UpdateFade(dt)
     local hovering = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
     if hovering ~= self.hovering then
         self.hovering = hovering
-        self.feed:SetHistoryPreview(hovering)
+        self.panelSizeTransition = true
+        self.feed:SetHistoryPreview(hovering, db().fadeEnabled == true)
         if hovering and not self.feed:IsBrowsingHistory() then self.feed:ScrollToBottom(true) end
         self:Touch()
     end
     local now = (type(GetTime) == 'function') and GetTime() or 0
     local historyVisible = self.feed and self.feed:IsHistoryVisible()
     local hasVisibleMessages = self.feed and self.feed:UpdateMessageFade(
-        now, db().fadeDelay or 15, db().fadeEnabled == true and not historyVisible
+        now, db().fadeDelay or 15,
+        db().fadeEnabled == true and (not historyVisible or self.feed:IsFadingHistoryOut())
     ) or false
-    self:UpdatePanelSize()
+    historyVisible = self.feed and self.feed:IsHistoryVisible()
+    self:UpdatePanelSize(dt)
     local tabsHovered = self.filterBar and self.filterBar:IsMouseOver()
     local inputFocused = Input:HasFocus()
 
@@ -1005,7 +1038,12 @@ end
 ---@param isFirst boolean
 function chat:StyleLine(fs, msg, isFirst)
     local r, g, b = chatTypeColor(msg.event)
-    fs:SetTextColor(r, g, b, 1)
+    -- Rebuilds re-style every line; skip the engine call when the color is
+    -- unchanged (chat-type colors are stable per event).
+    if fs._colorR ~= r or fs._colorG ~= g or fs._colorB ~= b then
+        fs:SetTextColor(r, g, b, 1)
+        fs._colorR, fs._colorG, fs._colorB = r, g, b
+    end
 end
 
 function chat:RefreshVisibleIcons()
@@ -1098,7 +1136,6 @@ function chat:Recompute()
     self.lastVisible = filtered[#filtered]
     if self.feed then
         self.feed:SetFonts(self:FontMetrics())
-        self.feed.showDividers = db().dividers ~= false
         self.feed:Rebuild(groups)
         if preserveBrowse then
             local removedHeight = math.max(previousContentHeight - self.feed:GetContentHeight(), 0)
@@ -1271,8 +1308,6 @@ function chat:GetDefaults()
             -- Character-by-character reveal (same behaviour as Chat Bubbles)
             revealText = true,
             revealSpeed = 44,
-            -- Divider between messages
-            dividers = true,
             -- History
             historyCap = 500,
             groupWindow = 60,
@@ -1479,12 +1514,6 @@ function chat:BuildArgs()
                     disabled = function() return not db().revealText end,
                     get = function() return db().revealSpeed end,
                     set = function(_, v) db().revealSpeed = v; chat:Recompute() end,
-                },
-                dividers = {
-                    name = 'Dividers', desc = 'Draw an ornamental divider between messages.',
-                    type = 'toggle', order = 19,
-                    get = function() return db().dividers ~= false end,
-                    set = function(_, v) db().dividers = v; chat:Recompute() end,
                 },
                 historyCap = {
                     name = 'History Cap', desc = 'Maximum messages kept for the current login (not saved).',

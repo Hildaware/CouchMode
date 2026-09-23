@@ -552,7 +552,13 @@ function loot:BuildPanel()
     frame:SetScript('OnUpdate', function(_, dt) loot:UpdateFade(dt) end)
 
     LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
-        db().positions[layoutName] = { point = point, x = x, y = y }
+        -- LibEditMode can dispatch a frame-position callback before it has
+        -- resolved the active layout name. There is nowhere valid to persist
+        -- that position yet, so wait for a layout-scoped callback instead.
+        if not layoutName then return end
+        local settings = db()
+        settings.positions = settings.positions or {}
+        settings.positions[layoutName] = { point = point, x = x, y = y }
     end, { point = 'BOTTOMRIGHT', x = -40, y = 40 }, 'CouchMode Loot')
 
     LibEditMode:AddFrameSettings(frame, {

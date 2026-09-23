@@ -2,15 +2,15 @@
 Pure admission policy for the scrolling Chat feed.
 
 Each group supplies its measured height for every possible first displayed
-message, both with and without a leading divider. Live mode keeps the newest
-complete suffix that fits; history mode admits everything.
+message. Live mode keeps the newest complete suffix that fits; history mode
+admits everything.
 ]]
 
 local addonName, addon = ...
 local M = {}
 
 --- Builds a display plan for measured chat groups.
----@param groups table[] { firstEligible, lastMessage, plainHeights, dividedHeights }
+---@param groups table[] { firstEligible, lastMessage, heights }
 ---@param budget number Maximum content height in live mode.
 ---@param history boolean Whether every retained message should be displayed.
 ---@param groupGap number Vertical gap between displayed groups.
@@ -32,8 +32,7 @@ function M.Plan(groups, budget, history, groupGap)
                 plan.firstByGroup[i] = first
                 plan.displayed[i] = true
                 displayedCount = displayedCount + 1
-                local heights = displayedCount == 1 and group.plainHeights or group.dividedHeights
-                plan.contentHeight = plan.contentHeight + (heights[first] or 0)
+                plan.contentHeight = plan.contentHeight + (group.heights[first] or 0)
                 if displayedCount > 1 then
                     plan.contentHeight = plan.contentHeight + groupGap
                 end
@@ -44,7 +43,6 @@ function M.Plan(groups, budget, history, groupGap)
 
     budget = math.max(budget or 0, 0)
     local selectedMessages = 0
-    local oldestSelectedGroup
 
     for groupIndex = #groups, 1, -1 do
         local group = groups[groupIndex]
@@ -56,18 +54,14 @@ function M.Plan(groups, budget, history, groupGap)
                 if plan.displayed[groupIndex] then
                     local previousFirst = plan.firstByGroup[groupIndex]
                     candidateHeight = plan.contentHeight
-                        - (group.plainHeights[previousFirst] or 0)
-                        + (group.plainHeights[messageIndex] or 0)
+                        - (group.heights[previousFirst] or 0)
+                        + (group.heights[messageIndex] or 0)
                 elseif selectedMessages == 0 then
-                    candidateHeight = group.plainHeights[messageIndex] or 0
+                    candidateHeight = group.heights[messageIndex] or 0
                 else
-                    local previousOldest = groups[oldestSelectedGroup]
-                    local previousFirst = plan.firstByGroup[oldestSelectedGroup]
                     candidateHeight = plan.contentHeight
-                        - (previousOldest.plainHeights[previousFirst] or 0)
-                        + (previousOldest.dividedHeights[previousFirst] or 0)
                         + groupGap
-                        + (group.plainHeights[messageIndex] or 0)
+                        + (group.heights[messageIndex] or 0)
                 end
 
                 -- The newest message is always admitted. This is the single
@@ -80,7 +74,6 @@ function M.Plan(groups, budget, history, groupGap)
                 plan.firstByGroup[groupIndex] = messageIndex
                 plan.contentHeight = candidateHeight
                 selectedMessages = selectedMessages + 1
-                oldestSelectedGroup = groupIndex
             end
         end
     end

@@ -259,11 +259,15 @@ end
 function map.setupContainerScripts()
     local db = addon.db.profile.minimap ---@type MinimapDB
 
-    -- Border overlay: parented to container (clipped to its bounds), above all content
-    map.borderFrame = CreateFrame("Frame", nil, map.container)
-    map.borderFrame:SetAllPoints(map.container)
+    -- Chrome lives outside the clipping map container so its authored outer
+    -- padding is visible.
+    map.borderFrame = CreateFrame("Frame", nil, UIParent)
+    map.borderFrame:SetFrameStrata("MEDIUM")
     map.borderFrame:SetFrameLevel(map.container:GetFrameLevel() + 100)
-    map.borders = map.MapUtils.create_border_textures(map.borderFrame, map.container)
+    map.MapUtils.position_wow_border_frame(map.borderFrame, map.container, 0)
+    map.borders = map.MapUtils.create_wow_border_textures(map.borderFrame, map.borderFrame)
+    map.container:HookScript("OnShow", function() map.borderFrame:Show() end)
+    map.container:HookScript("OnHide", function() map.borderFrame:Hide() end)
     map.applyBorder()
 
     -- Container children: toolbar and indicators

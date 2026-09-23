@@ -54,17 +54,14 @@ function map.applyBorder()
     if not map.borders then return end
     local db = addon.db.profile.minimap ---@type MinimapDB
     local show = db.borderEnabled
-    local size = db.borderSize
     local r, g, b, a = db.borderR, db.borderG, db.borderB, db.borderA
+    local size = map.MapUtils.WOW_BORDER_SIZE
+    local outset = map.MapUtils.WOW_BORDER_OUTSET
 
-    map.MapUtils.apply_border_textures(map.container, map.borders, show, size, r, g, b, a)
-    if map.toolbarBorders then
-        map.MapUtils.apply_border_textures(map.toolbar, map.toolbarBorders, show, size, r, g, b, a)
-        if show then
-            -- Hide the edge shared with the minimap container
-            map.toolbarBorders[db.toolbarDock == "bottom" and "T" or "B"]:Hide()
-        end
+    if map.borderFrame then
+        map.MapUtils.position_wow_border_frame(map.borderFrame, map.container, outset)
     end
+    map.MapUtils.apply_wow_border_textures(map.borders, show, r, g, b, a, size)
 end
 
 function map.createZoneText()

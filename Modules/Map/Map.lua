@@ -199,7 +199,6 @@ function map:GetDefaults()
             worldMapShowTravel = true,
             toolbarDock = "top",
             borderEnabled = true,
-            borderSize = 2,
             borderR = 1,
             borderG = 1,
             borderB = 1,
@@ -371,7 +370,7 @@ function map:GetOptions()
                 args = {
                     borderEnabled = {
                         name = 'Enable',
-                        desc = 'Show a colored border around the minimap and world map.',
+                        desc = 'Show Blizzard-style panel chrome around the minimap and world map.',
                         type = 'toggle',
                         order = 1,
                         get = function() return addon.db.profile.minimap.borderEnabled end,
@@ -380,26 +379,11 @@ function map:GetOptions()
                             map.applyBorder()
                         end,
                     },
-                    borderSize = {
-                        name = 'Size',
-                        desc = 'Border thickness in pixels.',
-                        type = 'range',
-                        order = 2,
-                        min = 1,
-                        max = 20,
-                        step = 1,
-                        disabled = function() return not addon.db.profile.minimap.borderEnabled end,
-                        get = function() return addon.db.profile.minimap.borderSize end,
-                        set = function(_, value)
-                            addon.db.profile.minimap.borderSize = value
-                            map.applyBorder()
-                        end,
-                    },
                     borderColor = {
                         name = 'Color',
                         type = 'color',
                         hasAlpha = true,
-                        order = 3,
+                        order = 2,
                         disabled = function() return not addon.db.profile.minimap.borderEnabled end,
                         get = function()
                             local db = addon.db.profile.minimap ---@type MinimapDB
