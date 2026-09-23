@@ -127,8 +127,8 @@ function M.CreateGroup(parent)
     -- Decorative frame, matching the overhead bubble portrait.
     local iconBorder = g:CreateTexture(nil, 'OVERLAY', nil, 1)
     iconBorder:SetAtlas(ICON_BORDER_ATLAS)
-    -- The atlas's visual frame is offset within its bounds. Anchor opposite
-    -- corners so it grows evenly around the portrait by 10px in each axis.
+    -- The atlas's visual frame is offset within its bounds. Compact mode scales
+    -- these offsets along with the portrait so the frame keeps the same ratio.
     iconBorder:SetPoint('TOPRIGHT', icon, 'TOPRIGHT', 2, 2)
     iconBorder:SetPoint('BOTTOMLEFT', icon, 'BOTTOMLEFT', -12, -6)
     iconBorder:Hide()
@@ -341,31 +341,69 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     g.groupData = group
 
     local top = 0
+    local compactMode = feed.compactMode == true
+    local iconSize = compactMode and (ICON_SIZE / 2) or ICON_SIZE
+    local iconGap = compactMode and (ICON_GAP / 2) or ICON_GAP
+    local iconTopPad = compactMode and (ICON_TOP_PAD / 2) or ICON_TOP_PAD
 
     local showsIdentity = chat:GroupShowsIdentity(group)
     local hasIcon = false
     local channelH = feed.fonts.channel.size
     local nameH = feed.fonts.name.size
     if showsIdentity then
+        -- Release any prior pooled row's explicit widths before styling the
+        -- next identity so GetStringWidth measures the new speaker's name.
+        g.name:SetWidth(0)
+        g.channel:SetWidth(0)
         hasIcon = chat:StyleIdentity(g, first) == true
-        local headerX = hasIcon and (ICON_SIZE + ICON_GAP) or 0
-        local channelTop = top + (hasIcon and ICON_TOP_PAD or 0)
+        local headerX = hasIcon and (iconSize + iconGap) or 0
+        local channelTop = top + (hasIcon and iconTopPad or 0)
 
         g.icon:ClearAllPoints()
-        g.icon:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -(top + ICON_TOP_PAD))
+        g.icon:SetSize(iconSize, iconSize)
+        g.icon:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -(top + iconTopPad))
+        g.iconBorder:ClearAllPoints()
+        local borderScale = compactMode and 0.5 or 1
+        g.iconBorder:SetPoint('TOPRIGHT', g.icon, 'TOPRIGHT', 2 * borderScale, 2 * borderScale)
+        g.iconBorder:SetPoint('BOTTOMLEFT', g.icon, 'BOTTOMLEFT', -12 * borderScale, -6 * borderScale)
+        g.spec:ClearAllPoints()
+        g.spec:SetSize(compactMode and 7 or 14, compactMode and 7 or 14)
+        g.spec:SetPoint('BOTTOMRIGHT', g.icon, 'BOTTOMRIGHT', compactMode and 2.5 or 5, compactMode and -2.5 or -5)
+
         g.channel:ClearAllPoints()
-        g.channel:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
-        g.channel:SetPoint('RIGHT', g, 'RIGHT', -4, 0)
-
-        channelH = math.max(g.channel:GetHeight() or 0, feed.fonts.channel.size)
-        nameH = math.max(g.name:GetHeight() or 0, feed.fonts.name.size)
-
         g.name:ClearAllPoints()
-        g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -(channelTop + channelH + NAME_GAP))
-        g.name:SetPoint('RIGHT', g, 'RIGHT', -4, 0)
+        -- RebuildGroup can run before a pooled frame's anchors resolve, so its
+        -- GetWidth() may still be zero. The feed width is established before
+        -- groups are rendered and is stable for both new and pooled widgets.
+        local headerWidth = math.max(feed.width - headerX - 4, 1)
+        if compactMode then
+            local measuredNameWidth = g.name:GetStringWidth() or 0
+            local nameWidth = measuredNameWidth > 0
+                and math.min(measuredNameWidth, headerWidth * 0.6)
+                or (headerWidth * 0.4)
+            local channelWidth = math.max(headerWidth - nameWidth - NAME_GAP, 1)
+            g.name:SetWidth(math.max(nameWidth, 1))
+            g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
+            g.channel:SetWidth(channelWidth)
+            g.channel:SetPoint('LEFT', g.name, 'RIGHT', NAME_GAP, 0)
+            channelH = math.max(g.channel:GetHeight() or 0, feed.fonts.channel.size)
+            nameH = math.max(g.name:GetHeight() or 0, feed.fonts.name.size)
+        else
+            g.channel:SetWidth(headerWidth)
+            g.channel:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
+            channelH = math.max(g.channel:GetHeight() or 0, feed.fonts.channel.size)
+            g.name:SetWidth(headerWidth)
+            g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -(channelTop + channelH + NAME_GAP))
+            nameH = math.max(g.name:GetHeight() or 0, feed.fonts.name.size)
+        end
 
-        local textBottom = channelTop + channelH + NAME_GAP + nameH
-        local iconBottom = top + (hasIcon and (ICON_TOP_PAD + ICON_SIZE) or 0)
+        local textBottom
+        if compactMode then
+            textBottom = channelTop + math.max(channelH, nameH)
+        else
+            textBottom = channelTop + channelH + NAME_GAP + nameH
+        end
+        local iconBottom = top + (hasIcon and (iconTopPad + iconSize) or 0)
         local messageTop = math.max(textBottom, iconBottom) + MSG_TOP_GAP
 
         g.identityMenu:ClearAllPoints()
@@ -392,15 +430,21 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
 
     local function messageTopFor(groupTop)
         if not showsIdentity then return groupTop end
-        local channelTop = groupTop + (hasIcon and ICON_TOP_PAD or 0)
-        local textBottom = channelTop + channelH + NAME_GAP + nameH
-        local iconBottom = groupTop + (hasIcon and (ICON_TOP_PAD + ICON_SIZE) or 0)
+        local channelTop = groupTop + (hasIcon and iconTopPad or 0)
+        local textBottom
+        if compactMode then
+            textBottom = channelTop + math.max(channelH, nameH)
+        else
+            textBottom = channelTop + channelH + NAME_GAP + nameH
+        end
+        local iconBottom = groupTop + (hasIcon and (iconTopPad + iconSize) or 0)
         return math.max(textBottom, iconBottom) + MSG_TOP_GAP
     end
 
     -- Measure every line against its complete text. The admission planner uses
     -- these cached heights to trim within a grouped speaker block.
-    local available = math.max(feed.width - PADDING * 2, 40)
+    local messageLeft = compactMode and hasIcon and (iconSize + iconGap) or 0
+    local available = math.max(feed.width - PADDING * 2 - messageLeft, 40)
     local msgFace, msgSize = feed.fonts.msg.face, feed.fonts.msg.size
     local messages = group.messages
     local messageCount = #messages
@@ -419,7 +463,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     local suffixHeight = 0
     for i = messageCount, 1, -1 do
         suffixHeight = suffixHeight + g._lineHeights[i] + LINE_GAP
-        heights[i] = math.max(messageTopFor(0) + suffixHeight, ICON_TOP_PAD + ICON_SIZE)
+        heights[i] = math.max(messageTopFor(0) + suffixHeight, iconTopPad + iconSize)
     end
     g._metrics = {
         firstEligible = g._hasVisibleMessages == false and nil or (g._firstVisibleMessage or 1),
@@ -439,7 +483,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         if fs:GetAlpha() ~= alpha then fs:SetAlpha(alpha) end
         applyText(fs, msg.text, animate ~= false)
         fs:ClearAllPoints()
-        fs:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -y)
+        fs:SetPoint('TOPLEFT', g, 'TOPLEFT', messageLeft, -y)
         fs:Show()
         y = y + g._lineHeights[i] + LINE_GAP
     end

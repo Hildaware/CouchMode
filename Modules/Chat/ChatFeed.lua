@@ -60,6 +60,7 @@ function Feed.New(parent)
             channel = { face = nil, size = 10 },
         },
         historyMode = false,
+        compactMode = false,
         fadePaused = false,
         fadePausedAt = nil,
         liveContentLimit = 300,
@@ -87,6 +88,10 @@ end
 ---@param fonts table  { msg = {...}, name = {...}, channel = {...} }
 function Feed:SetFonts(fonts)
     self.fonts = fonts
+end
+
+function Feed:SetCompactMode(compactMode)
+    self.compactMode = compactMode == true
 end
 
 function Feed:SetWidth(width)

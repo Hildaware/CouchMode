@@ -326,6 +326,7 @@ function chat:BuildPanel()
 
     self.feed = addon.ChatFeedProto.New(scrollArea)
     self.feed:SetFonts(self:FontMetrics())
+    self.feed:SetCompactMode(db().compactMode)
     self.feed.onScrollChanged = function() chat:OnFeedChanged() end
 
     local strip = CreateFrame('Frame', nil, frame)
@@ -1165,6 +1166,7 @@ function chat:Recompute()
     self.lastVisible = filtered[#filtered]
     if self.feed then
         self.feed:SetFonts(self:FontMetrics())
+        self.feed:SetCompactMode(db().compactMode)
         self.feed:Rebuild(groups)
         if preserveBrowse then
             local removedHeight = math.max(previousContentHeight - self.feed:GetContentHeight(), 0)
@@ -1325,6 +1327,7 @@ function chat:GetDefaults()
             backgroundOpacity = 0,
             fadeEnabled = true,
             fadeDelay = 15,
+            compactMode = false,
             -- Text (each field is independently configurable)
             channelFontFace = 'Arial Narrow',
             channelFontSize = 11,
@@ -1480,58 +1483,65 @@ function chat:BuildArgs()
                     get = function() return db().fadeDelay end,
                     set = function(_, v) db().fadeDelay = v; chat:Touch() end,
                 },
-                channelHeader = { name = 'Channel', type = 'header', order = 8 },
+                compactMode = {
+                    name = 'Compact Mode',
+                    desc = 'Place the speaker name beside the channel, move messages directly below the header, and halve identity icon sizing.',
+                    type = 'toggle', order = 8,
+                    get = function() return db().compactMode end,
+                    set = function(_, v) db().compactMode = v; chat:Recompute() end,
+                },
+                channelHeader = { name = 'Channel', type = 'header', order = 9 },
                 channelFont = {
                     name = 'Font', desc = 'Font for the channel label.',
-                    type = 'select', style = 'dropdown', order = 9,
+                    type = 'select', style = 'dropdown', order = 10,
                     values = addon.Media.GetFontOptions(),
                     get = function() return db().channelFontFace end,
                     set = function(_, v) db().channelFontFace = v; chat:Recompute() end,
                 },
                 channelSize = {
                     name = 'Font Size', desc = 'Channel label size.',
-                    type = 'range', min = 6, max = 28, step = 1, order = 10,
+                    type = 'range', min = 6, max = 28, step = 1, order = 11,
                     get = function() return db().channelFontSize end,
                     set = function(_, v) db().channelFontSize = v; chat:Recompute() end,
                 },
-                nameHeader = { name = 'Name', type = 'header', order = 11 },
+                nameHeader = { name = 'Name', type = 'header', order = 12 },
                 nameFont = {
                     name = 'Font', desc = 'Font for the speaker name.',
-                    type = 'select', style = 'dropdown', order = 12,
+                    type = 'select', style = 'dropdown', order = 13,
                     values = addon.Media.GetFontOptions(),
                     get = function() return db().nameFontFace end,
                     set = function(_, v) db().nameFontFace = v; chat:Recompute() end,
                 },
                 nameSize = {
                     name = 'Font Size', desc = 'Speaker name size.',
-                    type = 'range', min = 6, max = 32, step = 1, order = 13,
+                    type = 'range', min = 6, max = 32, step = 1, order = 14,
                     get = function() return db().nameFontSize end,
                     set = function(_, v) db().nameFontSize = v; chat:Recompute() end,
                 },
-                msgHeader = { name = 'Message', type = 'header', order = 14 },
+                msgHeader = { name = 'Message', type = 'header', order = 15 },
                 msgFont = {
                     name = 'Font', desc = 'Font for message text.',
-                    type = 'select', style = 'dropdown', order = 15,
+                    type = 'select', style = 'dropdown', order = 16,
                     values = addon.Media.GetFontOptions(),
                     get = function() return db().msgFontFace end,
                     set = function(_, v) db().msgFontFace = v; chat:Recompute() end,
                 },
                 msgSize = {
                     name = 'Font Size', desc = 'Message text size.',
-                    type = 'range', min = 8, max = 28, step = 1, order = 16,
+                    type = 'range', min = 8, max = 28, step = 1, order = 17,
                     get = function() return db().msgFontSize end,
                     set = function(_, v) db().msgFontSize = v; chat:Recompute() end,
                 },
                 revealText = {
                     name = 'Reveal Text',
                     desc = 'Message text reveals character-by-character; the channel and name fade in.',
-                    type = 'toggle', order = 17,
+                    type = 'toggle', order = 18,
                     get = function() return db().revealText end,
                     set = function(_, v) db().revealText = v; chat:Recompute() end,
                 },
                 revealSpeed = {
                     name = 'Reveal Speed', desc = 'Characters revealed per second.',
-                    type = 'range', min = 5, max = 120, step = 1, order = 18,
+                    type = 'range', min = 5, max = 120, step = 1, order = 19,
                     disabled = function() return not db().revealText end,
                     get = function() return db().revealSpeed end,
                     set = function(_, v) db().revealSpeed = v; chat:Recompute() end,
