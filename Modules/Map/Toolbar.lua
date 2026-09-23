@@ -141,23 +141,7 @@ function map.createToolbar()
     map.toolbar:SetFrameLevel(map.container:GetFrameLevel() + 50)
     map.toolbar:Hide()
 
-    local toolbar_bg_left = map.toolbar:CreateTexture(nil, "BACKGROUND", nil, 1)
-    toolbar_bg_left:SetAtlas("UI-Frame-DiamondMetal-Header-CornerLeft", true)
-    toolbar_bg_left:SetSize(32, 39)
-    toolbar_bg_left:SetScale(0.8)
-    toolbar_bg_left:SetPoint("LEFT", map.toolbar, "LEFT", -7, 0)
-
-    local toolbar_bg_right = map.toolbar:CreateTexture(nil, "BACKGROUND", nil, 1)
-    toolbar_bg_right:SetAtlas("UI-Frame-DiamondMetal-Header-CornerRight", true)
-    toolbar_bg_right:SetSize(32, 39)
-    toolbar_bg_right:SetScale(0.8)
-    toolbar_bg_right:SetPoint("RIGHT", map.toolbar, "RIGHT", 7, 0)
-
-    local toolbar_bg = map.toolbar:CreateTexture(nil, "BACKGROUND")
-    toolbar_bg:SetAtlas("_UI-Frame-DiamondMetal-Header-Tile")
-    toolbar_bg:SetHorizTile(true)
-    toolbar_bg:SetPoint("TOPLEFT", toolbar_bg_left, "TOPRIGHT")
-    toolbar_bg:SetPoint("BOTTOMRIGHT", toolbar_bg_right, "BOTTOMLEFT")
+    addon.Components.MetalHeader.Create(map.toolbar)
 
     -- Settings button
     local settings_btn = map.MapUtils.create_toolbar_button(map.toolbar, "echoes-icon", function()

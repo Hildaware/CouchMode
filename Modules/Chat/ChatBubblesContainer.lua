@@ -6,6 +6,7 @@ local LSM = LibStub('LibSharedMedia-3.0')
 
 ---@class ChatBubblesModule
 local bubbles = addon:GetModule('ChatBubbles')
+local Animations = addon.Animations
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ end
 ---@field message       FontString
 ---@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
+---@field heightAnimation table? height-expansion tween while formatting
 ---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
 ---@field Format        fun(self: ChatBubblesMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?)
 
@@ -65,7 +67,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetText(text)
 
     local contentHeight, topPad
-    if issecretvalue and issecretvalue(text) then
+    if addon.Utils.IsSecretValue(text) then
         -- Can't measure a secret-aspected FontString; use safe defaults
         self.message:SetFont(fontPath, messageSize, 'OUTLINE')
         contentHeight = MIN_MESSAGE_HEIGHT
@@ -99,7 +101,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', leftPad, -topPad)
     self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -rightPad, -topPad)
 
-    if d.revealText and not (issecretvalue and issecretvalue(text)) then
+    if d.revealText and not addon.Utils.IsSecretValue(text) then
         self.message:SetText('')
         local total = #text
         local shown = 0
@@ -117,17 +119,18 @@ function messageProto:Format(text, type, noPortrait, noAnim)
         local fullHeight = contentHeight
         C_Timer.After(0, function()
             if not self.widget:IsShown() then return end
+            if self.heightAnimation then self.heightAnimation:Cancel() end
             self.widget:SetHeight(0)
-            local elapsed = 0
-            self.widget:SetScript('OnUpdate', function(f, dt)
-                elapsed = elapsed + dt
-                local t = math.min(elapsed / 0.25, 1)
-                f:SetHeight(fullHeight * (t * (2 - t))) -- ease-out
-                if t >= 1 then
-                    f:SetHeight(fullHeight)
-                    f:SetScript('OnUpdate', nil)
-                end
-            end)
+            local animation
+            animation = Animations.Progress(self.widget, 0.25, Animations.QuadraticOut,
+                function(eased, progress)
+                    if progress < 1 then self.widget:SetHeight(fullHeight * eased) end
+                end,
+                function()
+                    self.widget:SetHeight(fullHeight)
+                    if self.heightAnimation == animation then self.heightAnimation = nil end
+                end)
+            self.heightAnimation = animation
         end)
     end
 
@@ -161,7 +164,10 @@ local function _MessageReset(pool, msg)
         msg.revealTicker:Cancel()
         msg.revealTicker = nil
     end
-    msg.widget:SetScript('OnUpdate', nil)
+    if msg.heightAnimation then
+        msg.heightAnimation:Cancel()
+        msg.heightAnimation = nil
+    end
     msg.widget:SetParent(UIParent)
     msg.widget:SetAlpha(1)
     msg.widget:Hide()
@@ -181,6 +187,7 @@ end
 ---@field RepositionMessages fun(self: ChatBubblesController)
 ---@field RemoveMessage      fun(self: ChatBubblesController, msg: ChatBubblesMessage)
 ---@field FormatMessage      fun(self: ChatBubblesController, msg: ChatBubblesMessage, text: string, type: string): number
+---@field layoutAnimation   table?
 
 local controllerProto = {}
 controllerProto.__index = controllerProto
@@ -285,27 +292,25 @@ function controllerProto:RemoveMessage(msg)
 
     local DURATION = 0.5
     local startParentH = parentWidget:GetHeight()
-    local elapsed = 0
+    if self.layoutAnimation then self.layoutAnimation:Cancel() end
 
-    parentWidget:SetScript('OnUpdate', function(f, dt)
-        elapsed = elapsed + dt
-        local t = math.min(elapsed / DURATION, 1)
-        local eased = t * (2 - t) -- ease-out
+    local animation
+    animation = Animations.Progress(parentWidget, DURATION, Animations.QuadraticOut,
+        function(eased)
+            for _, entry in ipairs(sliding) do
+                local y = entry.startY + (entry.endY - entry.startY) * eased
+                entry.msg.widget:ClearAllPoints()
+                entry.msg.widget:SetPoint('BOTTOMLEFT', parentWidget, 'BOTTOMLEFT', 0, y)
+            end
 
-        for _, entry in ipairs(sliding) do
-            local y = entry.startY + (entry.endY - entry.startY) * eased
-            entry.msg.widget:ClearAllPoints()
-            entry.msg.widget:SetPoint('BOTTOMLEFT', parentWidget, 'BOTTOMLEFT', 0, y)
-        end
-
-        f:SetHeight(startParentH + (targetParentHeight - startParentH) * eased)
-
-        if t >= 1 then
-            f:SetScript('OnUpdate', nil)
-            f:SetHeight(targetParentHeight)
+            parentWidget:SetHeight(startParentH + (targetParentHeight - startParentH) * eased)
+        end,
+        function()
+            parentWidget:SetHeight(targetParentHeight)
             self:RepositionMessages()
-        end
-    end)
+            if self.layoutAnimation == animation then self.layoutAnimation = nil end
+        end)
+    self.layoutAnimation = animation
 end
 
 ---@param msg  ChatBubblesMessage
@@ -491,6 +496,10 @@ local function _BubbleReset(pool, bubble)
     if not bubble or not bubble.widget then return end
 
     -- Release messages directly — no animations during pool reset.
+    if bubble.controller.layoutAnimation then
+        bubble.controller.layoutAnimation:Cancel()
+        bubble.controller.layoutAnimation = nil
+    end
     local messages = bubble.widget.subWidgets.messages
     for i = #messages, 1, -1 do
         bubbles._messagePool:Release(table.remove(messages, i))
@@ -504,7 +513,6 @@ local function _BubbleReset(pool, bubble)
     bubble._bubbleToken = nil
     bubble.shownAt = nil
     bubble.bubbleDuration = nil
-    bubble.widget:SetScript('OnUpdate', nil)
     bubble.expiryTime = nil
     bubble.widget:SetHeight(bubble.minimumHeight)
     bubble.widget:SetScale(1)

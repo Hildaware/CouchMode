@@ -324,8 +324,10 @@ function Feed:UpdateRowFade(now, delay, enabled)
             alpha = 1
         end
 
-        row._alpha = alpha
-        row:SetAlpha(alpha)
+        if row._alpha ~= alpha then
+            row._alpha = alpha
+            row:SetAlpha(alpha)
+        end
         if alpha > 0 then hasVisibleRows = true end
     end
     return hasVisibleRows

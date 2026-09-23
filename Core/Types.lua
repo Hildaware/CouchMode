@@ -89,7 +89,8 @@
 ---@field worldMapFade           FadeState
 ---@field toolbarFade            FadeState
 ---@field containerFade          FadeState
----@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number, hideOnComplete?: boolean)
+---@field startFrameFade         fun(frame: Frame, state: FadeState, toAlpha: number, hideOnComplete?: boolean, duration?: number)
+---@field cancelFrameFade        fun(state: FadeState)
 ---@field grown                  boolean
 ---@field worldMapOpen           boolean
 ---@field origParent             Frame|nil

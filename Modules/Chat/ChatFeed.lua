@@ -12,6 +12,7 @@ local addonName, addon = ...
 local addon = addon or LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LayoutPolicy = addon.ChatFeedLayout
 local Widgets = addon.ChatFeedWidgets
+local Animations = addon.Animations
 
 local Feed = {}
 Feed.__index = Feed
@@ -68,9 +69,6 @@ function Feed.New(parent)
         onScrollChanged = nil,
     }, Feed)
 
-    local layoutDriver = CreateFrame('Frame', nil, scrollChild)
-    layoutDriver:Hide()
-    feed.layoutDriver = layoutDriver
 
     scrollFrame:SetScript('OnScrollRangeChanged', function()
         if feed.onScrollChanged then feed.onScrollChanged() end
@@ -141,7 +139,7 @@ function Feed:UpdateMessageFade(now, delay, enabled)
             local displayAlpha = historyVisible and 1 or alpha
             local line = lines[messageIndex]
             if line and line:GetAlpha() ~= displayAlpha then line:SetAlpha(displayAlpha) end
-            lineAlphas[messageIndex] = alpha
+            if lineAlphas[messageIndex] ~= alpha then lineAlphas[messageIndex] = alpha end
             liveHeaderAlpha = math.max(liveHeaderAlpha, alpha)
             if alpha > 0 then
                 hasVisibleMessages = true
@@ -403,8 +401,10 @@ end
 --#region ── Layout and motion ───────────────────────────────────────────────────
 
 function Feed:StopLayoutAnimation()
-    if self.layoutDriver then self.layoutDriver:Hide() end
-    self.layoutMoves = nil
+    if self.layoutAnimation then
+        self.layoutAnimation:Cancel()
+        self.layoutAnimation = nil
+    end
 end
 
 --- Captures only visible widgets that still represent their current logical
@@ -425,28 +425,25 @@ end
 
 function Feed:AnimateLayout(moves)
     if #moves == 0 then return end
-    local elapsed = 0
-    self.layoutMoves = moves
-    self.layoutDriver:SetScript('OnUpdate', function(_, dt)
-        elapsed = elapsed + dt
-        local progress = math.min(elapsed / LAYOUT_ANIMATION_TIME, 1)
-        -- Cubic ease-out matches the quick, gentle stack shift from the old
-        -- Banter container.
-        local eased = 1 - (1 - progress) ^ 3
-        for i = 1, #moves do
-            local move = moves[i]
-            Widgets.AnchorGroup(move.group, self.scrollChild,
-                move.fromY + (move.toY - move.fromY) * eased)
-        end
-        if progress >= 1 then
+    local animation
+    animation = Animations.Progress(self.scrollChild, LAYOUT_ANIMATION_TIME, Animations.CubicOut,
+        function(eased)
+            for i = 1, #moves do
+                local move = moves[i]
+                Widgets.AnchorGroup(move.group, self.scrollChild,
+                    move.fromY + (move.toY - move.fromY) * eased)
+            end
+        end,
+        function()
             for i = 1, #moves do
                 local move = moves[i]
                 Widgets.AnchorGroup(move.group, self.scrollChild, move.toY)
             end
-            self:StopLayoutAnimation()
-        end
-    end)
-    self.layoutDriver:Show()
+            if self.layoutAnimation == animation then
+                self.layoutAnimation = nil
+            end
+        end)
+    self.layoutAnimation = animation
 end
 
 --- Anchors admitted group widgets top-to-bottom, bottom-aligning short content.

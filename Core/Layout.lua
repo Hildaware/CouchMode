@@ -10,6 +10,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@field FontString fun(self: CouchModeLayout, parent: LayoutParent, opts?: LayoutFontStringOpts): LayoutFontString
 addon.Layout = {}
 local Layout = addon.Layout
+local isSecretValue = addon.Utils.IsSecretValue
 
 ---@alias LayoutParent Frame|LayoutContainer|LayoutFontString|LayoutTexture
 
@@ -311,7 +312,7 @@ function Layout:VStack(parent, opts)
         local first = true
         for _, child in ipairs(children) do
             local h = child.region:GetHeight()
-            if h and issecretvalue(h) then h = child.region.safeLineH end
+            if h and isSecretValue(h) then h = child.region.safeLineH end
             if h and h > 0 then
                 if not first then total = total + spacing end
                 total = total + h
@@ -339,7 +340,7 @@ function Layout:VStack(parent, opts)
                 child.region:SetWidth(math.max(frameW + (child.widthOffset or 0), 1))
             end
             local h = child.region:GetHeight()
-            if h and issecretvalue(h) then h = child.region.safeLineH end
+            if h and isSecretValue(h) then h = child.region.safeLineH end
             child.region:ClearAllPoints()
             if h and h > 0 then
                 if not first then
@@ -349,7 +350,7 @@ function Layout:VStack(parent, opts)
                 local xOff = (x or 0) + child.xOffset
                 if child.halign == "CENTER" and frameW and frameW > 0 then
                     local childW = child.region:GetWidth()
-                    if childW and issecretvalue(childW) then childW = nil end
+                    if childW and isSecretValue(childW) then childW = nil end
                     if childW then
                         xOff = math.floor((frameW - childW) / 2) + child.xOffset
                     end
@@ -419,7 +420,7 @@ function Layout:HStack(parent, opts)
         local frameH = self.frame:GetHeight()
         for _, child in ipairs(children) do
             local w = child.region:GetWidth()
-            if w and issecretvalue(w) then w = child.region.safeLineH end
+            if w and isSecretValue(w) then w = child.region.safeLineH end
             child.region:ClearAllPoints()
             if w and w > 0 then
                 if not first then
@@ -427,10 +428,10 @@ function Layout:HStack(parent, opts)
                     totalW = totalW + spacing
                 end
                 local autoY = 0
-                local frameH_safe = frameH and not issecretvalue(frameH) and frameH
+                local frameH_safe = frameH and not isSecretValue(frameH) and frameH
                 if child.valign == "CENTER" and frameH_safe and frameH_safe > 0 then
                     local h = child.region:GetHeight()
-                    if h and issecretvalue(h) then h = child.region.safeLineH end
+                    if h and isSecretValue(h) then h = child.region.safeLineH end
                     if h then
                         autoY = -math.floor((frameH_safe - h) / 2)
                     end
@@ -511,17 +512,17 @@ function Layout:FontString(parent, opts)
     setupForwarding(obj, "fs")
 
     local function truncate(text, maxWidth)
-        if issecretvalue(text) then return text end
+        if isSecretValue(text) then return text end
         fs:SetText(text)
         local sw = fs:GetStringWidth()
-        if issecretvalue(sw) then return text end
+        if isSecretValue(sw) then return text end
         if sw <= maxWidth then return text end
         local lo, hi = 0, #text
         while lo < hi do
             local mid = math.ceil((lo + hi) / 2)
             fs:SetText(text:sub(1, mid) .. "...")
             local sw2 = fs:GetStringWidth()
-            if issecretvalue(sw2) then return text end
+            if isSecretValue(sw2) then return text end
             if sw2 <= maxWidth then lo = mid else hi = mid - 1 end
         end
         return text:sub(1, lo) .. "..."
@@ -550,7 +551,7 @@ function Layout:FontString(parent, opts)
             self:SetHeight(0)
             return
         end
-        if issecretvalue(t) then
+        if isSecretValue(t) then
             self:SetHeight(safeLineH)
             return
         end -- can't measure secret strings; use pre-captured line height

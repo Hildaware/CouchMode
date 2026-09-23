@@ -12,19 +12,58 @@ local _G = _G
 local unpack = unpack
 local Minimap = _G.Minimap
 local MinimapCluster = _G.MinimapCluster ---@type Frame
+local Animations = addon.Animations
+local DEFAULT_FADE_DURATION = 0.25
+local fadeAnimations = {}
 
 map.minimapFade = { from = 1, to = 1, elapsed = 0, active = false, hideOnComplete = false }
 map.worldMapFade = { from = 0, to = 0, elapsed = 0, active = false, hideOnComplete = false }
 map.toolbarFade = { from = 0, to = 0, elapsed = 0, active = false, hideOnComplete = false }
 map.containerFade = { from = 1, to = 1, elapsed = 0, active = false, hideOnComplete = false }
-map.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, lastZoomAt = 0 }
+---@class MapGrowTransition
+---@field active boolean
+---@field elapsed number
+---@field fromW number
+---@field fromH number
+---@field toW number
+---@field toH number
+---@field animShape string
+---@field lastZoomAt number
 
-function map.startFrameFade(frame, state, to_alpha, hide_on_complete)
+---@type MapGrowTransition
+map.growTransition = { active = false, elapsed = 0, fromW = 0, fromH = 0, toW = 0, toH = 0, animShape = "", lastZoomAt = 0 }
+
+function map.cancelFrameFade(state)
+    local animation = fadeAnimations[state]
+    if animation then
+        animation:Cancel()
+        fadeAnimations[state] = nil
+    end
+    state.active = false
+end
+
+function map.startFrameFade(frame, state, to_alpha, hide_on_complete, duration)
+    map.cancelFrameFade(state)
     state.from = frame:GetAlpha()
     state.to = to_alpha
     state.elapsed = 0
     state.active = true
     state.hideOnComplete = hide_on_complete or false
+
+    local animation
+    animation = Animations.Progress(map.container, duration or DEFAULT_FADE_DURATION, Animations.Linear,
+        function(progress, _, elapsed)
+            state.elapsed = elapsed
+            frame:SetAlpha(state.from + (state.to - state.from) * progress)
+        end,
+        function()
+            if fadeAnimations[state] == animation then
+                fadeAnimations[state] = nil
+                state.active = false
+                if state.hideOnComplete then frame:Hide() end
+            end
+        end)
+    fadeAnimations[state] = animation
 end
 
 --#region ── Module lifecycle ─────────────────────────────────────────────────
@@ -162,7 +201,7 @@ function map:OnDisable()
 
         map.origParent = nil
         map.grown = false
-        map.containerFade.active = false
+        map.cancelFrameFade(map.containerFade)
     end
 end
 

@@ -18,6 +18,7 @@ local Sources = addon.ChatSources
 local Rules = addon.ChatRules
 local Grouping = addon.ChatGrouping
 local Input = addon.ChatInput
+local Animations = addon.Animations
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -85,14 +86,12 @@ function chat:IsSubscriberEnabled()
     return db().enabled == true
 end
 
---- Registers an event only when the running client defines it, so flavor-
---- specific events never throw from RegisterEvent.
+--- Registers an event only when the running client defines it.
 ---@param event string
 ---@param handler string|fun(...)
+---@return boolean registered
 function chat:RegisterValidEvent(event, handler)
-    local Utils = addon.Utils
-    if Utils and Utils.EventExists and Utils.EventExists(event) == false then return end
-    self:RegisterEvent(event, handler)
+    return addon.Utils.RegisterEventIfValid(self, event, handler)
 end
 
 function chat:OnEnable()
@@ -253,24 +252,7 @@ function chat:BuildFilterBar(parent)
     bar:EnableMouse(true)
     bar:SetAlpha(0)
 
-    -- Match the minimap toolbar's continuous Diamond Metal header treatment.
-    local bgLeft = bar:CreateTexture(nil, 'BACKGROUND', nil, 1)
-    bgLeft:SetAtlas('UI-Frame-DiamondMetal-Header-CornerLeft', true)
-    bgLeft:SetSize(32, 39)
-    bgLeft:SetScale(0.8)
-    bgLeft:SetPoint('LEFT', bar, 'LEFT', -7, 0)
-
-    local bgRight = bar:CreateTexture(nil, 'BACKGROUND', nil, 1)
-    bgRight:SetAtlas('UI-Frame-DiamondMetal-Header-CornerRight', true)
-    bgRight:SetSize(32, 39)
-    bgRight:SetScale(0.8)
-    bgRight:SetPoint('RIGHT', bar, 'RIGHT', 7, 0)
-
-    local bgTile = bar:CreateTexture(nil, 'BACKGROUND')
-    bgTile:SetAtlas('_UI-Frame-DiamondMetal-Header-Tile')
-    bgTile:SetHorizTile(true)
-    bgTile:SetPoint('TOPLEFT', bgLeft, 'TOPRIGHT')
-    bgTile:SetPoint('BOTTOMRIGHT', bgRight, 'BOTTOMLEFT')
+    addon.Components.MetalHeader.Create(bar)
 
     local prev
     for _, filter in ipairs(Sources.FILTERS) do
@@ -333,23 +315,7 @@ function chat:BuildPanel()
     strip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, PAD)
     strip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD)
     strip:SetHeight(INPUT_STRIP_H)
-    local stripBgLeft = strip:CreateTexture(nil, 'BACKGROUND', nil, 1)
-    stripBgLeft:SetAtlas('UI-Frame-DiamondMetal-Header-CornerLeft', true)
-    stripBgLeft:SetSize(32, 39)
-    stripBgLeft:SetScale(0.8)
-    stripBgLeft:SetPoint('LEFT', strip, 'LEFT', -7, 0)
-
-    local stripBgRight = strip:CreateTexture(nil, 'BACKGROUND', nil, 1)
-    stripBgRight:SetAtlas('UI-Frame-DiamondMetal-Header-CornerRight', true)
-    stripBgRight:SetSize(32, 39)
-    stripBgRight:SetScale(0.8)
-    stripBgRight:SetPoint('RIGHT', strip, 'RIGHT', 7, 0)
-
-    local stripBgTile = strip:CreateTexture(nil, 'BACKGROUND')
-    stripBgTile:SetAtlas('_UI-Frame-DiamondMetal-Header-Tile')
-    stripBgTile:SetHorizTile(true)
-    stripBgTile:SetPoint('TOPLEFT', stripBgLeft, 'TOPRIGHT')
-    stripBgTile:SetPoint('BOTTOMRIGHT', stripBgRight, 'BOTTOMLEFT')
+    addon.Components.MetalHeader.Create(strip)
     strip:SetAlpha(0)
     self.inputStrip = strip
 
@@ -533,8 +499,10 @@ function chat:FadeRegion(region, stateKey, target, dt)
     else
         current = current + diff * math.min(dt * 8, 1)
     end
-    self[stateKey] = current
-    region:SetAlpha(current)
+    if current ~= self[stateKey] then
+        self[stateKey] = current
+        region:SetAlpha(current)
+    end
 end
 
 function chat:UpdateFade(dt)
@@ -575,12 +543,16 @@ function chat:UpdateFade(dt)
     end
     local current = self.fadeAlpha
     local diff = target - current
+    local nextAlpha
     if math.abs(diff) < 0.01 then
-        self.fadeAlpha = target
+        nextAlpha = target
     else
-        self.fadeAlpha = current + diff * math.min(dt * 6, 1)
+        nextAlpha = current + diff * math.min(dt * 6, 1)
     end
-    self.panel:SetAlpha(self.fadeAlpha)
+    if nextAlpha ~= current then
+        self.fadeAlpha = nextAlpha
+        self.panel:SetAlpha(nextAlpha)
+    end
 end
 
 --#endregion
@@ -614,10 +586,7 @@ end
 
 --#region ── Identity ──────────────────────────────────────────────────────────
 
-local function isSecret(value)
-    local fn = issecretvalue
-    return fn ~= nil and fn(value)
-end
+local isSecret = addon.Utils.IsSecretValue
 
 local function findUnitTokenByGUID(guid)
     if not guid then return nil end
@@ -645,7 +614,7 @@ function chat:ResolveIdentity(msg)
     if id then return id end
 
     local localizedClass, classFile, localizedRace, raceFile, sex = GetPlayerInfoByGUID(msg.guid)
-    if (issecretvalue and issecretvalue(localizedClass)) then return nil end
+    if isSecret(localizedClass) then return nil end
     if not classFile then return nil end
 
     id = {
@@ -791,9 +760,9 @@ end
 --- Cancels a header fade in flight.
 ---@param fs FontString
 function chat:CancelTextFade(fs)
-    if fs and fs._fadeTicker then
-        fs._fadeTicker:Cancel()
-        fs._fadeTicker = nil
+    if fs and fs._fadeAnimation then
+        fs._fadeAnimation:Cancel()
+        fs._fadeAnimation = nil
     end
 end
 
@@ -816,18 +785,18 @@ function chat:FadeInText(fs, duration)
     fs._fadedText = text
 
     duration = duration or 0.25
-    local step = 0.02
-    local elapsed = 0
     fs:SetAlpha(0)
-    fs._fadeTicker = C_Timer.NewTicker(step, function()
-        elapsed = elapsed + step
-        local t = math.min(elapsed / duration, 1)
-        fs:SetAlpha(t)
-        if t >= 1 then
-            chat:CancelTextFade(fs)
+    local animation
+    animation = Animations.Progress(fs, duration, Animations.Linear,
+        function(progress)
+            fs:SetAlpha(progress)
+        end,
+        function()
             fs:SetAlpha(1)
+            if fs._fadeAnimation == animation then fs._fadeAnimation = nil end
         end
-    end)
+    )
+    fs._fadeAnimation = animation
 end
 
 --- Sets a FontString's full text immediately, cancelling any reveal in flight.

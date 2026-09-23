@@ -2,6 +2,7 @@ local addon_name = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
+local isSecretValue = addon.Utils.IsSecretValue
 
 --#region ── Inspect cache ────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ local function getSpecData(unit)
 
     -- Others: look up the GUID cache populated by INSPECT_READY.
     local guid = UnitGUID(unit)
-    if guid and issecretvalue and issecretvalue(guid) then return nil end
+    if guid and isSecretValue(guid) then return nil end
     return guid and inspectCache[guid] or nil
 end
 
@@ -54,7 +55,7 @@ local function requestInspect(unit)
     if not CanInspect(unit) then return end
     local now = GetTime()
     local guid = UnitGUID(unit)
-    if not guid or (issecretvalue and issecretvalue(guid)) then return end
+    if not guid or isSecretValue(guid) then return end
     local cached = inspectCache[guid]
     if cached and now - cached.time <= CACHE_TTL then return end
     if now - lastInspect < INSPECT_THROTTLE then return end
@@ -76,13 +77,13 @@ measureFs:Hide()
 
 local function measureWidth(fs)
     local text = fs:GetText()
-    if not text or issecretvalue(text) then return 0 end
+    if not text or isSecretValue(text) then return 0 end
     local fontPath, fontSize, fontFlags = fs:GetFont()
     if not fontPath then return 0 end
     if fontPath then measureFs:SetFont(fontPath, fontSize, fontFlags) end
     measureFs:SetText(text)
     local w = measureFs:GetStringWidth()
-    return (not issecretvalue(w)) and w or 0
+    return (not isSecretValue(w)) and w or 0
 end
 
 addon.TipsUtils = {

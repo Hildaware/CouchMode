@@ -10,6 +10,7 @@ local _G = _G
 local math_min = math.min
 local math_max = math.max
 local math_ceil = math.ceil
+local Animations = addon.Animations
 
 local CreateFrame = _G.CreateFrame
 local Minimap = _G.Minimap
@@ -130,48 +131,47 @@ function map.applySettings()
     map.applyZoneText()
 end
 
-function map.updateGrowTransition(elapsed)
+function map.startGrowTransition()
     local gt = map.growTransition
-    if not gt.active then return end
-
-    gt.elapsed = gt.elapsed + elapsed
-    local t = math_min(1, gt.elapsed / GROW_DURATION)
-    local ts = t * t * (3 - 2 * t) -- smoothstep easing
-    local cw = gt.fromW + (gt.toW - gt.fromW) * ts
-    local ch = gt.fromH + (gt.toH - gt.fromH) * ts
-    local off = math_ceil((cw - ch) / 2)
-    map.container:SetSize(cw, ch)
-    map.container:SetClampRectInsets(0, 0, off, off)
-    Minimap:ClearAllPoints()
-    Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, off)
-    Minimap:SetSize(cw, cw)
-    apply_minimap_shape(gt.animShape, cw, ch)
-    if (gt.elapsed - gt.lastZoomAt) >= 0.005 then
-        gt.lastZoomAt = gt.elapsed
-        local cz = Minimap:GetZoom()
-        local mz = Minimap:GetZoomLevels() - 1
-        if cz < mz then
-            Minimap:SetZoom(cz + 1); Minimap:SetZoom(cz)
-        else
-            Minimap:SetZoom(cz - 1); Minimap:SetZoom(cz)
-        end
-    end
-    if t >= 1 then
-        gt.active = false
-        local cur_zoom = Minimap:GetZoom()
-        local max_zoom = Minimap:GetZoomLevels() - 1
-        if cur_zoom < max_zoom then
-            Minimap:SetZoom(cur_zoom + 1); Minimap:SetZoom(cur_zoom)
-        else
-            Minimap:SetZoom(cur_zoom - 1); Minimap:SetZoom(cur_zoom)
-        end
-        map.applySettings()
-        map.applyZoom()
-        if map.pendingWorldMapOpen then
-            map.pendingWorldMapOpen = false
-            map.openWorldMapFresh()
-        end
-    end
+    Animations.Progress(map.container, GROW_DURATION, Animations.Smoothstep,
+        function(ts, _, elapsed)
+            gt.elapsed = elapsed
+            local cw = gt.fromW + (gt.toW - gt.fromW) * ts
+            local ch = gt.fromH + (gt.toH - gt.fromH) * ts
+            local off = math_ceil((cw - ch) / 2)
+            map.container:SetSize(cw, ch)
+            map.container:SetClampRectInsets(0, 0, off, off)
+            Minimap:ClearAllPoints()
+            Minimap:SetPoint('TOPRIGHT', map.container, 'TOPRIGHT', 0, off)
+            Minimap:SetSize(cw, cw)
+            apply_minimap_shape(gt.animShape, cw, ch)
+            if (elapsed - gt.lastZoomAt) >= 0.005 then
+                gt.lastZoomAt = elapsed
+                local cz = Minimap:GetZoom()
+                local mz = Minimap:GetZoomLevels() - 1
+                if cz < mz then
+                    Minimap:SetZoom(cz + 1); Minimap:SetZoom(cz)
+                else
+                    Minimap:SetZoom(cz - 1); Minimap:SetZoom(cz)
+                end
+            end
+        end,
+        function()
+            gt.active = false
+            local cur_zoom = Minimap:GetZoom()
+            local max_zoom = Minimap:GetZoomLevels() - 1
+            if cur_zoom < max_zoom then
+                Minimap:SetZoom(cur_zoom + 1); Minimap:SetZoom(cur_zoom)
+            else
+                Minimap:SetZoom(cur_zoom - 1); Minimap:SetZoom(cur_zoom)
+            end
+            map.applySettings()
+            map.applyZoom()
+            if map.pendingWorldMapOpen then
+                map.pendingWorldMapOpen = false
+                map.openWorldMapFresh()
+            end
+        end)
 end
 
 function map.zoomMinimap(delta)

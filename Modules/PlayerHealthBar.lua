@@ -2,6 +2,7 @@ local addonName = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
+local isSecretValue = addon.Utils.IsSecretValue
 
 ---@class PlayerHealthBar: AceModule
 ---@field preview          boolean
@@ -55,7 +56,7 @@ function healthBar:UpdateValue()
 
     gui.bar:SetMinMaxValues(0, maxHP)
 
-    if issecretvalue(current) or issecretvalue(maxHP) then
+    if isSecretValue(current) or isSecretValue(maxHP) then
         -- Can't interpolate secret values; snap immediately
         gui.bar:SetValue(current)
         gui.absorbBar:SetMinMaxValues(0, maxHP)
@@ -108,7 +109,7 @@ function healthBar:UpdateValue()
     end
 
     -- Low-health glow
-    local pct = (maxHP > 0 and not issecretvalue(current) and not issecretvalue(maxHP))
+    local pct = (maxHP > 0 and not isSecretValue(current) and not isSecretValue(maxHP))
         and (current / maxHP) or 1
     local wasGlowing = self.glowActive
     self.glowActive = (pct <= 0.4)

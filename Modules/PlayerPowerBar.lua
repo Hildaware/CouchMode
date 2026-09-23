@@ -2,6 +2,7 @@ local addonName = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
+local isSecretValue = addon.Utils.IsSecretValue
 
 ---@class PlayerPowerBar: AceModule
 ---@field preview         boolean
@@ -65,7 +66,7 @@ function powerBar:UpdateValue()
     local powerType = UnitPowerType('player')
     local current = UnitPower('player', powerType)
     local maxVal = UnitPowerMax('player', powerType)
-    local pct = (maxVal > 0 and not issecretvalue(current) and not issecretvalue(maxVal))
+    local pct = (maxVal > 0 and not isSecretValue(current) and not isSecretValue(maxVal))
         and (current / maxVal) or 0.0
     local c = cfg()
 
@@ -97,7 +98,7 @@ function powerBar:UpdateValue()
     end
 
     -- Visibility
-    -- pct is pre-guarded (issecretvalue checked above, defaults to 0.0), so Lua comparisons are safe.
+    -- pct is pre-guarded (secret values default to 0.0), so Lua comparisons are safe.
     local inCombat = UnitAffectingCombat('player')
     if self.preview then
         gui.frame:SetAlpha(1)

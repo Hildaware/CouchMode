@@ -5,6 +5,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class NameplatesModule: AceModule
 local nameplates = addon:GetModule('Nameplates')
+local Animations = addon.Animations
 
 --#region ── Name colors ──────────────────────────────────────────────────────
 
@@ -275,6 +276,10 @@ end
 local LAYOUT_TRANSITION = 0.2
 
 function nameplates.applyLayout(f, plateType)
+    if f.layoutTween then
+        f.layoutTween:Cancel()
+        f.layoutTween = nil
+    end
     local PlateType = nameplates.PlateType
     f.name:ClearAllPoints()
     f.bar:ClearAllPoints()
@@ -306,22 +311,16 @@ function nameplates.applyLayout(f, plateType)
     local toSize = (plateType == PlateType.Full) and (fontSize - 6) or fontSize
     if fromSize == toSize then
         f.name:SetFont(font, toSize, fontFlag)
-        f:SetScript("OnUpdate", nil)
         return
     end
 
-    f.layoutTrans = { elapsed = 0, fromSize = fromSize, toSize = toSize, font = font, flag = fontFlag }
-    f:SetScript("OnUpdate", function(self, dt)
-        local t = self.layoutTrans
-        t.elapsed = t.elapsed + dt
-        local pct = math.min(t.elapsed / LAYOUT_TRANSITION, 1)
-        pct = pct * pct * (3 - 2 * pct) -- smoothstep
-        self.name:SetFont(t.font, t.fromSize + (t.toSize - t.fromSize) * pct, t.flag)
-        if pct >= 1 then
-            self:SetScript("OnUpdate", nil)
-            self.layoutTrans = nil
-        end
+    local tween
+    tween = Animations.Progress(f, LAYOUT_TRANSITION, Animations.Smoothstep, function(pct)
+        f.name:SetFont(font, fromSize + (toSize - fromSize) * pct, fontFlag)
+    end, function()
+        if f.layoutTween == tween then f.layoutTween = nil end
     end)
+    f.layoutTween = tween
 end
 
 --#endregion

@@ -127,8 +127,10 @@ local function acquire()
 end
 
 local function release(f)
-    f:SetScript("OnUpdate", nil)
-    f.layoutTrans = nil
+    if f.layoutTween then
+        f.layoutTween:Cancel()
+        f.layoutTween = nil
+    end
     f.plateType = nil
     f.isSelected = nil
     f.showName = nil

@@ -21,18 +21,6 @@ local ZOOM_BAR_W = 80
 local ZOOM_BAR_H = 10
 
 local FADE_DURATION = 0.5
-local TRANSITION_DURATION = 0.25
-
-local function update_fade(state, frame, elapsed, duration)
-    if not state.active or not frame then return end
-    state.elapsed = state.elapsed + elapsed
-    local t = math_min(1, state.elapsed / (duration or TRANSITION_DURATION))
-    frame:SetAlpha(state.from + (state.to - state.from) * t)
-    if t >= 1 then
-        state.active = false
-        if state.hideOnComplete then frame:Hide() end
-    end
-end
 
 local ConsolePort = _G['ConsolePort'] ---@type any
 
@@ -201,8 +189,9 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
     local zi = map.zoomIndicator
     if not zi then return end
 
-    zi:SetShown(map.grown)
-    if not map.grown then return end
+    local shouldShow = map.grown == true
+    if zi:IsShown() ~= shouldShow then zi:SetShown(shouldShow) end
+    if not shouldShow then return end
 
     if map.worldMapOpen and map.worldMap then
         -- Refresh trigger icons if the active controller device changed
@@ -281,13 +270,6 @@ function map.setupContainerScripts()
     end
 
     map.container:SetScript("OnUpdate", function(_, elapsed)
-        update_fade(map.containerFade, map.container, elapsed, FADE_DURATION)
-        update_fade(map.minimapFade, Minimap, elapsed)
-        update_fade(map.worldMapFade, map.worldMap, elapsed)
-        update_fade(map.toolbarFade, map.toolbar, elapsed, FADE_DURATION)
-
-        -- Grow/shrink transition (Minimap frame, delegated to Minimap.lua)
-        map.updateGrowTransition(elapsed)
 
         -- Toolbar visibility: fade in/out
         if map.toolbar then
@@ -295,16 +277,16 @@ function map.setupContainerScripts()
             local tf = map.toolbarFade
             if should_show and tf.to ~= 1 then
                 map.toolbar:Show()
-                map.startFrameFade(map.toolbar, tf, 1)
+                map.startFrameFade(map.toolbar, tf, 1, false, FADE_DURATION)
             elseif not should_show and tf.to ~= 0 then
-                map.startFrameFade(map.toolbar, tf, 0)
+                map.startFrameFade(map.toolbar, tf, 0, false, FADE_DURATION)
             end
         end
         map.updateZoomIndicator(elapsed)
     end)
 
     local function start_fade(target)
-        map.startFrameFade(map.container, map.containerFade, target)
+        map.startFrameFade(map.container, map.containerFade, target, false, FADE_DURATION)
     end
 
     map.container:RegisterEvent("PLAYER_STARTED_MOVING")
@@ -373,6 +355,7 @@ local function toggle_grow()
     gt.toH = to_h
     gt.animShape = db.growShape
     gt.lastZoomAt = 0
+    map.startGrowTransition()
 end
 
 -- Expose as a global so Bindings.xml can invoke it by name
@@ -396,7 +379,7 @@ function CouchMode_MinimapToggle() ---@diagnostic disable-line: lowercase-global
     local db = addon.db.profile.minimap ---@type MinimapDB
     local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
     if target > 0 then map.container:Show() end
-    map.startFrameFade(map.container, map.containerFade, target, target == 0)
+    map.startFrameFade(map.container, map.containerFade, target, target == 0, FADE_DURATION)
 end
 
 -- Blizzard Key Bindings panel display strings

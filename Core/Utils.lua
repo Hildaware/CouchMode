@@ -47,6 +47,15 @@ function addon.Utils.IsFlavor(flavor)
     return addon.Utils.FLAVOR == flavor
 end
 
+--- Whether a value is secret and therefore unsafe to compare, measure, hash,
+--- or otherwise inspect. Returns false on clients without the predicate.
+---@param value any
+---@return boolean
+function addon.Utils.IsSecretValue(value)
+    local isSecret = issecretvalue
+    return isSecret ~= nil and isSecret(value)
+end
+
 --- Whether the client knows a given event. Uses the authoritative
 --- C_EventUtils.IsEventValid when available; otherwise probes RegisterEvent on a
 --- throwaway frame. Returns nil when validity cannot be determined.
@@ -68,15 +77,22 @@ function addon.Utils.EventExists(event)
     return ok
 end
 
---- Registers `event` on `frame` only when the client supports it.
----@param frame Frame
+--- Registers `event` only when the client supports it. When supplied, `handler`
+--- is forwarded for AceEvent-3.0's embedded RegisterEvent method.
+---@param frame any
 ---@param event string
+---@param handler? string|fun(...)
 ---@return boolean registered
-function addon.Utils.RegisterEventIfValid(frame, event)
+function addon.Utils.RegisterEventIfValid(frame, event, handler)
     if not frame then return false end
     local exists = addon.Utils.EventExists(event)
     if exists == false then return false end
-    local ok = pcall(frame.RegisterEvent, frame, event)
+    local ok
+    if handler ~= nil then
+        ok = pcall(frame.RegisterEvent, frame, event, handler)
+    else
+        ok = pcall(frame.RegisterEvent, frame, event)
+    end
     return ok
 end
 
@@ -98,7 +114,7 @@ end
 function addon.Utils.GetPlayerNameParts(unit)
     local baseName = UnitName(unit) or ""
     local pvpName = UnitPVPName(unit)
-    if not pvpName or (issecretvalue and issecretvalue(pvpName)) then
+    if not pvpName or addon.Utils.IsSecretValue(pvpName) then
         return "", baseName, ""
     end
 

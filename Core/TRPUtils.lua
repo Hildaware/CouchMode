@@ -18,7 +18,7 @@ local function getPlayer(unit)
     local guid = UnitGUID(unit)
     if not guid then return nil end
     -- GUIDs are secret strings in instances; CreateFromGUID would get garbage data.
-    if issecretvalue and issecretvalue(guid) then return nil end
+    if addon.Utils.IsSecretValue(guid) then return nil end
     local ok, player = pcall(AddOn_TotalRP3.Player.CreateFromGUID, guid)
     if not ok or not player then return nil end
     return player
@@ -136,7 +136,7 @@ function addon.TRPUtils.isPlayingMusic(unit)
     if not UnitIsPlayer(unit) then return false end
     local unitName = GetUnitName(unit, true)
     if not unitName then return false end
-    if issecretvalue and issecretvalue(unitName) then return false end
+    if addon.Utils.IsSecretValue(unitName) then return false end
     ---@diagnostic disable-next-line: undefined-global
     local song = Musician.songs[Musician.Utils.NormalizePlayerName(unitName)]
     return song ~= nil and song:IsPlaying()

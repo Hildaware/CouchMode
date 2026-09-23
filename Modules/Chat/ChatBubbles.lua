@@ -35,10 +35,7 @@ local function db() return addon.db.profile.chatBubbles end
 
 --#region ── Utilities ─────────────────────────────────────────────────────────
 
-local function isSecret(value)
-    local fn = issecretvalue
-    return fn ~= nil and fn(value)
-end
+local isSecret = addon.Utils.IsSecretValue
 
 local function CalculateDisplayDuration(message)
     local baseDuration = 3

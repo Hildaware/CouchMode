@@ -162,14 +162,12 @@ function loot:OnInitialize()
     addon.Loot = self
 end
 
---- Registers an event only when the running client defines it, so flavor-
---- specific events never throw from RegisterEvent.
+--- Registers an event only when the running client defines it.
 ---@param event string
 ---@param handler string|fun(...)
+---@return boolean registered
 function loot:RegisterValidEvent(event, handler)
-    local Utils = addon.Utils
-    if Utils and Utils.EventExists and Utils.EventExists(event) == false then return end
-    self:RegisterEvent(event, handler)
+    return addon.Utils.RegisterEventIfValid(self, event, handler)
 end
 
 function loot:OnEnable()
@@ -732,13 +730,16 @@ function loot:UpdateFade(dt)
 
     local current = self.fadeAlpha or 0
     local diff = target - current
+    local nextAlpha
     if math.abs(diff) < 0.01 then
-        current = target
+        nextAlpha = target
     else
-        current = current + diff * math.min(dt * 6, 1)
+        nextAlpha = current + diff * math.min(dt * 6, 1)
     end
-    self.fadeAlpha = current
-    self.panel:SetAlpha(current)
+    if nextAlpha ~= current then
+        self.fadeAlpha = nextAlpha
+        self.panel:SetAlpha(nextAlpha)
+    end
 end
 
 function loot:OnFeedChanged()

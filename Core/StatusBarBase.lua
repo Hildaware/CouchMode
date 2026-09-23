@@ -3,6 +3,7 @@ local addonName = ...
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LibEditMode = LibStub('LibEditMode')
+local isSecretValue = addon.Utils.IsSecretValue
 
 local SMOOTH_RATE = 2 -- exponential lerp factor (higher = snappier)
 
@@ -131,7 +132,7 @@ function StatusBarBase.CreateOnUpdate(module, gui, opts)
         if module.targetValue then
             local displayed = module.displayedValue
             local target = module.targetValue
-            if issecretvalue(target) or issecretvalue(displayed) then
+            if isSecretValue(target) or isSecretValue(displayed) then
                 -- Can't do arithmetic on secret values; snap immediately
                 module.displayedValue = target
                 gui.bar:SetValue(target)
@@ -150,7 +151,7 @@ function StatusBarBase.CreateOnUpdate(module, gui, opts)
         if hasAbsorb and module.targetAbsorb and module.targetMax then
             local dispAbs = module.displayedAbsorb or 0
             local targAbs = module.targetAbsorb
-            if issecretvalue(targAbs) or issecretvalue(dispAbs) or issecretvalue(module.targetMax) then
+            if isSecretValue(targAbs) or isSecretValue(dispAbs) or isSecretValue(module.targetMax) then
                 module.displayedAbsorb = targAbs
                 gui.absorbBar:SetMinMaxValues(0, module.targetMax)
                 gui.absorbBar:SetValue(targAbs)
@@ -178,7 +179,7 @@ end
 --- Returns 1 (show), 0 (hide), or nil meaning "the caller should apply its autoHide logic".
 --- Priority: showWhenNotFull > showOnlyInCombat > autoHide.
 ---
---- pct must already be safe to compare: compute it with issecretvalue guards and default
+--- pct must already be safe to compare: compute it with IsSecretValue guards and default
 --- to 1.0 when values are secret. That way pct < 1.0 never touches a secret value, and
 --- showWhenNotFull conservatively does not fire when health cannot be read.
 ---@param pct      number   current/max in [0, 1]; use 1.0 for unknown/secret

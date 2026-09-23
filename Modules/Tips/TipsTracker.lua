@@ -3,6 +3,8 @@ local addon_name = ...
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 local LibEditMode = LibStub('LibEditMode')
+local isSecretValue = addon.Utils.IsSecretValue
+local Animations = addon.Animations
 
 ---@class TipsModule: AceModule
 local tips = addon:GetModule('Tips')
@@ -68,14 +70,34 @@ local INTERACTION_EVENT_UNITS = {
 
 local function getPublicGUID(unit)
     local guid = UnitGUID(unit)
-    if guid and issecretvalue and issecretvalue(guid) then return nil end
+    if guid and isSecretValue(guid) then return nil end
     return guid
+end
+
+local function animateFrameAlpha(f, fromAlpha, toAlpha, onComplete)
+    if f._tipFadeAnimation then
+        f._tipFadeAnimation:Cancel()
+        f._tipFadeAnimation = nil
+    end
+
+    local animation
+    animation = Animations.Progress(UIParent, 0.25, Animations.Linear,
+        function(progress)
+            f:SetAlpha(fromAlpha + (toAlpha - fromAlpha) * progress)
+        end,
+        function()
+            f:SetAlpha(toAlpha)
+            if f._tipFadeAnimation == animation then f._tipFadeAnimation = nil end
+            if onComplete then onComplete() end
+        end
+    )
+    f._tipFadeAnimation = animation
 end
 
 local function fadeInFrame(f)
     f:SetAlpha(0)
     f:Show()
-    UIFrameFadeIn(f, 0.25, 0, 1)
+    animateFrameAlpha(f, 0, 1)
 end
 
 local function showTip(unit)
@@ -101,8 +123,7 @@ local function hideTip()
         tips.activeFrame = nil
         currentUnit = nil
         currentGUID = nil
-        UIFrameFadeOut(f, 0.25, f:GetAlpha(), 0)
-        C_Timer.After(0.25, function()
+        animateFrameAlpha(f, f:GetAlpha(), 0, function()
             tips.release(f)
         end)
     end
@@ -316,7 +337,7 @@ function tips:OnInspectReady(_, guid)
     if addon.TipsUtils then
         local unit = currentUnit
         local unitGUID = unit and UnitGUID(unit)
-        if unitGUID and not issecretvalue(unitGUID) and unitGUID == guid then
+        if unitGUID and not isSecretValue(unitGUID) and unitGUID == guid then
             addon.TipsUtils.onInspectReady(guid, unit)
             showTip(unit)
         end
