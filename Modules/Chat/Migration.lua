@@ -18,7 +18,7 @@ addon = addon or (LibStub and LibStub('AceAddon-3.0'):GetAddon(addonName))
 local M = {}
 
 M.CURRENT_VERSION = 5
-local DEFAULT_CHAT_HEIGHT = 400
+local DEFAULT_CHAT_HEIGHT = 260
 
 --- Computes the routing/enablement decisions for Chat Bubbles.
 ---@param old table  the legacy `profile.banter` table

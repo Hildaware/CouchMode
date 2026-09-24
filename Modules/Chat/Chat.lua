@@ -28,7 +28,10 @@ local FILTER_BAR_H = 32
 local INPUT_STRIP_H = 28
 local PANEL_ORDER = 10
 local PANEL_CHROME_HEIGHT = (PAD + FILTER_BAR_H + PAD) + (PAD + INPUT_STRIP_H + PAD)
-local DEFAULT_HEIGHT = 400
+local DEFAULT_WIDTH = 500
+local DEFAULT_HEIGHT = 260
+local BORDER_ALPHA = 0.5
+local BORDER_INSET = 1
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
 
@@ -156,6 +159,7 @@ function chat:OnDisable()
     end
     self.blockCheck = nil
     if self.panel then self.panel:Hide() end
+    if self.borderFrame then self.borderFrame:Hide() end
 end
 
 function chat:OnPlayerEnteringWorld()
@@ -246,13 +250,14 @@ end
 
 function chat:BuildFilterBar(parent)
     local bar = CreateFrame('Frame', nil, parent)
-    bar:SetPoint('TOPLEFT', parent, 'TOPLEFT', PAD, -PAD)
-    bar:SetPoint('TOPRIGHT', parent, 'TOPRIGHT', -PAD, -PAD)
+    bar:SetFrameStrata('DIALOG')
+    bar:SetPoint('TOPLEFT', parent, 'TOPLEFT', PAD, 0)
+    bar:SetPoint('TOPRIGHT', parent, 'TOPRIGHT', -PAD, 0)
     bar:SetHeight(FILTER_BAR_H)
     bar:EnableMouse(true)
     bar:SetAlpha(0)
 
-    addon.Components.MetalHeader.Create(bar)
+    addon.Components.Metal.CreateHeader(bar)
 
     local prev
     for _, filter in ipairs(Sources.FILTERS) do
@@ -282,6 +287,7 @@ end
 function chat:BuildPanel()
     if self.panel then
         self.panel:Show()
+        if self.borderFrame then self.borderFrame:Show() end
         return
     end
 
@@ -291,6 +297,19 @@ function chat:BuildPanel()
     frame:SetFrameStrata('LOW')
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
+
+    local borderFrame = CreateFrame('Frame', nil, UIParent)
+    borderFrame:SetFrameStrata(frame:GetFrameStrata())
+    borderFrame:SetFrameLevel(frame:GetFrameLevel() + 1)
+    addon.Components.Metal.PositionBorderFrame(borderFrame, frame, addon.Components.Metal.BORDER_OUTSET)
+    borderFrame:SetAlpha(BORDER_ALPHA * frame:GetAlpha())
+    borderFrame:Hide()
+    self.borderFrame = borderFrame
+
+    local borderAnchor = CreateFrame('Frame', nil, frame)
+    borderAnchor:SetPoint('TOPLEFT', frame, 'TOPLEFT', BORDER_INSET, 0)
+    borderAnchor:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -BORDER_INSET, 0)
+    self.borders = addon.Components.Metal.CreateBorderTextures(borderFrame, borderAnchor)
 
     local bg = frame:CreateTexture(nil, 'BACKGROUND')
     bg:SetPoint('CENTER', frame, 'CENTER', 0, -6)
@@ -312,10 +331,11 @@ function chat:BuildPanel()
     self.feed.onScrollChanged = function() chat:OnFeedChanged() end
 
     local strip = CreateFrame('Frame', nil, frame)
-    strip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, PAD)
-    strip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD)
+    strip:SetFrameStrata('DIALOG')
+    strip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, PAD/2)
+    strip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD/2)
     strip:SetHeight(INPUT_STRIP_H)
-    addon.Components.MetalHeader.Create(strip)
+    addon.Components.Metal.CreateHeader(strip)
     strip:SetAlpha(0)
     self.inputStrip = strip
 
@@ -348,16 +368,16 @@ function chat:BuildPanel()
         local settings = db()
         settings.positions = settings.positions or {}
         settings.positions[layoutName] = { point = point, x = x, y = y }
-    end, { point = 'BOTTOMLEFT', x = 40, y = 220 }, 'CouchMode Chat')
+    end, { point = 'BOTTOMLEFT', x = 10, y = 120 }, 'CouchMode Chat')
 
     LibEditMode:AddFrameSettings(frame, {
         {
             kind = LibEditMode.SettingType.Slider,
             name = 'Width', desc = 'Panel width in pixels.',
-            default = 520, minValue = 240, maxValue = 1200, valueStep = 10,
+            default = DEFAULT_WIDTH, minValue = 240, maxValue = 1200, valueStep = 10,
             get = function() return db().width end,
             set = function(_, value, fromReset)
-                db().width = (fromReset and 520 or value)
+                db().width = (fromReset and DEFAULT_WIDTH or value)
                 chat:ApplyLayout(true)
             end,
         },
@@ -449,11 +469,12 @@ function chat:BuildPanel()
         if pos then
             frame:SetPoint(pos.point, pos.x, pos.y)
         else
-            frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 40, 220)
+            frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 10, 120)
         end
     end)
 
     frame:Show()
+    borderFrame:Show()
     self.panel = frame
     self:ApplyLayout()
     self:RefreshFilterButtons()
@@ -553,6 +574,7 @@ function chat:UpdateFade(dt)
         self.fadeAlpha = nextAlpha
         self.panel:SetAlpha(nextAlpha)
     end
+    if self.borderFrame then self.borderFrame:SetAlpha(BORDER_ALPHA * self.panel:GetAlpha()) end
 end
 
 --#endregion
@@ -1266,6 +1288,7 @@ function chat:ClosePanel()
     Input:Deactivate()
     self.fadeAlpha = db().backgroundOpacity
     if self.panel then self.panel:SetAlpha(self.fadeAlpha) end
+    if self.borderFrame then self.borderFrame:SetAlpha(BORDER_ALPHA * self.fadeAlpha) end
 end
 
 function chat:ScrollUp()
@@ -1289,7 +1312,7 @@ function chat:GetDefaults()
             -- Position (per Edit Mode layout)
             positions = {},
             -- Sizing / appearance
-            width = 520,
+            width = DEFAULT_WIDTH,
             height = DEFAULT_HEIGHT,
             scale = 1,
             activeOpacity = 1,
@@ -1298,10 +1321,10 @@ function chat:GetDefaults()
             fadeDelay = 15,
             compactMode = false,
             -- Text (each field is independently configurable)
-            channelFontFace = 'Arial Narrow',
-            channelFontSize = 11,
+            channelFontFace = 'Friz Quadrata TT',
+            channelFontSize = 12,
             nameFontFace = 'Arial Narrow',
-            nameFontSize = 14,
+            nameFontSize = 18,
             msgFontFace = 'Arial Narrow',
             msgFontSize = 14,
             -- Character-by-character reveal (same behaviour as Chat Bubbles)
