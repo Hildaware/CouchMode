@@ -95,8 +95,9 @@ end
 
 function chat:ApplyBlockedList(_)
     -- (Re)build the dynamic dropdown entries.
-    if not self.optionsArgs or not self.optionsArgs.moderation then return end
-    local args = self.optionsArgs.moderation.args
+    if not self.optionsArgs or not self.optionsArgs.moderation
+        or not self.optionsArgs.moderation.args.blocking then return end
+    local args = self.optionsArgs.moderation.args.blocking.args
     args.blocked.values = function() return chat:BuildBlockedList() end
     args.blocked.get = function() return '__none' end
     args.blocked.set = function(_, value)
@@ -157,17 +158,9 @@ function chat:BuildArgs()
                 if value then chat:Enable() else chat:Disable() end
             end,
         },
-        open = {
-            name = 'Open Chat',
-            desc = 'Focus the CouchMode chat input.',
-            type = 'execute',
-            order = 3,
-            func = function() chat:FocusInput() end,
-        },
         appearance = {
             name = 'Appearance',
             type = 'group',
-            inline = true,
             order = 10,
             args = {
                 width = {
@@ -301,82 +294,107 @@ function chat:BuildArgs()
                         chat:UpdateMessageQueuePace()
                     end,
                 },
-            },
-        },
-        identity = {
-            name = 'Identity',
-            type = 'group',
-            inline = true,
-            order = 20,
-            args = {
                 specEnrichment = {
                     name = 'Specialization Badges',
                     desc = 'Throttled, out-of-combat inspects add a specialization badge to player icons.',
                     type = 'toggle',
-                    order = 1,
+                    order = 23,
                     get = function() return db().specEnrichment end,
                     set = function(_, v) db().specEnrichment = v end,
                 },
             },
         },
         moderation = {
-            name = 'Moderation & Aliases',
+            name = 'Moderation',
             type = 'group',
-            inline = true,
             order = 30,
             args = {
-                blocked = {
-                    name = 'Blocked', desc = 'Locally blocked players and guilds.',
-                    type = 'select', style = 'dropdown', order = 1,
-                    values = function() return chat:BuildBlockedList() end,
-                    get = function() return '__none' end,
-                    set = function() end,
+                blocking = {
+                    name = 'Blocking',
+                    type = 'group',
+                    inline = true,
+                    order = 1,
+                    args = {
+                        blockName = {
+                            name = 'Block Player', desc = 'Name or Name-Realm. A bare name matches any realm.',
+                            type = 'input', width = 1, order = 1,
+                            get = function() return '' end,
+                            set = function(_, v)
+                                if v and v ~= '' then chat:BlockName(v) end
+                            end,
+                        },
+                        blockGuild = {
+                            name = 'Block Guild', desc = 'Guild name. Best effort: requires known membership.',
+                            type = 'input', width = 1, order = 2,
+                            get = function() return '' end,
+                            set = function(_, v)
+                                if v and v ~= '' then chat:BlockGuild(v) end
+                            end,
+                        },
+                        blocked = {
+                            name = 'Blocked', desc = 'Locally blocked players and guilds.',
+                            type = 'select', style = 'dropdown', width = 'full', order = 3,
+                            values = function() return chat:BuildBlockedList() end,
+                            get = function() return '__none' end,
+                            set = function() end,
+                        },
+                    },
                 },
-                blockName = {
-                    name = 'Block Player', desc = 'Name or Name-Realm. A bare name matches any realm.',
-                    type = 'input', order = 2,
-                    get = function() return '' end,
-                    set = function(_, v)
-                        if v and v ~= '' then chat:BlockName(v) end
-                    end,
+                aliases = {
+                    name = 'Aliases',
+                    type = 'group',
+                    inline = true,
+                    order = 4,
+                    args = {
+                        aliasKey = {
+                            name = 'Alias Channel', desc = 'Canonical chat type or public channel base name.',
+                            type = 'input', width = 1, order = 1,
+                            get = function() return '' end,
+                            set = function(_, v) db()._pendingAliasKey = v end,
+                        },
+                        aliasName = {
+                            name = 'Alias Name', desc = 'Cosmetic label to show for that channel.',
+                            type = 'input', width = 1, order = 2,
+                            get = function() return '' end,
+                            set = function(_, v)
+                                local key = db()._pendingAliasKey
+                                if key and key ~= '' and v and v ~= '' then
+                                    db().aliases[key] = v
+                                    chat:NotifyChange()
+                                end
+                            end,
+                        },
+                        aliasList = {
+                            name = 'Aliases', desc = 'Configured cosmetic channel aliases.',
+                            type = 'select', style = 'dropdown', width = 'full', order = 3,
+                            values = function() return chat:BuildAliasList() end,
+                            get = function() return '__none' end,
+                            set = function(_, value)
+                                if db().aliases[value] then
+                                    db().aliases[value] = nil
+                                    chat:NotifyChange()
+                                end
+                            end,
+                        },
+                    },
                 },
-                blockGuild = {
-                    name = 'Block Guild', desc = 'Guild name. Best effort: requires known membership.',
-                    type = 'input', order = 3,
-                    get = function() return '' end,
-                    set = function(_, v)
-                        if v and v ~= '' then chat:BlockGuild(v) end
-                    end,
+            },
+        },
+        misc = {
+            name = 'Misc',
+            type = 'group',
+            order = 99,
+            args = {
+                clear = {
+                    name = 'Clear History', desc = 'Clear the current login\'s message history.',
+                    type = 'execute', order = 1,
+                    func = function() chat:ClearSession() end,
                 },
-                aliasKey = {
-                    name = 'Alias Channel', desc = 'Canonical chat type or public channel base name.',
-                    type = 'input', order = 4,
-                    get = function() return '' end,
-                    set = function(_, v) db()._pendingAliasKey = v end,
-                },
-                aliasName = {
-                    name = 'Alias Name', desc = 'Cosmetic label to show for that channel.',
-                    type = 'input', order = 5,
-                    get = function() return '' end,
-                    set = function(_, v)
-                        local key = db()._pendingAliasKey
-                        if key and key ~= '' and v and v ~= '' then
-                            db().aliases[key] = v
-                            chat:NotifyChange()
-                        end
-                    end,
-                },
-                aliasList = {
-                    name = 'Aliases', desc = 'Configured cosmetic channel aliases.',
-                    type = 'select', style = 'dropdown', order = 6,
-                    values = function() return chat:BuildAliasList() end,
-                    get = function() return '__none' end,
-                    set = function(_, value)
-                        if db().aliases[value] then
-                            db().aliases[value] = nil
-                            chat:NotifyChange()
-                        end
-                    end,
+                testMessages = {
+                    name = 'Test Messages',
+                    desc = 'Fire mock messages for every source into the feed.\n\nAlso available in chat as /cm chat mock [set] and /cm chat sets.',
+                    type = 'execute', order = 2,
+                    func = function() chat:RunMock('all') end,
                 },
             },
         },
@@ -391,25 +409,6 @@ function chat:BuildArgs()
                     type = 'execute',
                     order = 1,
                     func = function() chat:OpenBlizzardChatFiltering() end,
-                },
-            },
-        },
-        misc = {
-            name = 'Misc',
-            type = 'group',
-            inline = true,
-            order = 99,
-            args = {
-                clear = {
-                    name = 'Clear History', desc = 'Clear the current login\'s message history.',
-                    type = 'execute', order = 1,
-                    func = function() chat:ClearSession() end,
-                },
-                testMessages = {
-                    name = 'Test Messages',
-                    desc = 'Fire mock messages for every source into the feed.\n\nAlso available in chat as /cm chat mock [set] and /cm chat sets.',
-                    type = 'execute', order = 2,
-                    func = function() chat:RunMock('all') end,
                 },
             },
         },
