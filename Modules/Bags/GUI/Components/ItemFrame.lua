@@ -17,6 +17,7 @@ local database   = addon:GetModule('Bags.Database')
 
 ---@class Utils: AceModule
 local utils      = addon:GetModule('Bags.Utils')
+local rowStyle   = addon.Components.ItemRow
 
 local Masque     = LibStub('Masque', true)
 
@@ -81,26 +82,13 @@ function itemFrame.proto:Build(item, offset, parent)
     local itemWidth = database:GetInventoryViewWidth()
     local itemHeight = database:GetItemViewHeight()
     local columnScale = utils:GetColumnScale()
-    local fontSize = utils:GetFontScale()
+    local fontSize = rowStyle.GetFontSize(itemWidth, itemHeight)
 
     frame:SetParent(parent)
-    frame:SetSize(itemWidth, itemHeight)
+    rowStyle.SetGeometry(frame, itemWidth, itemHeight,
+        session.Settings.Defaults.Columns.Icon * columnScale)
     frame:ClearAllPoints()
     frame:SetPoint('TOP', 0, -((offset - 1) * itemHeight))
-
-    -- ContainerFrameItemButtonTemplate fixes its icon frames at 37px.  Our
-    -- catalog rows resize the button, so keep the item art, quality border,
-    -- and quest overlay in the same bounds at every row scale.
-    local iconSize = itemHeight - 6
-    frame.iconContainer:SetSize(session.Settings.Defaults.Columns.Icon * columnScale, iconSize)
-    frame.icon.frame:SetSize(iconSize, iconSize)
-    frame.icon:SetAllPoints(frame.icon.frame)
-    frame.icon:SetSize(iconSize, iconSize)
-    frame.icon.icon:SetAllPoints(frame.icon)
-    -- frame.icon.NormalTexture:SetAllPoints(frame.icon)
-    frame.icon.NormalTexture:SetSize(iconSize * 1.5, iconSize * 1.5)
-    frame.icon.IconBorder:SetAllPoints(frame.icon)
-    frame.icon.IconQuestTexture:SetAllPoints(frame.icon)
 
     local tooltipOwner = GameTooltip:GetOwner()
 
@@ -108,9 +96,6 @@ function itemFrame.proto:Build(item, offset, parent)
     frame:SetID(item.bag)
 
     frame.itemButton:SetHasItem(item.texture)
-
-    local r, g, b, _ = C_Item.GetItemQualityColor(item.quality or 0)
-    frame.itemButton.HighlightTexture:SetVertexColor(r, g, b, 1)
 
     local questInfo = item.questInfo
     local isQuestItem = questInfo.isQuestItem;
@@ -124,7 +109,7 @@ function itemFrame.proto:Build(item, offset, parent)
     ClearItemButtonOverlay(frame.icon)
     frame.icon:SetHasItem(item.texture)
     frame.icon:SetItemButtonTexture(item.texture)
-    SetItemButtonQuality(frame.icon, item.quality, item.link, false, item.bound)
+    local r, g, b = rowStyle.SetQuality(frame, item.quality or 0, item.link, item.bound)
     SetItemButtonCount(frame.icon, item.stackCount)
     SetItemButtonDesaturated(frame.icon, item.isLocked)
     frame.icon:UpdateExtended()
@@ -259,10 +244,7 @@ end
 
 function itemFrame.proto:Clear()
     self.item = nil
-    self.widget:Hide()
-    self.widget:SetParent(nil)
-    self.widget:ClearAllPoints()
-
+    rowStyle.Reset(self.widget)
 end
 
 ---@return ListItem
@@ -273,96 +255,21 @@ function itemFrame:_DoCreate()
     local itemHeight = database:GetItemViewHeight()
     local itemWidth = database:GetInventoryViewWidth()
     local columnScale = utils:GetColumnScale()
-    local fontSize = utils:GetFontScale()
+    local fontSize = rowStyle.GetFontSize(itemWidth, itemHeight)
 
     ---@class ItemRow
-    local f = CreateFrame('Frame', nil, UIParent)
-    f:SetSize(itemWidth, itemHeight)
-
-    ---@class ItemButton
-    local itemButton = CreateFrame('ItemButton', nil, f, 'ContainerFrameItemButtonTemplate')
-    itemButton:SetAllPoints(f)
-    itemButton:RegisterForClicks('LeftButtonUp', 'RightButtonUp')
-
-    itemButton.NormalTexture:Hide()
-    itemButton.NormalTexture:SetParent(nil)
-    itemButton.NormalTexture = nil
-    itemButton.PushedTexture:Hide()
-    itemButton.PushedTexture:SetParent(nil)
-    itemButton.PushedTexture = nil
-    itemButton.NewItemTexture:Hide()
-    itemButton.BattlepayItemTexture:Hide()
-    itemButton:GetHighlightTexture():Hide()
-    itemButton:GetHighlightTexture():SetParent(nil)
-    itemButton.HighlightTexture = nil
-
-    local undermark = itemButton:CreateTexture()
-    undermark:SetDrawLayer('BACKGROUND')
-    undermark:SetBlendMode('ADD')
-    undermark:SetPoint('TOPLEFT', itemButton, 'BOTTOMLEFT', 0, 1)
-    undermark:SetPoint('BOTTOMRIGHT', itemButton, 'BOTTOMRIGHT')
-    undermark:SetColorTexture(1, 1, 1, 0.2)
-
-    local highlight = itemButton:CreateTexture()
-    highlight:SetDrawLayer('BACKGROUND')
-    highlight:SetBlendMode('ADD')
-    highlight:SetAllPoints()
-    highlight:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Item_Highlight')
-    highlight:Hide()
-    itemButton.HighlightTexture = highlight
-
-    local new = itemButton:CreateTexture()
-    new:SetDrawLayer('BACKGROUND')
-    new:SetBlendMode('ADD')
-    new:SetAllPoints()
-    new:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Item_Highlight')
-    new:SetVertexColor(1, 1, 0, 1)
-    new:Hide()
-    itemButton.NewTexture = new
-
-    local desaturate = itemButton:CreateTexture()
-    desaturate:SetDrawLayer('BACKGROUND')
-    desaturate:SetBlendMode('ADD')
-    desaturate:SetAllPoints()
-    desaturate:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Item_Highlight_Solid')
-    desaturate:SetVertexColor(1, 0, 0, 0.5)
-    desaturate:Hide()
-    itemButton.Desaturate = desaturate
-
-    itemButton:HookScript('OnEnter', function(s)
-        s.HighlightTexture:Show()
-    end)
-    itemButton:HookScript('OnLeave', function(s)
-        s.HighlightTexture:Hide()
+    local f = rowStyle.Create(UIParent)
+    rowStyle.SetGeometry(f, itemWidth, itemHeight,
+        session.Settings.Defaults.Columns.Icon * columnScale)
+    f.itemButton:HookScript('OnLeave', function(s)
         s.NewTexture:Hide()
         if i.item ~= nil then
             i.item.isNew = false
         end
     end)
 
-    f.itemButton = itemButton
-
-    --#region Icon
-    local iconSpace = CreateFrame('Frame', nil, f)
-    iconSpace:SetPoint('LEFT', f, 'LEFT', 4, 0)
-    iconSpace:SetSize(session.Settings.Defaults.Columns.Icon * columnScale, itemHeight - 6)
-    local icon = CreateFrame('Frame', nil, iconSpace)
-    icon:SetPoint('CENTER', iconSpace, 'CENTER')
-    icon:SetSize(itemHeight - 6, itemHeight - 6)
-
-    ---@class ItemIconButton
-    local iconTexture = CreateFrame('ItemButton', nil, icon, 'ContainerFrameItemButtonTemplate')
-    iconTexture:SetAllPoints(icon)
-    -- ConsolePort skips this because it has mouse input disabled. Native Smart
-    -- Navigation considers every Button focusable, so explicitly exclude this
-    -- display-only ItemButton and leave the full-width row as the sole target.
-    if _G.SmartNavigation_MarkFrameIgnored then
-        SmartNavigation_MarkFrameIgnored(iconTexture)
-    else
-        iconTexture.smartNavigationIgnored = true
-    end
-
-    iconTexture.frame = icon
+    local iconSpace = f.iconContainer
+    local iconTexture = f.icon
 
     local upgradeIcon = iconTexture:CreateTexture(nil, 'ARTWORK')
     upgradeIcon:SetPoint('TOPLEFT', iconTexture, 'TOPLEFT', 2, -2)
@@ -399,11 +306,6 @@ function itemFrame:_DoCreate()
 
     scrapFrame:Hide()
     iconTexture.scrap = scrapFrame
-
-    f.iconContainer = iconSpace
-    f.icon = iconTexture
-
-    --#endregion
 
     --#region Name
 

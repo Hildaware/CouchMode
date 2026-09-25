@@ -165,8 +165,6 @@ end
 function view.proto:SetupGamepadNavigation()
     local f = self.widget
     if self.usesConsolePort then
-        f.scroller.ScrollBar:Hide()
-        f.scroller.ScrollBar:EnableMouse(false)
         _G.ConsolePort:AddInterfaceCursorFrame(f)
         f:SetPropagateKeyboardInput(true)
         f:SetScript('OnGamePadButtonDown', function(_, key)

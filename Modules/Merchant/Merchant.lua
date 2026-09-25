@@ -347,7 +347,7 @@ function merchant:CreateView()
         width = self.profile.width, height = self.profile.height,
         minWidth = 480, minHeight = 360, maxWidth = 1200, maxHeight = 1200,
         headerHeight = 32, toolbarHeight = 34, columnHeaderHeight = 0, footerHeight = 76,
-        rowHeight = 58, scrollTemplate = scrollTemplate, search = true,
+        rowHeight = addon.MerchantRows:GetHeight(), scrollTemplate = scrollTemplate, search = true,
         onSearch = function(text)
             if self.settingSearchText then return end
             if CursorHasItem() then ClearCursor() end
@@ -466,8 +466,6 @@ function merchant:CreateView()
     frame:HookScript('OnShow', function() self:ActivateGamepad() end)
     frame:HookScript('OnHide', function() self:DeactivateGamepad() end)
     if scrollTemplate == 'CPSmoothScrollTemplate' then
-        self.catalog.scrollFrame.ScrollBar:Hide()
-        self.catalog.scrollFrame.ScrollBar:EnableMouse(false)
         ConsolePort:AddInterfaceCursorFrame(frame)
     end
 end

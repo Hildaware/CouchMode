@@ -115,6 +115,16 @@ function catalog:Create(options)
     local footer = CreateFrame('Frame', nil, f)
     footer:SetPoint('BOTTOMLEFT', f, 'BOTTOMLEFT', 10, 10); footer:SetPoint('BOTTOMRIGHT', f, 'BOTTOMRIGHT', -10, 10); footer:SetHeight(options.footerHeight or 0)
     local scroll = CreateFrame('ScrollFrame', nil, f, options.scrollTemplate or 'UIPanelScrollFrameTemplate')
+    -- Blizzard can show the bar again whenever the scroll range changes.
+    -- Keep it invisible while preserving its value for wheel and gamepad scrolling.
+    if scroll.ScrollBar then
+        local scrollBar = scroll.ScrollBar
+        scrollBar:Hide()
+        scrollBar:SetAlpha(0)
+        scrollBar:EnableMouse(false)
+        if scrollBar.ScrollUpButton then scrollBar.ScrollUpButton:EnableMouse(false) end
+        if scrollBar.ScrollDownButton then scrollBar.ScrollDownButton:EnableMouse(false) end
+    end
     scroll:ClearAllPoints()
     scroll:SetPoint('TOPLEFT', f, 'TOPLEFT', 0,
         -(28 + (options.headerHeight or 32) + (options.toolbarHeight or 0) + (options.columnHeaderHeight or 0)))

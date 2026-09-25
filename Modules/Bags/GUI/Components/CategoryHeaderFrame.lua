@@ -111,9 +111,9 @@ function categoryHeaders:_DoCreate()
 
     f:RegisterForClicks('LeftButtonUp')
 
-    f:SetNormalTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Item_Highlight_Solid')
+    f:SetNormalTexture('Interface\\Addons\\CouchMode\\Resources\\Media\\Item_Highlight_Solid')
     f:GetNormalTexture():SetVertexColor(1, 1, 0, 0.5)
-    f:SetHighlightTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Item_Highlight_Solid')
+    f:SetHighlightTexture('Interface\\Addons\\CouchMode\\Resources\\Media\\Item_Highlight_Solid')
     f:GetHighlightTexture():SetVertexColor(1, 1, 0, 0.25)
 
     -- type
