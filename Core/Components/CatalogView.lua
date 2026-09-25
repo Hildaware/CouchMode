@@ -115,7 +115,10 @@ function catalog:Create(options)
     local footer = CreateFrame('Frame', nil, f)
     footer:SetPoint('BOTTOMLEFT', f, 'BOTTOMLEFT', 10, 10); footer:SetPoint('BOTTOMRIGHT', f, 'BOTTOMRIGHT', -10, 10); footer:SetHeight(options.footerHeight or 0)
     local scroll = CreateFrame('ScrollFrame', nil, f, options.scrollTemplate or 'UIPanelScrollFrameTemplate')
-    scroll:SetPoint('TOPLEFT', columnHeader, 'BOTTOMLEFT'); scroll:SetPoint('BOTTOMRIGHT', footer, 'TOPRIGHT')
+    scroll:ClearAllPoints()
+    scroll:SetPoint('TOPLEFT', f, 'TOPLEFT', 0,
+        -(28 + (options.headerHeight or 32) + (options.toolbarHeight or 0) + (options.columnHeaderHeight or 0)))
+    scroll:SetPoint('BOTTOMRIGHT', f, 'BOTTOMRIGHT', -10, 10 + (options.footerHeight or 0))
     local content = CreateFrame('Frame', nil, scroll); content:SetSize(1, 1); scroll:SetScrollChild(content)
     if options.smoothScroll ~= false then enableSmoothScrolling(scroll) end
     -- Assign regions before creating resize assets: Blizzard can issue a size
