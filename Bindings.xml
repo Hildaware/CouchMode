@@ -29,19 +29,19 @@
     <Binding name="COUCHMODE_CHAT_CLOSE" category="CouchMode">
         CouchMode_ChatClose()
     </Binding>
-    <Binding name="COUCHMODE_LOOT_TOGGLE" category="CouchMode">
-        CouchMode_LootToggle()
+    <Binding name="COUCHMODE_TOASTS_TOGGLE" category="CouchMode">
+        CouchMode_ToastsToggle()
     </Binding>
-    <Binding name="COUCHMODE_LOOT_SCROLL_UP" category="CouchMode">
-        CouchMode_LootScrollUp()
+    <Binding name="COUCHMODE_TOASTS_SCROLL_UP" category="CouchMode">
+        CouchMode_ToastsScrollUp()
     </Binding>
-    <Binding name="COUCHMODE_LOOT_SCROLL_DOWN" category="CouchMode">
-        CouchMode_LootScrollDown()
+    <Binding name="COUCHMODE_TOASTS_SCROLL_DOWN" category="CouchMode">
+        CouchMode_ToastsScrollDown()
     </Binding>
-    <Binding name="COUCHMODE_LOOT_BOTTOM" category="CouchMode">
-        CouchMode_LootBottom()
+    <Binding name="COUCHMODE_TOASTS_BOTTOM" category="CouchMode">
+        CouchMode_ToastsBottom()
     </Binding>
-    <Binding name="COUCHMODE_LOOT_CLOSE" category="CouchMode">
-        CouchMode_LootClose()
+    <Binding name="COUCHMODE_TOASTS_CLOSE" category="CouchMode">
+        CouchMode_ToastsClose()
     </Binding>
 </Bindings>

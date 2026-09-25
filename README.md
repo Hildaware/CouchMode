@@ -19,13 +19,14 @@ Utilities that make World of Warcraft feel more like a console experience.
 - **Chat Bubbles** — reskins NPC overhead speech bubbles with portraits and a
   reveal animation. NPC lines that cannot be replaced overhead are routed into
   Chat. Chat and Chat Bubbles can be enabled independently.
-- **Loot** — a standalone, session-scoped reward feed. It shows item
+- **Toasts** — a standalone, session-scoped feed. It shows item
   acquisitions (icon, name and carried count, tinted by rarity), money gains,
-  currency gains and reputation increases as bottom-anchored, auto-fading rows
+  currency gains, reputation increases and system messages as bottom-anchored, auto-fading rows
   with mouse-wheel scrolling, history browsing and a return-to-bottom button.
-  Recognized reward lines are removed from Blizzard chat only while the matching
-  reward category is enabled; group loot, losses and unsupported-client lines
-  stay in native chat. Placed and scaled independently through Edit Mode.
+  System messages use a distinct color and wrap across multiple lines. Recognized
+  lines are removed from Blizzard chat while the matching category is enabled;
+  group loot, losses and unsupported-client reward lines stay in native chat.
+  Placed and scaled independently through Edit Mode.
 - **Bags**, **CastBar**, **Nameplates**, **Map**, **Tips**, **Player Bars** — see
   the in-game options under *Options → AddOns → Couch Mode*.
 
@@ -34,15 +35,11 @@ so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 
 ## Development
 
-Syntax-check every Lua file and run the pure test suite:
+Syntax-check every Lua file:
 
 ```sh
-scripts/run-tests.sh
+rg --files -g '*.lua' | xargs luac -p
 ```
-
-The tests cover source normalization, category mapping, grouping, local
-moderation rules, router dedup/routing, the profile migration, client-flavor
-detection, loot recognition/normalization/enrichment and the mock fixtures.
 
 ### In-game mock messages
 
@@ -60,18 +57,21 @@ Sets: `npc`, `whisper`, `group`, `guild`, `public`, `system`, `rich` (links,
 emotes and long wrapping text), plus `all`. There is also a **Test Messages**
 button under *Options → AddOns → Couch Mode → Chat*.
 
-`Modules/Loot/Mock.lua` fires representative rewards for every Loot category:
+`Modules/Toasts/Mock.lua` fires representative rewards and system messages:
 
 ```
-/cm loot items             -- a few item rewards
-/cm loot mock              -- every reward category
-/cm loot mock item         -- a single set
-/cm loot sets              -- list the available sets
-/cm loot clear             -- wipe the current login's history
+/cm toasts items             -- a few item rewards
+/cm toasts mock              -- every category
+/cm toasts mock system       -- system messages
+/cm toasts sets              -- list the available sets
+/cm toasts clear             -- wipe the current login's history
 ```
 
-Sets: `item`, `money`, `currency`, `reputation`, plus `all`. There is also a
-**Test Rewards** button under *Options → AddOns → Couch Mode → Loot*.
+Sets: `item`, `money`, `currency`, `reputation`, `system`, plus `all`. There is
+also a **Test Rewards** button under *Options → AddOns → Couch Mode → Toasts*.
+
+Chat currently keeps its own System category. Its removal from the Chat feed is
+reserved for the separate Chat module change.
 
 For current Blizzard UI implementation details, consult the extracted client
 source described in `AGENTS.md`.

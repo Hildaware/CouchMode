@@ -8,5 +8,5 @@
     <Include file = 'Bags/Bags.xml' />
     <Include file = 'Tips/Tips.xml' />
     <Include file = 'Chat/Chat.xml' />
-    <Include file = 'Loot/Loot.xml' />
+    <Include file = 'Toasts/Toasts.xml' />
 </UI>

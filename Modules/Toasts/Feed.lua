@@ -1,8 +1,8 @@
 --[[ Feed.lua
-A pooled, bottom-anchored scrolling list of loot reward rows.
+A pooled, bottom-anchored scrolling list of toast rows.
 
 The feed owns no policy: it renders the entries it is handed and reports its
-scroll state. Styling is delegated to `addon.Loot` through a presenter, so
+scroll state. Styling is delegated to `addon.Toasts` through a presenter, so
 colors, icons and labels stay in one place.
 ]]
 
@@ -23,6 +23,7 @@ local ICON_GAP = 6
 local QUEST_ICON_SIZE = 16
 local QUEST_ICON_GAP = 4
 local TEXT_PAD = 6
+local WRAPPED_TEXT_PAD = 12
 local FADE_TIME = 0.25
 
 --#endregion
@@ -132,6 +133,8 @@ end
 function Feed:SetWidth(width)
     self.width = width
     self.scrollChild:SetWidth(width)
+    for i = 1, #self.rows do self:SizeRow(self.rows[i]) end
+    if self.viewportHeight > 0 then self:Layout() end
 end
 
 --- Stores the resolved font metrics and applies them to live rows.
@@ -140,7 +143,9 @@ function Feed:SetFonts(fonts)
     self.fonts = fonts or { label = { face = nil, size = 14 } }
     for i = 1, #self.rows do
         self:ApplyFont(self.rows[i])
+        self:SizeRow(self.rows[i])
     end
+    if self.viewportHeight > 0 then self:Layout() end
 end
 
 ---@param row Frame
@@ -148,6 +153,17 @@ function Feed:ApplyFont(row)
     local font = self.fonts and self.fonts.label
     if font and font.face then
         row.label:SetFont(font.face, font.size or 14)
+    end
+end
+
+function Feed:SizeRow(row)
+    local presented = row._presented or {}
+    local labelOffset = row._labelOffset or TEXT_PAD
+    row.label:SetWidth(math.max(1, self.width - PADDING * 2 - labelOffset - TEXT_PAD))
+    if presented.wrap then
+        row:SetHeight(math.max(ROW_HEIGHT, math.ceil(row.label:GetStringHeight()) + WRAPPED_TEXT_PAD))
+    else
+        row:SetHeight(ROW_HEIGHT)
     end
 end
 
@@ -181,6 +197,7 @@ function Feed:ReleaseRow(row)
         GameTooltip:Hide()
     end
     row._entry = nil
+    row._presented = nil
     row._alpha = nil
     row.label:SetText('')
     row.label:SetTextColor(1, 1, 1, 1)
@@ -195,7 +212,7 @@ end
 
 --- Applies the presenter's styling to one row.
 ---@param row Frame
----@param entry LootEntry
+---@param entry ToastEntry
 function Feed:RenderRow(row, entry)
     row._entry = entry
     row._alpha = 1
@@ -203,8 +220,10 @@ function Feed:RenderRow(row, entry)
 
     local presented = self.presenter and self.presenter(entry) or nil
     if not presented then presented = { text = '' } end
+    row._presented = presented
 
     row.label:SetText(presented.text or '')
+    row.label:SetWordWrap(presented.wrap == true)
     self:ApplyFont(row)
     local text = presented.textColor
     row.label:SetTextColor(text and text[1] or 1, text and text[2] or 1, text and text[3] or 1, 1)
@@ -239,11 +258,12 @@ function Feed:RenderRow(row, entry)
 
     row.label:ClearAllPoints()
     row.label:SetPoint('LEFT', row, 'LEFT', labelOffset, 0)
-    row.label:SetPoint('RIGHT', row, 'RIGHT', -TEXT_PAD, 0)
+    row._labelOffset = labelOffset
+    self:SizeRow(row)
 end
 
 --- Adds one entry below the existing rows.
----@param entry LootEntry
+---@param entry ToastEntry
 function Feed:Append(entry)
     local row = self:AcquireRow()
     self:RenderRow(row, entry)
@@ -262,7 +282,7 @@ function Feed:TrimFirst(count)
 end
 
 --- Re-renders the whole list from `entries`, preserving the scroll position.
----@param entries LootEntry[]
+---@param entries ToastEntry[]
 function Feed:Rebuild(entries)
     local offset = self.scrollFrame:GetVerticalScroll() or 0
     for i = #self.rows, 1, -1 do
@@ -297,7 +317,8 @@ end
 --- shorter than the viewport the stack sits at the bottom.
 function Feed:Layout()
     local count = #self.rows
-    local contentHeight = count > 0 and (count * ROW_HEIGHT + (count - 1) * ROW_GAP) or 0
+    local contentHeight = count > 0 and (count - 1) * ROW_GAP or 0
+    for i = 1, count do contentHeight = contentHeight + self.rows[i]:GetHeight() end
     local top = 0
     if contentHeight < self.viewportHeight then
         top = self.viewportHeight - contentHeight
@@ -305,10 +326,11 @@ function Feed:Layout()
 
     for i = 1, count do
         local row = self.rows[i]
-        local y = -(top + (i - 1) * (ROW_HEIGHT + ROW_GAP))
+        local y = -top
         row:ClearAllPoints()
         row:SetPoint('TOPLEFT', self.scrollChild, 'TOPLEFT', PADDING, y)
         row:SetPoint('TOPRIGHT', self.scrollChild, 'TOPRIGHT', -PADDING, y)
+        top = top + row:GetHeight() + ROW_GAP
     end
 
     self.contentHeight = contentHeight
@@ -415,5 +437,5 @@ end
 
 --#endregion
 
-if addon then addon.LootFeedProto = Feed end
+if addon then addon.ToastFeedProto = Feed end
 return Feed

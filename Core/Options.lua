@@ -14,7 +14,7 @@ local options = addon:NewModule('Options')
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
 local MODULES = { 'Bags', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'PlayerHealthBar', 'PlayerPowerBar',
-    'PlayerManaBar', 'Chat', 'ChatBubbles', 'Loot' }
+    'PlayerManaBar', 'Chat', 'ChatBubbles', 'Toasts' }
 
 -- Modules whose options are nested together under a single "Player Bars" group.
 local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerPowerBar = true, PlayerManaBar = true }
@@ -72,11 +72,11 @@ function options:OnInitialize()
             end
             return
         end
-        -- `/cm loot ...` drives the Loot module's mock/testing subcommands.
-        if cmd == 'loot' then
+        -- `/cm toasts ...` drives the Toasts mock/testing subcommands.
+        if cmd == 'toasts' then
             local sub, arg = rest:match('^%s*(%S*)%s*(.-)%s*$')
-            if addon.Loot and addon.Loot.HandleCommand then
-                addon.Loot:HandleCommand(sub or '', arg or '')
+            if addon.Toasts and addon.Toasts.HandleCommand then
+                addon.Toasts:HandleCommand(sub or '', arg or '')
             end
             return
         end

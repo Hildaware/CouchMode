@@ -4,5 +4,5 @@
     <Include file='Sources.lua'/>
     <Include file='Feed.lua'/>
     <Include file='Mock.lua'/>
-    <Include file='Loot.lua'/>
+    <Include file='Toasts.lua'/>
 </UI>

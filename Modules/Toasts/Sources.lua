@@ -1,14 +1,15 @@
 --[[ Sources.lua
-Flavor-safe event sources and normalization for CouchMode's Loot module.
+Flavor-safe event sources and normalization for CouchMode's Toasts module.
 
 This file is intentionally free of Ace/Lib dependencies so it can be loaded by
 the pure Lua test suite:
-    local chunk = assert(loadfile('Modules/Loot/Sources.lua'))
+    local chunk = assert(loadfile('Modules/Toasts/Sources.lua'))
     local Sources = chunk('CouchMode', fakeAddon)
 
-It owns three responsibilities:
+It owns four responsibilities:
   * describe which Blizzard events carry each reward kind,
   * recognize/normalize accepted rewards (items, money, currency, reputation),
+  * normalize supported system messages,
   * enrich accepted items through C_Item without ever touching secret values.
 
 Recognition is driven entirely by Blizzard's localized runtime format strings
@@ -59,14 +60,31 @@ end
 
 --#region ── Reward kinds and events ──────────────────────────────────────────
 
---- The four reward categories the Loot feed understands.
----@alias LootKind 'items'|'money'|'currency'|'reputation'
+--- Reward categories and the separate system-message category.
+---@alias RewardKind 'items'|'money'|'currency'|'reputation'
+---@alias ToastKind RewardKind|'system'
 
----@type LootKind[]
+---@type RewardKind[]
 M.KINDS = { 'items', 'money', 'currency', 'reputation' }
 
+-- Keep this list aligned with the SYSTEM events in ChatSources until Chat's
+-- own routing is moved. Toasts registers independently of Chat.
+M.SYSTEM_EVENTS = {
+    'CHAT_MSG_SYSTEM',
+    'CHAT_MSG_CHANNEL_NOTICE',
+    'CHAT_MSG_CHANNEL_NOTICE_USER',
+    'CHAT_MSG_IGNORED',
+    'CHAT_MSG_FILTERED',
+    'CHAT_MSG_RESTRICTED',
+    'CHAT_MSG_BN_WHISPER_PLAYER_OFFLINE',
+    'CHAT_MSG_BN_INLINE_TOAST_ALERT',
+    'CHAT_MSG_BN_INLINE_TOAST_BROADCAST',
+}
+M.SYSTEM_EVENT_SET = {}
+for _, event in ipairs(M.SYSTEM_EVENTS) do M.SYSTEM_EVENT_SET[event] = true end
+
 --- The Blizzard chat event that carries each reward category's text.
----@type table<LootKind, string>
+---@type table<RewardKind, string>
 M.KIND_EVENT = {
     items = 'CHAT_MSG_LOOT',
     money = 'CHAT_MSG_MONEY',
@@ -75,7 +93,7 @@ M.KIND_EVENT = {
 }
 
 --- Reverse lookup: chat event -> reward category.
----@type table<string, LootKind>
+---@type table<string, RewardKind>
 M.EVENT_KIND = {}
 for kind, event in pairs(M.KIND_EVENT) do
     M.EVENT_KIND[event] = kind
@@ -84,6 +102,7 @@ end
 --- Every chat event the native-chat filters care about.
 ---@type string[]
 M.EVENTS = { 'CHAT_MSG_LOOT', 'CHAT_MSG_MONEY', 'CHAT_MSG_CURRENCY', 'CHAT_MSG_COMBAT_FACTION_CHANGE' }
+for _, event in ipairs(M.SYSTEM_EVENTS) do M.EVENTS[#M.EVENTS + 1] = event end
 
 --- Events the module registers for reward ingestion and item refresh. They are
 --- registered through addon.Utils.RegisterEventIfValid so an unknown event can
@@ -102,6 +121,7 @@ M.SUPPORT_EVENTS = {
     'BAG_UPDATE_DELAYED',
     'PLAYER_ENTERING_WORLD',
 }
+for _, event in ipairs(M.SYSTEM_EVENTS) do M.SUPPORT_EVENTS[#M.SUPPORT_EVENTS + 1] = event end
 
 --#endregion
 
@@ -354,8 +374,8 @@ end
 
 --#region ── Entry normalization ───────────────────────────────────────────────
 
----@class LootEntry
----@field kind        LootKind  Reward category
+---@class ToastEntry
+---@field kind        ToastKind Reward or system category
 ---@field timestamp   number    GetTime() when received
 ---@field originalText string?  Raw line, retained for fallback rendering
 ---@field name        string?   Display name (item/faction/currency)
@@ -373,10 +393,22 @@ end
 ---@field currencyID  number?   Currency id
 ---@field needsRefresh boolean? Item data or count still pending
 
+--- Builds a toast only for a supported system event with safe display text.
+---@param event string
+---@param text any
+---@param timestamp number
+---@return ToastEntry?
+function M.NormalizeSystem(event, text, timestamp)
+    if not M.SYSTEM_EVENT_SET[event] then return nil end
+    text = M.SafeString(text)
+    if not text then return nil end
+    return { kind = 'system', timestamp = timestamp, originalText = text }
+end
+
 --- Builds an item entry from a raw CHAT_MSG_LOOT line.
 ---@param text any
 ---@param timestamp number
----@return LootEntry?
+---@return ToastEntry?
 function M.NormalizeItem(text, timestamp)
     local info = M.ParseSelfLoot(text)
     if not info then return nil end
@@ -395,7 +427,7 @@ end
 ---@param delta any
 ---@param total any
 ---@param timestamp number
----@return LootEntry?
+---@return ToastEntry?
 function M.NormalizeMoney(delta, total, timestamp)
     if isSecret(delta) or type(delta) ~= 'number' or delta <= 0 then return nil end
     return {
@@ -429,7 +461,7 @@ end
 ---@param quantity any
 ---@param quantityChange any
 ---@param timestamp number
----@return LootEntry?
+---@return ToastEntry?
 function M.NormalizeCurrency(currencyID, quantity, quantityChange, timestamp)
     if isSecret(currencyID) or type(currencyID) ~= 'number' then return nil end
     if isSecret(quantityChange) or type(quantityChange) ~= 'number' or quantityChange <= 0 then return nil end
@@ -528,7 +560,7 @@ end
 --- Builds a reputation entry from a raw CHAT_MSG_COMBAT_FACTION_CHANGE line.
 ---@param text any
 ---@param timestamp number
----@return LootEntry?
+---@return ToastEntry?
 function M.NormalizeReputation(text, timestamp)
     local gain = M.ParseReputationGain(text)
     if not gain then return nil end
@@ -549,7 +581,7 @@ end
 ---@param amount number?
 ---@param timestamp number
 ---@param text string?
----@return LootEntry?
+---@return ToastEntry?
 function M.NormalizeReputationFromParts(name, amount, timestamp, text)
     if isSecret(amount) or type(amount) ~= 'number' or amount <= 0 then return nil end
     return {
@@ -567,7 +599,7 @@ end
 
 --- Resolves an item's name, icon and quality through C_Item, and optionally its
 --- carried-bag count. Secret return values are ignored rather than compared.
----@param entry LootEntry
+---@param entry ToastEntry
 ---@param options? { GetItemInfo?: fun(id:number):any, GetItemIconByID?: fun(id:number):any, GetItemCount?: fun(id:number):any, withCount?: boolean }
 ---@return boolean changed
 function M.EnrichItem(entry, options)
@@ -628,7 +660,7 @@ end
 --- Whether the client has supplied the item's cached data (quality and icon).
 --- The carried count is refreshed separately once bags settle, so it is not
 --- part of the resolution check.
----@param entry LootEntry
+---@param entry ToastEntry
 ---@return boolean
 function M.IsItemResolved(entry)
     return M.SafeNumber(entry.quality) ~= nil and M.SafeNumber(entry.icon) ~= nil
@@ -636,5 +668,5 @@ end
 
 --#endregion
 
-if addon then addon.LootSources = M end
+if addon then addon.ToastSources = M end
 return M

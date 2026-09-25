@@ -1,9 +1,9 @@
 --[[ Mock.lua
-Representative rewards for every Loot category, driven from chat:
+Representative rewards and system messages for Toasts:
 
-    /cm loot mock           -- every set
-    /cm loot mock item      -- a single set
-    /cm loot clear          -- wipe the session history
+    /cm toasts mock           -- every set
+    /cm toasts mock item      -- a single set
+    /cm toasts clear          -- wipe the session history
 
 Item entries are emitted as real CHAT_MSG_LOOT lines (built from the client's
 own localized format strings when available) so a mock run exercises
@@ -95,6 +95,13 @@ local function reputationSet()
     }
 end
 
+local function systemSet()
+    return {
+        { kind = 'system', event = 'CHAT_MSG_SYSTEM', text = 'You are now AFK.' },
+        { kind = 'system', event = 'CHAT_MSG_SYSTEM', text = 'No player named "Ghost" is currently playing.' },
+    }
+end
+
 --#endregion
 
 --#region ── Scenario registry ──────────────────────────────────────────────────
@@ -104,12 +111,13 @@ M.SETS = {
     money = moneySet,
     currency = currencySet,
     reputation = reputationSet,
+    system = systemSet,
 }
 
-M.ORDER = { 'item', 'money', 'currency', 'reputation' }
+M.ORDER = { 'item', 'money', 'currency', 'reputation', 'system' }
 
 --- Accepted spellings for each set. The plural forms are the natural thing to
---- type from chat (/cm loot mock items).
+--- type from chat (/cm toasts mock items).
 ---@type table<string, string>
 M.ALIASES = {
     items = 'item',
@@ -158,27 +166,27 @@ end
 
 --#region ── Firing ─────────────────────────────────────────────────────────────
 
---- Emits one scenario entry through the Loot module.
----@param loot table
+--- Emits one scenario entry through the Toasts module.
+---@param toasts table
 ---@param spec table
-function M.Fire(loot, spec)
-    if loot.MockEntry then loot:MockEntry(spec) end
+function M.Fire(toasts, spec)
+    if toasts.MockEntry then toasts:MockEntry(spec) end
 end
 
 --- Fires a set with a staggered delay so fading and scrolling are visible.
----@param loot table
+---@param toasts table
 ---@param setName string
 ---@param stepDelay number?
 ---@return number fired
-function M.Run(loot, setName, stepDelay)
+function M.Run(toasts, setName, stepDelay)
     local entries = M.Collect(setName)
     stepDelay = stepDelay or M.STEP_DELAY
     for i = 1, #entries do
         local spec = entries[i]
         if C_Timer and C_Timer.After then
-            C_Timer.After((i - 1) * stepDelay, function() M.Fire(loot, spec) end)
+            C_Timer.After((i - 1) * stepDelay, function() M.Fire(toasts, spec) end)
         else
-            M.Fire(loot, spec)
+            M.Fire(toasts, spec)
         end
     end
     return #entries
@@ -186,5 +194,5 @@ end
 
 --#endregion
 
-if addon then addon.LootMock = M end
+if addon then addon.ToastMock = M end
 return M

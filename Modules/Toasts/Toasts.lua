@@ -1,23 +1,21 @@
 local addonName, addon = ...
 
 ---@class CouchMode: AceAddon
----@field LootSources table
----@field LootFeedProto table
----@field LootMock table
----@field Loot LootModule
+---@field ToastSources table
+---@field ToastFeedProto table
+---@field ToastMock table
+---@field Toasts ToastsModule
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LibEditMode = LibStub('LibEditMode')
-local LSM = LibStub('LibSharedMedia-3.0')
 
----@class LootModule: AceModule
----@field HandleCommand fun(self: LootModule, sub: string, arg: string)
-local loot = addon:NewModule('Loot', 'AceEvent-3.0')
+---@class ToastsModule: AceModule
+---@field HandleCommand fun(self: ToastsModule, sub: string, arg: string)
+local toasts = addon:NewModule('Toasts', 'AceEvent-3.0')
 
-local Sources = addon.LootSources
+local Sources = addon.ToastSources
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local FALLBACK_FONT = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
 local PAD = 8
 local MIN_HEIGHT = 120
 local PANEL_ORDER = 12
@@ -30,6 +28,7 @@ local DEFAULT_HEIGHT = 300
 local NEUTRAL = { r = 0.16, g = 0.16, b = 0.16 }
 local MONEY = { r = 0.83, g = 0.68, b = 0.21 }
 local REPUTATION = { r = 0.30, g = 0.58, b = 0.95 }
+local SYSTEM = { r = 0.46, g = 0.79, b = 0.92 }
 local QUEST = { r = 1, g = 0.82, b = 0 }
 local QUEST_ICON_ATLAS = 'QuestNormal'
 local REPUTATION_ICON = 'Interface\\Icons\\achievement_reputation_01'
@@ -41,28 +40,24 @@ local ROW_BG_ALPHA = 0.5
 
 --#region ── Module state ──────────────────────────────────────────────────────
 
-loot.session = {}       ---@type LootEntry[]
-loot.lastMoney = nil    ---@type number?
-loot.panel = nil        ---@type Frame?
-loot.feed = nil
-loot.returnButton = nil ---@type Button?
-loot.fadeAlpha = 1
-loot.refreshPending = false
-loot.filters = nil      ---@type { event: string, callback: fun(...) }[]?
-loot.filtersInstalled = false
+toasts.session = {}       ---@type ToastEntry[]
+toasts.lastMoney = nil    ---@type number?
+toasts.panel = nil        ---@type Frame?
+toasts.feed = nil
+toasts.returnButton = nil ---@type Button?
+toasts.fadeAlpha = 1
+toasts.refreshPending = false
+toasts.filters = nil      ---@type { event: string, callback: fun(...) }[]?
+toasts.filtersInstalled = false
 
 --#endregion
 
 --#region ── Small helpers ───────────────────────────────────────────────────────
 
-local function db() return addon.db.profile.loot end
+local function db() return addon.db.profile.toasts end
 
 local function now()
     return (type(GetTime) == 'function') and GetTime() or 0
-end
-
-local function fetchFont(face)
-    return LSM:Fetch(LSM.MediaType.FONT, face) or FALLBACK_FONT
 end
 
 --- Reads an item quality's RGB from the client, tolerating older clients.
@@ -144,7 +139,7 @@ end
 --- Builds the parenthetical reputation detail: "Friendly 1,000 / 6,000", the
 --- label alone for capped factions, the progress alone when no label is known,
 --- or nil when nothing can be resolved.
----@param entry LootEntry
+---@param entry ToastEntry
 ---@return string?
 local function reputationDetail(entry)
     local label = standingLabel(entry.reaction)
@@ -160,19 +155,19 @@ end
 
 --#region ── Lifecycle ─────────────────────────────────────────────────────────
 
-function loot:OnInitialize()
-    addon.Loot = self
+function toasts:OnInitialize()
+    addon.Toasts = self
 end
 
 --- Registers an event only when the running client defines it.
 ---@param event string
 ---@param handler string|fun(...)
 ---@return boolean registered
-function loot:RegisterValidEvent(event, handler)
+function toasts:RegisterValidEvent(event, handler)
     return addon.Utils.RegisterEventIfValid(self, event, handler)
 end
 
-function loot:OnEnable()
+function toasts:OnEnable()
     if not db().enabled then
         self:Disable()
         return
@@ -192,7 +187,7 @@ function loot:OnEnable()
     self:Touch()
 end
 
-function loot:OnDisable()
+function toasts:OnDisable()
     for _, event in ipairs(Sources.SUPPORT_EVENTS) do
         self:UnregisterEvent(event)
     end
@@ -204,7 +199,7 @@ end
 
 --#region ── Money snapshot ────────────────────────────────────────────────────
 
-function loot:SnapshotMoney()
+function toasts:SnapshotMoney()
     if type(GetMoney) ~= 'function' then return end
     local money = GetMoney()
     if money ~= nil and not Sources.isSecret(money) then
@@ -212,7 +207,7 @@ function loot:SnapshotMoney()
     end
 end
 
-function loot:OnPlayerEnteringWorld()
+function toasts:OnPlayerEnteringWorld()
     self:SnapshotMoney()
     self:ScheduleRefresh()
 end
@@ -221,8 +216,8 @@ end
 
 --#region ── Reward ingestion ──────────────────────────────────────────────────
 
----@param entry LootEntry
-function loot:AddEntry(entry)
+---@param entry ToastEntry
+function toasts:AddEntry(entry)
     if not db().enabled then return end
 
     self.session[#self.session + 1] = entry
@@ -249,7 +244,7 @@ end
 --- CHAT_MSG_LOOT: local-player item acquisitions only.
 ---@param _event string
 ---@param text any
-function loot:OnLootMessage(_event, text)
+function toasts:OnLootMessage(_event, text)
     if not db().items then return end
     local entry = Sources.NormalizeItem(text, now())
     if not entry then return end
@@ -264,7 +259,7 @@ function loot:OnLootMessage(_event, text)
 end
 
 --- PLAYER_MONEY: consume positive deltas of the GetMoney() snapshot.
-function loot:OnPlayerMoney()
+function toasts:OnPlayerMoney()
     if not db().money then return end
     if type(GetMoney) ~= 'function' then return end
 
@@ -285,7 +280,7 @@ end
 ---@param currencyID any
 ---@param quantity any
 ---@param quantityChange any
-function loot:OnCurrencyUpdate(_event, currencyID, quantity, quantityChange)
+function toasts:OnCurrencyUpdate(_event, currencyID, quantity, quantityChange)
     if not db().currency then return end
     local entry = Sources.NormalizeCurrency(currencyID, quantity, quantityChange, now())
     if entry then self:AddEntry(entry) end
@@ -294,9 +289,18 @@ end
 --- CHAT_MSG_COMBAT_FACTION_CHANGE: positive reputation increases only.
 ---@param _event string
 ---@param text any
-function loot:OnReputationMessage(_event, text)
+function toasts:OnReputationMessage(_event, text)
     if not db().reputation then return end
     local entry = Sources.NormalizeReputation(text, now())
+    if entry then self:AddEntry(entry) end
+end
+
+--- Displays the same system-event family currently categorized by Chat.
+---@param event string
+---@param text any
+function toasts:OnSystemMessage(event, text)
+    if not db().system then return end
+    local entry = Sources.NormalizeSystem(event, text, now())
     if entry then self:AddEntry(entry) end
 end
 
@@ -334,7 +338,7 @@ local function getQuestItemIDsInBags()
     return questItemIDs
 end
 
-function loot:RefreshItems()
+function toasts:RefreshItems()
     if not db().enabled then return end
     local changed = false
     local questItemIDs
@@ -355,7 +359,7 @@ function loot:RefreshItems()
     if changed and self.feed then self.feed:Rebuild(self.session) end
 end
 
-function loot:ScheduleRefresh()
+function toasts:ScheduleRefresh()
     if not (C_Timer and C_Timer.After) or self.refreshPending then return end
     self.refreshPending = true
     C_Timer.After(REFRESH_DELAY, function()
@@ -364,11 +368,11 @@ function loot:ScheduleRefresh()
     end)
 end
 
-function loot:OnItemInfoReceived()
+function toasts:OnItemInfoReceived()
     self:ScheduleRefresh()
 end
 
-loot.OnBagUpdate = loot.OnItemInfoReceived
+toasts.OnBagUpdate = toasts.OnItemInfoReceived
 
 --#endregion
 
@@ -377,7 +381,7 @@ loot.OnBagUpdate = loot.OnItemInfoReceived
 --- Rewards that can be recognized from a chat line. Each entry maps a chat
 --- event to the profile category and the predicate that recognizes a local
 --- player's gain.
----@type { event: string, kind: LootKind, recognize: fun(text:any):boolean }[]
+---@type { event: string, kind: ToastKind, recognize: fun(text:any):boolean }[]
 local CHAT_SOURCES = {
     {
         event = 'CHAT_MSG_LOOT',
@@ -400,8 +404,15 @@ local CHAT_SOURCES = {
         recognize = function(text) return Sources.ParseReputationGain(text) ~= nil end,
     },
 }
+for _, event in ipairs(Sources.SYSTEM_EVENTS) do
+    CHAT_SOURCES[#CHAT_SOURCES + 1] = {
+        event = event,
+        kind = 'system',
+        recognize = function(text) return Sources.SafeString(text) ~= nil end,
+    }
+end
 
-function loot:IsRecognizedRewardLine(event, text)
+function toasts:IsRecognizedChatLine(event, text)
     local spec = self.chatSourceByEvent and self.chatSourceByEvent[event]
     if not spec then return false end
     if not db()[spec.kind] then return false end
@@ -414,13 +425,13 @@ end
 ---@param event string
 ---@param text any
 ---@return boolean?
-function loot:FilterChatMessage(event, text)
+function toasts:FilterChatMessage(event, text)
     if not db().enabled then return nil end
-    if self:IsRecognizedRewardLine(event, text) then return true end
+    if self:IsRecognizedChatLine(event, text) then return true end
     return nil
 end
 
-function loot:InstallChatFilters()
+function toasts:InstallChatFilters()
     if self.filtersInstalled then return end
 
     -- Modern clients expose ChatFrameUtil; older ones only the legacy function.
@@ -432,19 +443,21 @@ function loot:InstallChatFilters()
     self.filters = {}
 
     for _, spec in ipairs(CHAT_SOURCES) do
-        self.chatSourceByEvent[spec.event] = spec
-        local callback = function(_, event, ...)
-            return loot:FilterChatMessage(event, ...)
+        if addon.Utils.EventExists(spec.event) ~= false then
+            self.chatSourceByEvent[spec.event] = spec
+            local callback = function(_, event, ...)
+                return toasts:FilterChatMessage(event, ...)
+            end
+            add(spec.event, callback)
+            self.filters[#self.filters + 1] = { event = spec.event, callback = callback }
         end
-        add(spec.event, callback)
-        self.filters[#self.filters + 1] = { event = spec.event, callback = callback }
     end
 
     self.filterRemove = remove
     self.filtersInstalled = true
 end
 
-function loot:RemoveChatFilters()
+function toasts:RemoveChatFilters()
     if not self.filtersInstalled then return end
     local remove = self.filterRemove
         or (ChatFrameUtil and ChatFrameUtil.RemoveMessageEventFilter)
@@ -464,9 +477,9 @@ end
 
 --- Builds the feed's styling for one entry. Styling lives here (not in the
 --- feed) so colors and labels stay in one place, mirroring the Chat module.
----@param entry LootEntry
+---@param entry ToastEntry
 ---@return table
-function loot:PresentEntry(entry)
+function toasts:PresentEntry(entry)
     if entry.kind == 'items' then
         local quality = entry.quality
         local r, g, b = qualityColor(quality)
@@ -529,15 +542,23 @@ function loot:PresentEntry(entry)
             border = { REPUTATION.r, REPUTATION.g, REPUTATION.b },
             textColor = { 0.82, 0.91, 1 },
         }
+    elseif entry.kind == 'system' then
+        return {
+            text = 'SYSTEM  ' .. (entry.originalText or ''),
+            wrap = true,
+            bg = { 0.07, 0.16, 0.21, 0.72 },
+            border = { SYSTEM.r, SYSTEM.g, SYSTEM.b },
+            textColor = { 0.86, 0.96, 1 },
+        }
     end
     return { text = entry.originalText or '' }
 end
 
 --- Resolved font metrics for the feed label field.
 ---@return table
-function loot:FontMetrics()
+function toasts:FontMetrics()
     return {
-        label = { face = fetchFont(db().fontFace), size = db().fontSize },
+        label = { face = addon.Media.ResolveFont(db().fontFace), size = db().fontSize },
     }
 end
 
@@ -545,13 +566,13 @@ end
 
 --#region ── Panel construction ─────────────────────────────────────────────────
 
-function loot:BuildPanel()
+function toasts:BuildPanel()
     if self.panel then
         self.panel:Show()
         return
     end
 
-    local frame = CreateFrame('Frame', 'CouchModeLoot', UIParent)
+    local frame = CreateFrame('Frame', 'CouchModeToasts', UIParent)
     frame:SetSize(db().width, db().height)
     frame:SetScale(db().scale or 1)
     frame:SetFrameStrata('LOW')
@@ -568,9 +589,9 @@ function loot:BuildPanel()
     scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD)
     self.scrollArea = scrollArea
 
-    self.feed = addon.LootFeedProto.New(scrollArea)
-    self.feed.presenter = function(entry) return loot:PresentEntry(entry) end
-    self.feed.onScrollChanged = function() loot:OnFeedChanged() end
+    self.feed = addon.ToastFeedProto.New(scrollArea)
+    self.feed.presenter = function(entry) return toasts:PresentEntry(entry) end
+    self.feed.onScrollChanged = function() toasts:OnFeedChanged() end
 
     -- Rows enable the mouse for tooltips, so hover is tracked on the padding
     -- regions here and per-row inside the feed.
@@ -587,11 +608,11 @@ function loot:BuildPanel()
     returnBtn:SetPoint('BOTTOMRIGHT', scrollArea, 'BOTTOMRIGHT', -4, 4)
     returnBtn:SetFrameLevel(frame:GetFrameLevel() + 20)
     returnBtn:SetNormalTexture('Interface\\ChatFrame\\ChatFrameExpandArrow')
-    returnBtn:SetScript('OnClick', function() loot:ScrollToBottom() end)
+    returnBtn:SetScript('OnClick', function() toasts:ScrollToBottom() end)
     returnBtn:Hide()
     self.returnButton = returnBtn
 
-    frame:SetScript('OnUpdate', function(_, dt) loot:UpdateFade(dt) end)
+    frame:SetScript('OnUpdate', function(_, dt) toasts:UpdateFade(dt) end)
 
     LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
         -- LibEditMode can dispatch a frame-position callback before it has
@@ -601,7 +622,7 @@ function loot:BuildPanel()
         local settings = db()
         settings.positions = settings.positions or {}
         settings.positions[layoutName] = { point = point, x = x, y = y }
-    end, { point = 'BOTTOMRIGHT', x = -40, y = 40 }, 'CouchMode Loot')
+    end, { point = 'BOTTOMRIGHT', x = -40, y = 40 }, 'CouchMode Toasts')
 
     LibEditMode:AddFrameSettings(frame, {
         {
@@ -611,7 +632,7 @@ function loot:BuildPanel()
             get = function() return db().width end,
             set = function(_, value, fromReset)
                 db().width = (fromReset and DEFAULT_WIDTH or value)
-                loot:ApplyLayout()
+                toasts:ApplyLayout()
             end,
         },
         {
@@ -621,7 +642,7 @@ function loot:BuildPanel()
             get = function() return db().height end,
             set = function(_, value, fromReset)
                 db().height = (fromReset and DEFAULT_HEIGHT or value)
-                loot:ApplyLayout()
+                toasts:ApplyLayout()
             end,
         },
         {
@@ -631,7 +652,7 @@ function loot:BuildPanel()
             get = function() return db().scale end,
             set = function(_, value, fromReset)
                 db().scale = (fromReset and 1 or value)
-                if loot.panel then loot.panel:SetScale(db().scale) end
+                if toasts.panel then toasts.panel:SetScale(db().scale) end
             end,
         },
         {
@@ -641,7 +662,7 @@ function loot:BuildPanel()
             get = function() return db().activeOpacity end,
             set = function(_, value, fromReset)
                 db().activeOpacity = (fromReset and 1 or value)
-                loot:Touch()
+                toasts:Touch()
             end,
         },
         {
@@ -651,10 +672,10 @@ function loot:BuildPanel()
             get = function() return db().backgroundOpacity end,
             set = function(_, value, fromReset)
                 db().backgroundOpacity = (fromReset and 0 or value)
-                if loot.panel and loot.panel.bg then
-                    loot.panel.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
+                if toasts.panel and toasts.panel.bg then
+                    toasts.panel.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
                 end
-                loot:Touch()
+                toasts:Touch()
             end,
         },
         {
@@ -664,7 +685,7 @@ function loot:BuildPanel()
             get = function() return db().fadeDelay end,
             set = function(_, value, fromReset)
                 db().fadeDelay = (fromReset and 15 or value)
-                loot:Touch()
+                toasts:Touch()
             end,
         },
         {
@@ -682,7 +703,7 @@ function loot:BuildPanel()
             get = function() return db().fontFace end,
             set = function(_, value, fromReset)
                 db().fontFace = (fromReset and 'Arial Narrow' or value)
-                loot:ApplyFont()
+                toasts:ApplyFont()
             end,
         },
         {
@@ -692,7 +713,7 @@ function loot:BuildPanel()
             get = function() return db().historyCap end,
             set = function(_, value, fromReset)
                 db().historyCap = (fromReset and 200 or value)
-                loot:TrimSession()
+                toasts:TrimSession()
             end,
         },
     })
@@ -714,7 +735,7 @@ function loot:BuildPanel()
     self:OnFeedChanged()
 end
 
-function loot:ApplyFont()
+function toasts:ApplyFont()
     if not self.feed then return end
     self.feed:SetFonts(self:FontMetrics())
 end
@@ -723,7 +744,7 @@ end
 
 --#region ── Layout ─────────────────────────────────────────────────────────────
 
-function loot:ApplyLayout()
+function toasts:ApplyLayout()
     local frame = self.panel
     if not frame then return end
 
@@ -738,7 +759,7 @@ function loot:ApplyLayout()
     end
 end
 
-function loot:TrimSession()
+function toasts:TrimSession()
     local cap = db().historyCap or 200
     local overflow = #self.session - cap
     if overflow > 0 then
@@ -752,11 +773,11 @@ end
 
 --#region ── Fade / activity ──────────────────────────────────────────────────
 
-function loot:Touch()
+function toasts:Touch()
     self.lastActivity = now()
 end
 
-function loot:UpdateFade(dt)
+function toasts:UpdateFade(dt)
     if not self.panel then return end
 
     local browsing = self.feed and self.feed:IsBrowsingHistory()
@@ -786,7 +807,7 @@ function loot:UpdateFade(dt)
     end
 end
 
-function loot:OnFeedChanged()
+function toasts:OnFeedChanged()
     if not self.returnButton or not self.feed then return end
     if self.feed:IsAtBottom() then
         self.returnButton:Hide()
@@ -799,7 +820,7 @@ end
 
 --#region ── Panel controls ─────────────────────────────────────────────────────
 
-function loot:Toggle()
+function toasts:Toggle()
     if not self.panel then return end
     if self.panel:IsShown() then
         self.panel:Hide()
@@ -810,7 +831,7 @@ function loot:Toggle()
     end
 end
 
-function loot:ClosePanel()
+function toasts:ClosePanel()
     if self.feed then
         self.feed:ResumeLive()
         self.feed:ScrollToBottom()
@@ -818,17 +839,17 @@ function loot:ClosePanel()
     if self.panel then self.panel:Hide() end
 end
 
-function loot:ScrollUp()
+function toasts:ScrollUp()
     if self.feed then self.feed:ScrollBy(60) end
     self:Touch()
 end
 
-function loot:ScrollDown()
+function toasts:ScrollDown()
     if self.feed then self.feed:ScrollBy(-60) end
     self:Touch()
 end
 
-function loot:ScrollToBottom()
+function toasts:ScrollToBottom()
     if self.feed then
         -- An explicit return to the bottom resumes live fading.
         self.feed:ResumeLive()
@@ -838,7 +859,7 @@ function loot:ScrollToBottom()
     self:Touch()
 end
 
-function loot:ClearSession()
+function toasts:ClearSession()
     wipe(self.session)
     if self.feed then self.feed:Clear() end
     self:OnFeedChanged()
@@ -848,9 +869,9 @@ end
 
 --#region ── Defaults ─────────────────────────────────────────────────────────
 
-function loot:GetDefaults()
+function toasts:GetDefaults()
     return {
-        loot = {
+        toasts = {
             enabled = true,
             -- Position (per Edit Mode layout)
             positions = {},
@@ -869,6 +890,7 @@ function loot:GetDefaults()
             money = true,
             currency = true,
             reputation = true,
+            system = true,
             -- History
             historyCap = 200,
         },
@@ -879,28 +901,28 @@ end
 
 --#region ── Options ──────────────────────────────────────────────────────────
 
-function loot:NotifyChange()
+function toasts:NotifyChange()
     local registry = LibStub('AceConfigRegistry-3.0', true)
     if registry then registry:NotifyChange(addonName) end
 end
 
-function loot:BuildArgs()
+function toasts:BuildArgs()
     return {
         description = {
-            name = 'A scrolling feed of rewards you gain: looted items, money, currency and reputation. '
-                .. 'Reward lines are removed from Blizzard chat only while Loot is enabled and recognized.',
+            name = 'A scrolling feed for rewards and system messages. Recognized lines are removed '
+                .. 'from Blizzard chat while their Toasts category is enabled.',
             type = 'description',
             order = 1,
         },
         enabled = {
             name = 'Enable',
-            desc = 'Show the Loot feed and hide recognized reward lines from Blizzard chat.',
+            desc = 'Show Toasts and hide recognized lines from Blizzard chat.',
             type = 'toggle',
             order = 2,
             get = function() return db().enabled end,
             set = function(_, value)
                 db().enabled = value
-                if value then loot:Enable() else loot:Disable() end
+                if value then toasts:Enable() else toasts:Disable() end
             end,
         },
         rewards = {
@@ -935,6 +957,13 @@ function loot:BuildArgs()
                 },
             },
         },
+        system = {
+            name = 'System Messages',
+            desc = 'Show system messages in a distinct toast style.',
+            type = 'toggle', order = 11,
+            get = function() return db().system end,
+            set = function(_, value) db().system = value end,
+        },
         appearance = {
             name = 'Appearance',
             type = 'group',
@@ -945,62 +974,62 @@ function loot:BuildArgs()
                     name = 'Width', desc = 'Feed width in pixels.',
                     type = 'range', min = 200, max = 900, step = 10, order = 1,
                     get = function() return db().width end,
-                    set = function(_, value) db().width = value; loot:ApplyLayout() end,
+                    set = function(_, value) db().width = value; toasts:ApplyLayout() end,
                 },
                 height = {
                     name = 'Height', desc = 'Feed height in pixels.',
                     type = 'range', min = MIN_HEIGHT, max = 900, step = 10, order = 2,
                     get = function() return db().height end,
-                    set = function(_, value) db().height = value; loot:ApplyLayout() end,
+                    set = function(_, value) db().height = value; toasts:ApplyLayout() end,
                 },
                 scale = {
                     name = 'Scale', desc = 'Overall feed scale.',
                     type = 'range', min = 0.5, max = 2, step = 0.05, order = 3,
                     get = function() return db().scale end,
-                    set = function(_, value) db().scale = value; loot:ApplyLayout() end,
+                    set = function(_, value) db().scale = value; toasts:ApplyLayout() end,
                 },
                 activeOpacity = {
                     name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
                     type = 'range', min = 0.1, max = 1, step = 0.05, order = 4,
                     get = function() return db().activeOpacity end,
-                    set = function(_, value) db().activeOpacity = value; loot:Touch() end,
+                    set = function(_, value) db().activeOpacity = value; toasts:Touch() end,
                 },
                 backgroundOpacity = {
                     name = 'Background Opacity', desc = 'Feed opacity after all rewards fade.',
                     type = 'range', min = 0, max = 1, step = 0.05, order = 5,
                     get = function() return db().backgroundOpacity end,
-                    set = function(_, value) db().backgroundOpacity = value; loot:ApplyLayout() end,
+                    set = function(_, value) db().backgroundOpacity = value; toasts:ApplyLayout() end,
                 },
                 fadeEnabled = {
                     name = 'Auto-fade', desc = 'Fade each reward after its delay.',
                     type = 'toggle', order = 6,
                     get = function() return db().fadeEnabled end,
-                    set = function(_, value) db().fadeEnabled = value; loot:Touch() end,
+                    set = function(_, value) db().fadeEnabled = value; toasts:Touch() end,
                 },
                 fadeDelay = {
                     name = 'Fade Delay', desc = 'Seconds each reward remains visible before fading.',
                     type = 'range', min = 0, max = 120, step = 1, order = 7,
                     get = function() return db().fadeDelay end,
-                    set = function(_, value) db().fadeDelay = value; loot:Touch() end,
+                    set = function(_, value) db().fadeDelay = value; toasts:Touch() end,
                 },
                 fontFace = {
                     name = 'Font', desc = 'Font used for reward text.',
                     type = 'select', style = 'dropdown', order = 8,
                     values = addon.Media.GetFontOptions(),
                     get = function() return db().fontFace end,
-                    set = function(_, value) db().fontFace = value; loot:ApplyFont() end,
+                    set = function(_, value) db().fontFace = value; toasts:ApplyFont() end,
                 },
                 fontSize = {
                     name = 'Font Size', desc = 'Reward text size.',
                     type = 'range', min = 8, max = 28, step = 1, order = 9,
                     get = function() return db().fontSize end,
-                    set = function(_, value) db().fontSize = value; loot:ApplyFont() end,
+                    set = function(_, value) db().fontSize = value; toasts:ApplyFont() end,
                 },
                 historyCap = {
                     name = 'History Cap', desc = 'Maximum rewards kept for the current login (not saved).',
                     type = 'range', min = 20, max = 1000, step = 20, order = 10,
                     get = function() return db().historyCap end,
-                    set = function(_, value) db().historyCap = value; loot:TrimSession() end,
+                    set = function(_, value) db().historyCap = value; toasts:TrimSession() end,
                 },
             },
         },
@@ -1011,25 +1040,25 @@ function loot:BuildArgs()
             order = 99,
             args = {
                 clear = {
-                    name = 'Clear History', desc = 'Clear the current login\'s reward history.',
+                    name = 'Clear History', desc = 'Clear the current login\'s toast history.',
                     type = 'execute', order = 1,
-                    func = function() loot:ClearSession() end,
+                    func = function() toasts:ClearSession() end,
                 },
                 testRewards = {
                     name = 'Test Rewards',
-                    desc = 'Fire mock rewards for every category.\n\nAlso available in chat as /cm loot mock.',
+                    desc = 'Fire mock toasts for every category.\n\nAlso available as /cm toasts mock.',
                     type = 'execute', order = 2,
-                    func = function() loot:RunMock('all') end,
+                    func = function() toasts:RunMock('all') end,
                 },
             },
         },
     }
 end
 
-function loot:GetOptions()
+function toasts:GetOptions()
     self.optionsArgs = self.optionsArgs or self:BuildArgs()
-    return 'loot', {
-        name = 'Loot',
+    return 'toasts', {
+        name = 'Toasts',
         type = 'group',
         order = PANEL_ORDER,
         args = self.optionsArgs,
@@ -1040,13 +1069,13 @@ end
 
 --#region ── Testing / mock ───────────────────────────────────────────────────
 
-function loot:Notify(text)
+function toasts:Notify(text)
     print('CouchMode: ' .. tostring(text))
 end
 
 --- Applies one mock reward through the same paths live rewards use.
 ---@param spec table
-function loot:MockEntry(spec)
+function toasts:MockEntry(spec)
     local timestamp = now()
     local entry
 
@@ -1075,16 +1104,19 @@ function loot:MockEntry(spec)
             self:OnReputationMessage('CHAT_MSG_COMBAT_FACTION_CHANGE', spec.text)
             return
         end
+    elseif spec.kind == 'system' then
+        self:OnSystemMessage(spec.event or 'CHAT_MSG_SYSTEM', spec.text)
+        return
     end
 
     if entry then self:AddEntry(entry) end
 end
 
-function loot:RunMock(setName)
-    local mock = addon.LootMock
+function toasts:RunMock(setName)
+    local mock = addon.ToastMock
     if not mock then return end
     if not db().enabled then
-        self:Notify('enable Loot before running the mock.')
+        self:Notify('enable Toasts before running the mock.')
         return
     end
 
@@ -1096,26 +1128,26 @@ function loot:RunMock(setName)
     end
 
     local count = mock.Run(self, resolved)
-    self:Notify(('Loot mock: fired %d rewards from "%s".'):format(count, resolved))
+    self:Notify(('Toasts mock: fired %d messages from "%s".'):format(count, resolved))
 end
 
---- Entry point for `/cm loot ...`.
+--- Entry point for `/cm toasts ...`.
 ---@param sub string
 ---@param arg string
-function loot:HandleCommand(sub, arg)
+function toasts:HandleCommand(sub, arg)
     sub = (sub or ''):lower()
     if sub == 'mock' or sub == 'test' then
-        loot:RunMock(arg)
+        toasts:RunMock(arg)
     elseif sub == 'items' or sub == 'item' then
         -- Convenience shortcut for the item reward set.
-        loot:RunMock('item')
+        toasts:RunMock('item')
     elseif sub == 'clear' then
-        loot:ClearSession()
-        loot:Notify('Loot history cleared.')
+        toasts:ClearSession()
+        toasts:Notify('Toasts history cleared.')
     elseif sub == 'sets' then
-        loot:Notify('Loot mock sets: ' .. table.concat(addon.LootMock.Names(), ', ') .. ', all')
+        toasts:Notify('Toasts mock sets: ' .. table.concat(addon.ToastMock.Names(), ', ') .. ', all')
     else
-        loot:Notify('CouchMode Loot: /cm loot items | /cm loot mock [set] | /cm loot sets | /cm loot clear')
+        toasts:Notify('CouchMode Toasts: /cm toasts items | /cm toasts mock [set] | /cm toasts sets | /cm toasts clear')
     end
 end
 
@@ -1123,8 +1155,8 @@ end
 
 --#region ── Event routing table ────────────────────────────────────────────────
 
---- Maps the support events in LootSources to module handlers.
-loot.EVENT_HANDLERS = {
+--- Maps the support events in ToastSources to module handlers.
+toasts.EVENT_HANDLERS = {
     PLAYER_MONEY = 'OnPlayerMoney',
     CURRENCY_DISPLAY_UPDATE = 'OnCurrencyUpdate',
     CHAT_MSG_LOOT = 'OnLootMessage',
@@ -1134,17 +1166,26 @@ loot.EVENT_HANDLERS = {
     BAG_UPDATE_DELAYED = 'OnItemInfoReceived',
     PLAYER_ENTERING_WORLD = 'OnPlayerEnteringWorld',
 }
+for _, event in ipairs(Sources.SYSTEM_EVENTS) do
+    toasts.EVENT_HANDLERS[event] = 'OnSystemMessage'
+end
 
 --#endregion
 
 --#region ── Bindings ──────────────────────────────────────────────────────────
 
-function CouchMode_LootToggle() addon.Loot:Toggle() end
-function CouchMode_LootScrollUp() addon.Loot:ScrollUp() end
-function CouchMode_LootScrollDown() addon.Loot:ScrollDown() end
-function CouchMode_LootBottom() addon.Loot:ScrollToBottom() end
-function CouchMode_LootClose() addon.Loot:ClosePanel() end
+function CouchMode_ToastsToggle() addon.Toasts:Toggle() end
+function CouchMode_ToastsScrollUp() addon.Toasts:ScrollUp() end
+function CouchMode_ToastsScrollDown() addon.Toasts:ScrollDown() end
+function CouchMode_ToastsBottom() addon.Toasts:ScrollToBottom() end
+function CouchMode_ToastsClose() addon.Toasts:ClosePanel() end
+
+BINDING_NAME_COUCHMODE_TOASTS_TOGGLE = 'Toggle Toasts'
+BINDING_NAME_COUCHMODE_TOASTS_SCROLL_UP = 'Scroll Toasts Up'
+BINDING_NAME_COUCHMODE_TOASTS_SCROLL_DOWN = 'Scroll Toasts Down'
+BINDING_NAME_COUCHMODE_TOASTS_BOTTOM = 'Scroll Toasts to Bottom'
+BINDING_NAME_COUCHMODE_TOASTS_CLOSE = 'Close Toasts'
 
 --#endregion
 
-loot:Enable()
+toasts:Enable()
