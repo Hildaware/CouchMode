@@ -26,11 +26,14 @@ local function resolveEditBox()
 end
 
 local function captureState(frame)
+    local mouse
+    if frame.IsMouseEnabled then mouse = frame:IsMouseEnabled() end
     local state = {
         parent = frame:GetParent(),
         strata = frame:GetFrameStrata(),
         level = frame:GetFrameLevel(),
         shown = frame:IsShown(),
+        mouse = mouse,
         width = frame:GetWidth(),
         height = frame:GetHeight(),
         points = {},
@@ -53,6 +56,7 @@ local function restoreState(frame, state)
     if state.strata then frame:SetFrameStrata(state.strata) end
     if state.level then frame:SetFrameLevel(state.level) end
     if state.width and state.height then frame:SetSize(state.width, state.height) end
+    if state.mouse ~= nil and frame.EnableMouse then frame:EnableMouse(state.mouse) end
     frame:SetShown(state.shown)
 end
 
@@ -171,6 +175,15 @@ end
 function Input:HasFocus()
     local frame = editBox or resolveEditBox()
     return (frame and frame.HasFocus and frame:HasFocus()) or false
+end
+
+--- Keeps the inactive embedded edit box from intercepting the live feed.
+function Input:SetMouseEnabled(enabled)
+    local frame = editBox
+    if frame and frame.EnableMouse and frame.IsMouseEnabled
+        and frame:IsMouseEnabled() ~= (enabled == true) then
+        frame:EnableMouse(enabled == true)
+    end
 end
 
 if addon then addon.ChatInput = Input end

@@ -466,6 +466,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     g._metrics = {
         lastMessage = messageCount,
         heights = heights,
+        messages = messages,
     }
 
     firstMessage = math.max(1, math.min(firstMessage or 1, messageCount))
@@ -476,7 +477,9 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     for i = firstMessage, messageCount do
         local msg = messages[i]
         local fs = g.lines[i]
-        local alpha = historyVisible and 1 or ((lineAlphas and lineAlphas[i]) or 1)
+        local alpha = msg._chatFadeAlpha or ((lineAlphas and lineAlphas[i]) or 1)
+        if lineAlphas then lineAlphas[i] = alpha end
+        if historyVisible then alpha = 1 end
         if fs:GetAlpha() ~= alpha then fs:SetAlpha(alpha) end
         applyText(fs, msg.text, animate ~= false)
         fs:ClearAllPoints()

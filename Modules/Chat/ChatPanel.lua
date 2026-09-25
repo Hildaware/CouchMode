@@ -19,7 +19,10 @@ local LibEditMode = LibStub('LibEditMode')
 local PAD = 8
 local FILTER_BAR_H = 32
 local INPUT_STRIP_H = 28
-local PANEL_CHROME_HEIGHT = (PAD + FILTER_BAR_H + PAD) + (PAD + INPUT_STRIP_H + PAD)
+local EDGE_PAD = 4
+local CONTROL_GAP = 4
+local FEED_CONTROL_GAP = 4
+local FEED_PADDING = addon.ChatFeedProto.PADDING or 8
 local BORDER_ALPHA = 0.5
 local BORDER_INSET = 1
 
@@ -28,6 +31,13 @@ local BORDER_INSET = 1
 --#region ── DB accessor ───────────────────────────────────────────────────────
 
 local function db() return addon.db.profile.chat end
+
+local function pointFraction(point)
+    if type(point) ~= 'string' then return 0.5 end
+    if point:match('^TOP') then return 1 end
+    if point:match('^BOTTOM') then return 0 end
+    return 0.5
+end
 
 --#endregion
 
@@ -41,6 +51,8 @@ chat.lastActivity = 0
 chat.fadeAlpha = 1
 chat.tabsAlpha = 0
 chat.inputAlpha = 0
+chat.filterReserved = false
+chat.inputReserved = false
 
 --#endregion
 
@@ -124,11 +136,12 @@ function chat:BuildPanel()
     end
 
     local frame = CreateFrame('Frame', 'CouchModeChat', UIParent)
-    frame:SetSize(db().width, db().height or chat.DEFAULT_HEIGHT)
+    frame:SetSize(db().width, db().historyHeight or chat.DEFAULT_HISTORY_HEIGHT)
     frame:SetScale(db().scale or 1)
     frame:SetFrameStrata('LOW')
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
+    if frame.SetClipsChildren then frame:SetClipsChildren(true) end
 
     local borderFrame = CreateFrame('Frame', nil, UIParent)
     borderFrame:SetFrameStrata(frame:GetFrameStrata())
@@ -144,28 +157,23 @@ function chat:BuildPanel()
     self.borders = addon.Components.Metal.CreateBorderTextures(borderFrame, borderAnchor)
 
     local bg = frame:CreateTexture(nil, 'BACKGROUND')
-    bg:SetPoint('CENTER', frame, 'CENTER', 0, -6)
-    bg:SetWidth(frame:GetWidth() - 12)
-    bg:SetHeight(frame:GetHeight() - 30)
+    bg:SetAllPoints(frame)
     bg:SetColorTexture(0, 0, 0, 1)
     frame.bg = bg
 
     self:BuildFilterBar(frame)
 
     local scrollArea = CreateFrame('Frame', nil, frame)
-    scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD, -(PAD + FILTER_BAR_H + PAD))
-    scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD + INPUT_STRIP_H + PAD)
     self.scrollArea = scrollArea
 
     self.feed = addon.ChatFeedProto.New(scrollArea)
     self.feed:SetFonts(self:FontMetrics())
     self.feed:SetCompactMode(db().compactMode)
     self.feed.onScrollChanged = function() chat:OnFeedChanged() end
+    self.feed.onHistoryModeChanged = function() chat:ApplyLayout() end
 
     local strip = CreateFrame('Frame', nil, frame)
     strip:SetFrameStrata('DIALOG')
-    strip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, PAD/2)
-    strip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, PAD/2)
     strip:SetHeight(INPUT_STRIP_H)
     addon.Components.Metal.CreateHeader(strip)
     strip:SetAlpha(0)
@@ -221,22 +229,12 @@ function chat:BuildPanel()
         },
         {
             kind = LibEditMode.SettingType.Slider,
-            name = 'Height', desc = 'Fixed height of the chat panel.',
-            default = chat.DEFAULT_HEIGHT, minValue = 200, maxValue = 900, valueStep = 10,
-            get = function() return db().height end,
-            set = function(_, value, fromReset)
-                db().height = (fromReset and chat.DEFAULT_HEIGHT or value)
-                chat:ApplyLayout(true)
-            end,
-        },
-        {
-            kind = LibEditMode.SettingType.Slider,
             name = 'Scale', desc = 'Overall panel scale.',
             default = 1, minValue = 0.5, maxValue = 2, valueStep = 0.05,
             get = function() return db().scale end,
             set = function(_, value, fromReset)
                 db().scale = (fromReset and 1 or value)
-                if chat.panel then chat.panel:SetScale(db().scale) end
+                chat:ApplyLayout()
             end,
         },
         {
@@ -298,6 +296,7 @@ function chat:BuildPanel()
         else
             frame:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 10, 120)
         end
+        chat:ApplyLayout()
     end)
 
     frame:Show()
@@ -312,17 +311,182 @@ end
 function chat:ApplyLayout(rebuild)
     local frame = self.panel
     if not frame then return end
-    local panelHeight = db().height or chat.DEFAULT_HEIGHT
-    frame:SetSize(db().width, panelHeight)
-    frame:SetScale(db().scale or 1)
-    frame.bg:SetSize(db().width - 12, panelHeight - 30)
+
+    local direction = db().growthDirection == 'top' and 'top' or 'bottom'
+    self:SetPanelScale(db().scale or 1, direction)
+    self.feed:SetWidth(db().width - PAD * 2)
+    local historyMode = self.feed:IsBrowsingHistory()
+    local controlHeight = (self.filterReserved and FILTER_BAR_H or 0)
+        + (self.inputReserved and INPUT_STRIP_H or 0)
+    if self.filterReserved and self.inputReserved then controlHeight = controlHeight + CONTROL_GAP end
+    local hasMessages = self.feed:HasDisplayableMessages(historyMode, db().maxLiveMessages)
+    local feedGap = (hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0
+    local screenHeight = self:GetAvailablePanelHeight(direction)
+    local outerHeight = EDGE_PAD * 2
+    local panelHeight
+    local viewport
+
+    if historyMode then
+        panelHeight = math.min(db().historyHeight or chat.DEFAULT_HISTORY_HEIGHT, screenHeight)
+        viewport = math.max(0, panelHeight - outerHeight - controlHeight - feedGap)
+        self.feed:SetLiveLayout(db().maxLiveMessages, math.huge, direction)
+    else
+        local maxViewport = math.max(0, screenHeight - outerHeight - controlHeight - feedGap)
+        local maxContent = math.max(0, maxViewport - FEED_PADDING * 2)
+        self.feed:SetLiveLayout(db().maxLiveMessages, maxContent, direction)
+        hasMessages = self.feed:HasDisplayableMessages(false, db().maxLiveMessages)
+        feedGap = (hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0
+        maxViewport = math.max(0, screenHeight - outerHeight - controlHeight - feedGap)
+        local contentHeight = self.feed:GetContentHeight()
+        viewport = hasMessages and math.min(maxViewport, contentHeight + FEED_PADDING * 2) or 0
+        panelHeight = math.min(screenHeight, outerHeight + controlHeight + feedGap + viewport)
+    end
+
+    panelHeight = math.max(0, math.min(screenHeight, panelHeight))
+    self:ResizePanel(db().width, panelHeight, direction)
     self:ApplyPanelBackgroundOpacity()
 
-    local viewport = panelHeight - PANEL_CHROME_HEIGHT
-    self.feed:SetWidth(db().width - PAD * 2)
+    self.filterBar:SetShown(self.filterReserved)
+    self.inputStrip:Show()
+
+    local bottomOffset = EDGE_PAD
+    local topOffset = EDGE_PAD
+    if direction == 'bottom' then
+        self.inputStrip:ClearAllPoints()
+        self.inputStrip:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, bottomOffset)
+        self.inputStrip:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, bottomOffset)
+        self.inputStrip:EnableMouse(self.inputReserved)
+        if self.inputReserved then
+            bottomOffset = bottomOffset + INPUT_STRIP_H
+        end
+        if self.filterReserved then
+            if self.inputReserved then bottomOffset = bottomOffset + CONTROL_GAP end
+            self.filterBar:ClearAllPoints()
+            self.filterBar:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD, bottomOffset)
+            self.filterBar:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD, bottomOffset)
+            bottomOffset = bottomOffset + FILTER_BAR_H
+        else
+            self.filterBar:ClearAllPoints()
+        end
+        self.scrollArea:ClearAllPoints()
+        self.scrollArea:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD,
+            bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
+        self.scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD,
+            bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
+    else
+        if self.filterReserved then
+            self.filterBar:ClearAllPoints()
+            self.filterBar:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD, -topOffset)
+            self.filterBar:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -PAD, -topOffset)
+            topOffset = topOffset + FILTER_BAR_H
+        else
+            self.filterBar:ClearAllPoints()
+        end
+        if self.filterReserved then topOffset = topOffset + CONTROL_GAP end
+        self.inputStrip:ClearAllPoints()
+        self.inputStrip:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD, -topOffset)
+        self.inputStrip:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -PAD, -topOffset)
+        self.inputStrip:EnableMouse(self.inputReserved)
+        if self.inputReserved then
+            topOffset = topOffset + INPUT_STRIP_H
+        end
+        self.scrollArea:ClearAllPoints()
+        self.scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD,
+            -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
+        self.scrollArea:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -PAD,
+            -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
+    end
+    Input:SetMouseEnabled(self.inputReserved)
+    self.scrollArea:SetHeight(viewport)
     self.feed:SetViewportHeight(viewport)
 
+    if not historyMode then self.feed:ScrollToLiveEdge() end
+
     if rebuild then self:Recompute() end
+end
+
+--- Resizes the panel while keeping its configured top or bottom edge pinned.
+function chat:ResizePanel(width, height, direction)
+    local frame = self.panel
+    if not frame then return end
+    local oldHeight = frame:GetHeight() or height
+    local point, relativeTo, relativePoint, x, y
+    if frame.GetNumPoints and frame:GetNumPoints() == 1 then
+        point, relativeTo, relativePoint, x, y = frame:GetPoint(1)
+    end
+    local relativeScale = frame:GetEffectiveScale() / (relativeTo and relativeTo.GetEffectiveScale
+        and relativeTo:GetEffectiveScale() or 1)
+    local oldScreenHeight = oldHeight * relativeScale
+    frame:SetSize(width, height)
+    if not point or type(y) ~= 'number' then return end
+
+    relativeScale = frame:GetEffectiveScale() / (relativeTo and relativeTo.GetEffectiveScale
+        and relativeTo:GetEffectiveScale() or 1)
+    local scaledDelta = height * relativeScale - oldScreenHeight
+    if math.abs(scaledDelta) < 0.01 then return end
+    local ownFraction = pointFraction(point)
+    local nextY = y
+    if direction == 'bottom' then
+        nextY = y + ownFraction * scaledDelta
+    else
+        nextY = y - (1 - ownFraction) * scaledDelta
+    end
+    frame:SetPoint(point, relativeTo or UIParent, relativePoint or point, x or 0, nextY)
+end
+
+--- Applies panel scale while keeping the selected growth edge at the same spot.
+function chat:SetPanelScale(scale, direction)
+    local frame = self.panel
+    if not frame or math.abs((frame:GetScale() or 1) - scale) < 0.001 then return end
+    local oldScale = frame:GetScale() or 1
+    local height = frame:GetHeight() or 0
+    local point, relativeTo, relativePoint, x, y
+    if frame.GetNumPoints and frame:GetNumPoints() == 1 then
+        point, relativeTo, relativePoint, x, y = frame:GetPoint(1)
+    end
+    local parentScale = relativeTo and relativeTo.GetEffectiveScale
+        and relativeTo:GetEffectiveScale() or (UIParent:GetEffectiveScale() or 1)
+    frame:SetScale(scale)
+    if not point or type(y) ~= 'number' then return end
+    local nextRelativeScale = frame:GetEffectiveScale() / parentScale
+    local oldRelativeScale = oldScale * (UIParent:GetEffectiveScale() or 1) / parentScale
+    local scaledDelta = height * (nextRelativeScale - oldRelativeScale)
+    local ownFraction = pointFraction(point)
+    if direction == 'bottom' then
+        y = y + ownFraction * scaledDelta
+    else
+        y = y - (1 - ownFraction) * scaledDelta
+    end
+    frame:SetPoint(point, relativeTo or UIParent, relativePoint or point, x or 0, y)
+end
+
+--- Returns the available height from the current fixed panel edge to screen edge.
+function chat:GetAvailablePanelHeight(direction)
+    local parent = UIParent
+    local parentHeight = parent and parent.GetHeight and parent:GetHeight() or 0
+    local frame = self.panel
+    if parentHeight <= 0 or not frame then return parentHeight end
+
+    local point, relativeTo, relativePoint, _, y
+    if frame.GetNumPoints and frame:GetNumPoints() == 1 then
+        point, relativeTo, relativePoint, _, y = frame:GetPoint(1)
+    end
+    if point and (not relativeTo or relativeTo == parent) and type(y) == 'number' then
+        local parentPoint = relativePoint or point
+        local anchorY = pointFraction(parentPoint) * parentHeight + y
+        local scale = frame:GetEffectiveScale() / parent:GetEffectiveScale()
+        local frameHeight = (frame:GetHeight() or 0) * scale
+        local bottom = anchorY - pointFraction(point) * frameHeight
+        local top = bottom + frameHeight
+        local available = direction == 'top' and top or (parentHeight - bottom)
+        return math.max(0, available / scale)
+    end
+
+    return math.max(0, parentHeight / math.max(frame:GetScale() or 1, 0.01))
+end
+
+function chat:OnScreenSizeChanged()
+    self:ApplyLayout()
 end
 
 --#endregion
@@ -357,9 +521,6 @@ function chat:UpdateFade(dt)
     if not self.panel then return end
     local now = (type(GetTime) == 'function') and GetTime() or 0
     local panelHovered = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
-    local feedHovered = self.scrollArea and self.scrollArea.IsMouseOver
-        and self.scrollArea:IsMouseOver() or false
-    if self.feed then self.feed:SetHoverHistory(feedHovered) end
     local historyVisible = self.feed and self.feed:IsHistoryVisible()
     local backgroundHovered = panelHovered
     if backgroundHovered ~= self.backgroundHovered then
@@ -375,15 +536,27 @@ function chat:UpdateFade(dt)
     end
     local engaged = historyVisible or panelHovered or inputFocused or gamepadFocused
     if self.feed then self.feed:SetFadePaused(engaged, now) end
-    local hasVisibleMessages = self.feed and self.feed:UpdateMessageFade(
-        now, db().fadeDelay or 15,
-        db().fadeEnabled == true
-    ) or false
+    local hasVisibleMessages, displayChanged = false, false
+    if self.feed then
+        hasVisibleMessages, displayChanged = self.feed:UpdateMessageFade(
+            now, db().fadeDelay or 15,
+            db().fadeEnabled == true
+        )
+    end
+
+    if displayChanged then self:ApplyLayout() end
 
     -- The filter controls are discoverable from their own hover region, while
     -- the input strip only exists while Blizzard's edit box is active.
     self:FadeRegion(self.filterBar, 'tabsAlpha', panelHovered and 1 or 0, dt)
     self:FadeRegion(self.inputStrip, 'inputAlpha', inputFocused and 1 or 0, dt)
+    local filterReserved = panelHovered or self.tabsAlpha > 0.01
+    local inputReserved = inputFocused or self.inputAlpha > 0.01
+    if filterReserved ~= self.filterReserved or inputReserved ~= self.inputReserved then
+        self.filterReserved = filterReserved
+        self.inputReserved = inputReserved
+        self:ApplyLayout()
+    end
 
     -- Individual lines expire from their own display times. The panel remains
     -- active while a line, tab interaction, or focused input is visible.

@@ -19,7 +19,7 @@ local Input = addon.ChatInput
 
 -- Panel geometry defaults shared by the panel (ChatPanel) and ChatOptions.
 chat.DEFAULT_WIDTH = 500
-chat.DEFAULT_HEIGHT = 260
+chat.DEFAULT_HISTORY_HEIGHT = 400
 
 --#endregion
 
@@ -62,6 +62,12 @@ function chat:OnEnable()
     self:RegisterValidEvent('INSPECT_READY', 'OnInspectReady')
     self:RegisterValidEvent('PLAYER_REGEN_ENABLED', 'ProcessInspectQueue')
     self:RegisterValidEvent('PLAYER_LOGOUT', 'OnLogout')
+    self.screenEvents = {}
+    for _, event in ipairs({ 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do
+        if self:RegisterValidEvent(event, 'OnScreenSizeChanged') then
+            self.screenEvents[event] = true
+        end
+    end
 
     self:SuppressBlizzard()
     Input:Attach(self.panel, self.inputStrip)
@@ -90,6 +96,8 @@ function chat:OnDisable()
     self:UnregisterEvent('INSPECT_READY')
     self:UnregisterEvent('PLAYER_REGEN_ENABLED')
     self:UnregisterEvent('PLAYER_LOGOUT')
+    for event in pairs(self.screenEvents or {}) do self:UnregisterEvent(event) end
+    self.screenEvents = nil
 
     Input:Detach()
     self:RestoreBlizzard()

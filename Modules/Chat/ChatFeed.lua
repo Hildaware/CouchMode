@@ -21,6 +21,7 @@ Feed.__index = Feed
 
 -- Geometry shared with the widget layer is read from `ChatFeedWidgets`.
 local PADDING = Widgets.PADDING
+Feed.PADDING = PADDING
 
 local GROUP_GAP = 6
 local MESSAGE_FADE_TIME = 0.35
@@ -61,12 +62,16 @@ function Feed.New(parent)
             channel = { face = nil, size = 10 },
         },
         historyMode = false,
-        hoverHistory = false,
+        viewportHeight = nil,
+        maxLiveMessages = 6,
+        maxContentHeight = math.huge,
+        growthDirection = 'bottom',
         compactMode = false,
         fadePaused = false,
         fadePausedAt = nil,
         scrollRequest = 0,
         onScrollChanged = nil,
+        onHistoryModeChanged = nil,
     }, Feed)
 
 
@@ -97,6 +102,27 @@ function Feed:SetWidth(width)
     self.scrollChild:SetWidth(width)
 end
 
+--- Whether the current mode has any rows eligible for its display list.
+function Feed:HasDisplayableMessages(historyMode, maxMessages)
+    if historyMode == nil then historyMode = self.historyMode end
+    if historyMode then
+        for i = 1, #self.groups do
+            if self.groups[i].messages and #self.groups[i].messages > 0 then return true end
+        end
+        return false
+    end
+
+    if (maxMessages or self.maxLiveMessages or 6) <= 0 then return false end
+    for i = #self.groups, 1, -1 do
+        local messages = self.groups[i].messages or {}
+        for j = #messages, 1, -1 do
+            if (messages[j]._chatFadeAlpha or 1) <= 0 then return false end
+            return true
+        end
+    end
+    return false
+end
+
 --- Fades each message from its presentation time. Returns whether at
 --- least one message remains visible, so the panel itself fades only after the
 --- final visible message has expired.
@@ -108,6 +134,7 @@ function Feed:UpdateMessageFade(now, delay, enabled)
     local hasVisibleMessages = false
     local historyVisible = self:IsHistoryVisible()
     local fadeNow = self.fadePaused and (self.fadePausedAt or now) or now
+    local liveLayoutChanged = false
 
     local widgets, groups = self.widgets, self.groups
     for groupIndex = 1, #widgets do
@@ -133,6 +160,12 @@ function Feed:UpdateMessageFade(now, delay, enabled)
                 end
             end
 
+            local previousAlpha = msg._chatFadeAlpha
+            msg._chatFadeAlpha = alpha
+            if not historyVisible and ((previousAlpha or 1) > 0) ~= (alpha > 0) then
+                liveLayoutChanged = true
+            end
+
             -- Keep the live alpha current while browsing; history remains in
             -- the layout and is revealed without moving any rows.
             local displayAlpha = historyVisible and 1 or alpha
@@ -156,7 +189,8 @@ function Feed:UpdateMessageFade(now, delay, enabled)
         if g.spec:GetAlpha() ~= displayHeaderAlpha then g.spec:SetAlpha(displayHeaderAlpha) end
 
     end
-    return hasVisibleMessages
+    if liveLayoutChanged then self:Layout(false) end
+    return hasVisibleMessages, liveLayoutChanged
 end
 
 --- Pauses message aging while the chat is being read or navigated.
@@ -207,34 +241,58 @@ function Feed:IsBrowsingHistory()
 end
 
 function Feed:IsHistoryVisible()
-    return self.historyMode == true or self.hoverHistory == true
-end
-
-function Feed:SetHoverHistory(hovered)
-    self.hoverHistory = hovered == true
+    return self.historyMode == true
 end
 
 function Feed:ResumeLive()
     if not self.historyMode then return end
     self.historyMode = false
-    self:ScrollToBottom(true)
+    self:Layout(false)
+    if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
+    self:ScrollToLiveEdge()
 end
 
 ---@param preserveHistory boolean? Keep the browse latch while repositioning.
 ---@param defer boolean? Reapply next frame after an asynchronous range update.
 function Feed:ScrollToBottom(preserveHistory, defer)
     self:StopLayoutAnimation(true)
+    local wasHistory = self.historyMode
     if not preserveHistory then self.historyMode = false end
+    if wasHistory and not self.historyMode then
+        self:Layout(false)
+        if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
+    end
     self.scrollRequest = self.scrollRequest + 1
     local request = self.scrollRequest
     local function go()
         if self.scrollRequest ~= request then return end
-        self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
+        if not self.historyMode and self.growthDirection == 'top' then
+            self.scrollFrame:SetVerticalScroll(0)
+        else
+            self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
+        end
         if self.onScrollChanged then self.onScrollChanged() end
     end
     go()
     -- The scroll range lags a frame behind content changes; re-apply once.
     if defer ~= false and C_Timer then C_Timer.After(0, go) end
+end
+
+--- Aligns the live feed to its fixed growth edge after a resize or reflow.
+function Feed:ScrollToLiveEdge()
+    self.scrollRequest = self.scrollRequest + 1
+    local request = self.scrollRequest
+    local function align()
+        if self.scrollRequest ~= request or self.historyMode then return end
+        if self.growthDirection == 'bottom' then
+            self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
+        else
+            self.scrollFrame:SetVerticalScroll(0)
+        end
+        if self.onScrollChanged then self.onScrollChanged() end
+    end
+    align()
+    if C_Timer then C_Timer.After(0, align) end
 end
 
 function Feed:GetScrollOffset()
@@ -265,17 +323,31 @@ function Feed:ScrollBy(upAmount)
     self.layoutFollowBottom = false
     self.scrollRequest = self.scrollRequest + 1
     local request = self.scrollRequest
-    if upAmount > 0 then self.historyMode = true end
+    local enteringHistory = upAmount > 0 and not self.historyMode
+    if enteringHistory then
+        self.historyMode = true
+        self:Layout(false)
+        if self.onHistoryModeChanged then self.onHistoryModeChanged(true) end
+    end
     local function applyScroll()
         if self.scrollRequest ~= request then return end
         local range = self.scrollFrame:GetVerticalScrollRange() or 0
         local offset = self.scrollFrame:GetVerticalScroll() or 0
-        offset = math.max(0, math.min(range, offset - upAmount))
+        if enteringHistory then
+            offset = math.max(0, range - upAmount)
+        else
+            offset = math.max(0, math.min(range, offset - upAmount))
+        end
         self.scrollFrame:SetVerticalScroll(offset)
-        if upAmount < 0 and self:IsAtBottom() then self.historyMode = false end
+        if upAmount < 0 and self:IsAtBottom() and self.historyMode then
+            self.historyMode = false
+            if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
+            self:ScrollToLiveEdge()
+        end
         if self.onScrollChanged then self.onScrollChanged() end
     end
     applyScroll()
+    if enteringHistory and C_Timer then C_Timer.After(0, applyScroll) end
 end
 
 --#endregion
@@ -417,7 +489,7 @@ function Feed:AnimateLayout(moves, fromOffset, targetOffset, followBottom)
                 Widgets.AnchorGroup(move.group, self.scrollChild, move.toY)
             end
             if self.layoutFollowBottom then
-                self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or targetOffset)
+                self.scrollFrame:SetVerticalScroll(targetOffset)
             end
             if self.layoutAnimation == animation then
                 self.layoutAnimation = nil
@@ -429,7 +501,8 @@ function Feed:AnimateLayout(moves, fromOffset, targetOffset, followBottom)
     self.layoutAnimation = animation
 end
 
---- Anchors all retained groups top-to-bottom, bottom-aligning short content.
+--- Anchors retained groups in arrival order, with live rows aligned to their
+--- selected growth edge and history rows aligned to the top of the scroll list.
 ---@param animate boolean? tween stable displayed groups to new positions
 ---@param snapshot table? positions captured before rendering/pool mutations
 ---@param followBottom boolean? animate the viewport along with new content
@@ -441,7 +514,11 @@ function Feed:Layout(animate, snapshot, followBottom, fromOffset)
     local historyVisible = self:IsHistoryVisible()
     local measured = {}
     for i = 1, #self.widgets do measured[i] = self.widgets[i]._metrics end
-    local plan = LayoutPolicy.Plan(measured, GROUP_GAP)
+    local plan = LayoutPolicy.Plan(measured, GROUP_GAP, {
+        history = historyVisible,
+        maxMessages = self.maxLiveMessages,
+        maxContentHeight = self.maxContentHeight,
+    })
     local displayed = plan.displayed
     -- Apply the plan before showing anything. This gives newly acquired and
     -- newly restored widgets their final geometry while they are still hidden.
@@ -461,7 +538,10 @@ function Feed:Layout(animate, snapshot, followBottom, fromOffset)
     self.contentHeight = contentHeight
 
     local viewHeight = self.scrollFrame:GetHeight() or 0
-    local spacerHeight = math.max(viewHeight - contentHeight - PADDING * 2, 0)
+    local spacerHeight = 0
+    if not historyVisible and self.growthDirection == 'bottom' then
+        spacerHeight = math.max(viewHeight - contentHeight - PADDING * 2, 0)
+    end
     self.spacer:SetHeight(spacerHeight)
 
     local y = 0
@@ -470,6 +550,16 @@ function Feed:Layout(animate, snapshot, followBottom, fromOffset)
         local g = self.widgets[i]
         if displayed[i] then
             local targetY = -(spacerHeight + PADDING + y)
+            local displayedHeight = g._metrics.heights[plan.firstByGroup[i]] or g:GetHeight()
+            if plan.oversizedGroup == i then
+                -- The ScrollFrame clips the oversized row. Its full measured
+                -- height keeps a range so bottom growth can reveal its newest end.
+                displayedHeight = g._metrics.heights[plan.firstByGroup[i]] or displayedHeight
+            end
+            if g:GetHeight() ~= displayedHeight then
+                g:SetHeight(displayedHeight)
+                g.background:SetHeight(displayedHeight + 12)
+            end
             local origin = snapshot[g]
             local startY = origin and origin.group == self.groups[i] and origin.y or nil
             if animate and startY and math.abs(startY - targetY) > 0.5 then
@@ -485,19 +575,37 @@ function Feed:Layout(animate, snapshot, followBottom, fromOffset)
         g._displayed = displayed[i] == true
     end
 
-    local childHeight = math.max(spacerHeight + contentHeight + PADDING * 2, viewHeight)
+    local contentPadding = contentHeight > 0 and PADDING * 2 or 0
+    local childHeight = math.max(spacerHeight + contentHeight + contentPadding, viewHeight)
     self.scrollChild:SetHeight(childHeight)
     if animate then
+        local targetOffset = self.growthDirection == 'bottom'
+            and math.max(childHeight - viewHeight, 0) or 0
         self:AnimateLayout(moves, fromOffset or self:GetScrollOffset(),
-            math.max(childHeight - viewHeight, 0), followBottom)
+            targetOffset, followBottom)
     end
 end
 
 --- Sets the fixed feed viewport height and reflows the retained rows.
 function Feed:SetViewportHeight(height)
-    self.scrollFrame:SetHeight(height)
+    if self.viewportHeight == height then return end
+    self.viewportHeight = height
+    if self.scrollFrame:GetHeight() ~= height then self.scrollFrame:SetHeight(height) end
     self:Layout(false)
-    if not self:IsBrowsingHistory() then self:ScrollToBottom(true) end
+end
+
+--- Sets the live row limit and the message space available after panel chrome.
+function Feed:SetLiveLayout(maxMessages, maxContentHeight, growthDirection)
+    local nextMaxMessages = math.max(1, math.floor(maxMessages or 6))
+    local nextMaxHeight = math.max(0, maxContentHeight or 0)
+    local nextDirection = growthDirection == 'top' and 'top' or 'bottom'
+    local changed = nextMaxMessages ~= self.maxLiveMessages
+        or nextMaxHeight ~= self.maxContentHeight
+        or nextDirection ~= self.growthDirection
+    self.maxLiveMessages = nextMaxMessages
+    self.maxContentHeight = nextMaxHeight
+    self.growthDirection = nextDirection
+    if changed then self:Layout(false) end
 end
 
 --#endregion

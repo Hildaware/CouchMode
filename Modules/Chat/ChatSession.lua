@@ -66,6 +66,10 @@ function chat:ClearSession()
     self.lastGroup = nil
     self.lastVisible = nil
     if self.feed then self.feed:Clear() end
+    if self.panel then
+        self:ApplyLayout()
+        self:OnFeedChanged()
+    end
 end
 
 ---@return boolean
@@ -180,6 +184,7 @@ function chat:ProcessChatMessage(msg)
     self.lastVisible = msg
 
     if self.feed then
+        self:ApplyLayout()
         self:OnFeedChanged()
     end
     self:Touch()
@@ -209,6 +214,7 @@ function chat:Recompute()
             (type(GetTime) == 'function') and GetTime() or 0,
             db().fadeDelay or 15, db().fadeEnabled == true
         )
+        self:ApplyLayout()
         if preserveBrowse then
             local removedHeight = math.max(previousContentHeight - self.feed:GetContentHeight(), 0)
             self.feed:RestoreScrollOffset(math.max(previousOffset - removedHeight, 0))
@@ -221,7 +227,7 @@ end
 
 function chat:OnFeedChanged()
     if not self.returnButton or not self.feed then return end
-    if not self.feed:IsBrowsingHistory() or self.feed:IsAtBottom() then
+    if not self.feed:IsBrowsingHistory() then
         self.returnButton:Hide()
     else
         self.returnButton:Show()
