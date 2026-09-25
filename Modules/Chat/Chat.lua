@@ -32,6 +32,7 @@ local DEFAULT_WIDTH = 500
 local DEFAULT_HEIGHT = 260
 local BORDER_ALPHA = 0.5
 local BORDER_INSET = 1
+local QUEUE_SKIP_BUDGET = 50
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
 
@@ -60,6 +61,11 @@ chat.guildByName = {}     ---@type table<string, string>
 chat.guildRosterBuilt = false
 chat.inspectingGuid = nil ---@type string?
 chat.inspectQueue = {}    ---@type {unit:string, guid:string}[]
+chat.messageQueue = {}
+chat.messageQueueHead = 1
+chat.messageQueueTail = 0
+chat.messageQueueScheduled = false
+chat.messageQueueToken = 0
 
 chat.panel = nil          ---@type Frame?
 chat.feed = nil
@@ -104,6 +110,7 @@ function chat:OnEnable()
 
     self:BuildPanel()
     addon.ChatRouter:Subscribe(self)
+    if self:HasQueuedMessages() then self:ScheduleMessageQueue(0) end
 
     self:RegisterValidEvent('UPDATE_CHAT_WINDOWS', 'ApplyBlizzardSuppression')
     self:RegisterValidEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
@@ -144,6 +151,7 @@ function chat:OnLogout()
 end
 
 function chat:OnDisable()
+    self:StopMessageQueue()
     addon.ChatRouter:Unsubscribe(self)
     self:UnregisterEvent('UPDATE_CHAT_WINDOWS')
     self:UnregisterEvent('PLAYER_ENTERING_WORLD')
@@ -248,6 +256,21 @@ function chat:ApplyPanelBackgroundOpacity()
     self.panel.bg:SetColorTexture(0, 0, 0, opacity)
 end
 
+--- Applies border opacity independently of message-driven panel fading.
+---@param interactive boolean?
+function chat:ApplyBorderOpacity(interactive)
+    if not self.borderFrame then return end
+
+    if interactive == nil then
+        local hovered = self.panel and self.panel.IsMouseOver and self.panel:IsMouseOver()
+        interactive = hovered or Input:HasFocus()
+    end
+
+    local opacity = db().backgroundOpacity or 0
+    if interactive then opacity = 1 end
+    self.borderFrame:SetAlpha(BORDER_ALPHA * opacity)
+end
+
 function chat:BuildFilterBar(parent)
     local bar = CreateFrame('Frame', nil, parent)
     bar:SetFrameStrata('DIALOG')
@@ -288,6 +311,7 @@ function chat:BuildPanel()
     if self.panel then
         self.panel:Show()
         if self.borderFrame then self.borderFrame:Show() end
+        self:ApplyBorderOpacity()
         return
     end
 
@@ -302,7 +326,7 @@ function chat:BuildPanel()
     borderFrame:SetFrameStrata(frame:GetFrameStrata())
     borderFrame:SetFrameLevel(frame:GetFrameLevel() + 1)
     addon.Components.Metal.PositionBorderFrame(borderFrame, frame, addon.Components.Metal.BORDER_OUTSET)
-    borderFrame:SetAlpha(BORDER_ALPHA * frame:GetAlpha())
+    borderFrame:SetAlpha(BORDER_ALPHA * (db().backgroundOpacity or 0))
     borderFrame:Hide()
     self.borderFrame = borderFrame
 
@@ -356,8 +380,14 @@ function chat:BuildPanel()
 
     local eb = Input:Attach(frame, strip)
     if eb and eb.HookScript then
-        eb:HookScript('OnEditFocusGained', function() chat:Touch() end)
-        eb:HookScript('OnEditFocusLost', function() chat:Touch() end)
+        eb:HookScript('OnEditFocusGained', function()
+            chat:Touch()
+            chat:ApplyBorderOpacity(true)
+        end)
+        eb:HookScript('OnEditFocusLost', function()
+            chat:Touch()
+            chat:ApplyBorderOpacity()
+        end)
     end
 
     LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
@@ -450,17 +480,6 @@ function chat:BuildPanel()
                 chat:Recompute()
             end,
         },
-        {
-            kind = LibEditMode.SettingType.Slider,
-            name = 'History Cap', desc = 'Messages retained for the current login.',
-            default = 500, minValue = 50, maxValue = 2000, valueStep = 50,
-            get = function() return db().historyCap end,
-            set = function(_, value, fromReset)
-                db().historyCap = (fromReset and 500 or value)
-                while #chat.session > db().historyCap do table.remove(chat.session, 1) end
-                chat:Recompute()
-            end,
-        },
     })
 
     LibEditMode:RegisterCallback('layout', function(layoutName)
@@ -477,6 +496,7 @@ function chat:BuildPanel()
     borderFrame:Show()
     self.panel = frame
     self:ApplyLayout()
+    self:ApplyBorderOpacity()
     self:RefreshFilterButtons()
     self:Recompute()
 end
@@ -492,7 +512,6 @@ function chat:ApplyLayout(rebuild)
 
     local viewport = panelHeight - PANEL_CHROME_HEIGHT
     self.feed:SetWidth(db().width - PAD * 2)
-    self.feed:SetLiveContentLimit(math.max(viewport - PAD * 2, 0))
     self.feed:SetViewportHeight(viewport)
 
     if rebuild then self:Recompute() end
@@ -529,8 +548,11 @@ end
 function chat:UpdateFade(dt)
     if not self.panel then return end
     local now = (type(GetTime) == 'function') and GetTime() or 0
-    local historyVisible = self.feed and self.feed:IsHistoryVisible()
     local panelHovered = self.panel.IsMouseOver and self.panel:IsMouseOver() or false
+    local feedHovered = self.scrollArea and self.scrollArea.IsMouseOver
+        and self.scrollArea:IsMouseOver() or false
+    if self.feed then self.feed:SetHoverHistory(feedHovered) end
+    local historyVisible = self.feed and self.feed:IsHistoryVisible()
     local backgroundHovered = panelHovered
     if backgroundHovered ~= self.backgroundHovered then
         self.backgroundHovered = backgroundHovered
@@ -549,14 +571,13 @@ function chat:UpdateFade(dt)
         now, db().fadeDelay or 15,
         db().fadeEnabled == true
     ) or false
-    historyVisible = self.feed and self.feed:IsHistoryVisible()
 
     -- The filter controls are discoverable from their own hover region, while
     -- the input strip only exists while Blizzard's edit box is active.
     self:FadeRegion(self.filterBar, 'tabsAlpha', panelHovered and 1 or 0, dt)
     self:FadeRegion(self.inputStrip, 'inputAlpha', inputFocused and 1 or 0, dt)
 
-    -- Individual lines expire from their own receive times. The panel remains
+    -- Individual lines expire from their own display times. The panel remains
     -- active while a line, tab interaction, or focused input is visible.
     local target = db().activeOpacity
     if db().fadeEnabled and not engaged and not hasVisibleMessages then
@@ -574,7 +595,7 @@ function chat:UpdateFade(dt)
         self.fadeAlpha = nextAlpha
         self.panel:SetAlpha(nextAlpha)
     end
-    if self.borderFrame then self.borderFrame:SetAlpha(BORDER_ALPHA * self.panel:GetAlpha()) end
+    self:ApplyBorderOpacity(engaged)
 end
 
 --#endregion
@@ -1092,6 +1113,7 @@ function chat:ApplyBlockFilter(msg)
 end
 
 function chat:ClearSession()
+    self:ClearMessageQueue()
     wipe(self.session)
     self.groups = {}
     self.lastGroup = nil
@@ -1099,45 +1121,122 @@ function chat:ClearSession()
     if self.feed then self.feed:Clear() end
 end
 
+---@return boolean
+function chat:HasQueuedMessages()
+    return self.messageQueueHead <= self.messageQueueTail
+end
+
+--- Invalidates any pending timer callback without removing queued messages.
+function chat:StopMessageQueue()
+    self.messageQueueToken = self.messageQueueToken + 1
+    self.messageQueueScheduled = false
+end
+
+--- Opens the next-message gate after the configured interval. The timer is also
+--- kept when the queue is empty so synchronous event bursts are paced correctly.
+--- Its token makes stale callbacks harmless after disabling, clearing, or
+--- changing the pace setting.
+---@param delay number?
+function chat:ScheduleMessageQueue(delay)
+    if self.messageQueueScheduled or not db().enabled then return end
+
+    self.messageQueueScheduled = true
+    self.messageQueueToken = self.messageQueueToken + 1
+    local token = self.messageQueueToken
+    C_Timer.After(math.max(delay or 0, 0), function()
+        if token ~= chat.messageQueueToken then return end
+        chat.messageQueueScheduled = false
+        if not db().enabled or not chat:HasQueuedMessages() then return end
+        chat:ProcessNextQueuedMessage()
+    end)
+end
+
+--- Processes queued messages in order, pacing only messages that update the feed.
+function chat:ProcessNextQueuedMessage()
+    if not db().enabled or not self:HasQueuedMessages() then return end
+
+    local displayed
+    local processed = 0
+    repeat
+        local msg = self.messageQueue[self.messageQueueHead]
+        self.messageQueue[self.messageQueueHead] = nil
+        self.messageQueueHead = self.messageQueueHead + 1
+        displayed = self:ProcessChatMessage(msg)
+        processed = processed + 1
+    until displayed or not self:HasQueuedMessages() or processed >= QUEUE_SKIP_BUDGET
+
+    if not self:HasQueuedMessages() then
+        self.messageQueue = {}
+        self.messageQueueHead = 1
+        self.messageQueueTail = 0
+    end
+
+    if displayed then
+        self:ScheduleMessageQueue(db().messagePace or 0)
+    elseif self:HasQueuedMessages() then
+        self:ScheduleMessageQueue(0)
+    end
+end
+
+--- Clears pending presentation work for an explicit user-requested history clear.
+function chat:ClearMessageQueue()
+    self:StopMessageQueue()
+    self.messageQueue = {}
+    self.messageQueueHead = 1
+    self.messageQueueTail = 0
+end
+
+--- Reapplies a changed pace immediately to the existing backlog.
+function chat:UpdateMessageQueuePace()
+    if not self:HasQueuedMessages() and not self.messageQueueScheduled then return end
+    self:StopMessageQueue()
+    if self:HasQueuedMessages() then self:ScheduleMessageQueue(0) end
+end
+
 ---@param msg ChatMessage
 function chat:ChatMessage(msg)
     if not db().enabled then return end
-
     if self:ApplyBlockFilter(msg) then return end
 
+    local wasEmpty = not self:HasQueuedMessages()
+    self.messageQueueTail = self.messageQueueTail + 1
+    self.messageQueue[self.messageQueueTail] = msg
+
+    -- Show the first message immediately; only subsequent messages in a burst
+    -- are paced. No queue-size limit or eviction is applied.
+    if wasEmpty and not self.messageQueueScheduled then
+        self:ProcessNextQueuedMessage()
+    end
+end
+
+---@param msg ChatMessage
+---@return boolean displayed
+function chat:ProcessChatMessage(msg)
     -- Alerts (Talking Head suppression and similar) happen after blocking.
+    msg.displayedAt = (type(GetTime) == 'function') and GetTime() or msg.timestamp
     self.session[#self.session + 1] = msg
 
-    local cap = db().historyCap or 500
-    if #self.session > cap then
-        local overflow = #self.session - cap
-        for _ = 1, overflow do table.remove(self.session, 1) end
-        self:Recompute()
-        self:Touch()
-        return
-    end
-
     if not Sources.MatchesFilter(msg, db().filter) then
-        return
+        return false
     end
 
     local followBottom = self.feed and not self.feed:IsBrowsingHistory()
     if self.lastVisible and Grouping.ShouldGroup(self.lastVisible, msg, db().groupWindow) and self.lastGroup then
         self.lastGroup.messages[#self.lastGroup.messages + 1] = msg
-        if self.feed then self.feed:RefreshLastGroup(self.lastGroup) end
+        if self.feed then self.feed:RefreshLastGroup(self.lastGroup, followBottom) end
     else
         local group = { messages = { msg } }
         self.groups[#self.groups + 1] = group
         self.lastGroup = group
-        if self.feed then self.feed:AppendGroup(group) end
+        if self.feed then self.feed:AppendGroup(group, followBottom) end
     end
     self.lastVisible = msg
 
     if self.feed then
-        if followBottom then self.feed:ScrollToBottom(true) end
         self:OnFeedChanged()
     end
     self:Touch()
+    return true
 end
 
 function chat:Recompute()
@@ -1159,6 +1258,10 @@ function chat:Recompute()
         self.feed:SetFonts(self:FontMetrics())
         self.feed:SetCompactMode(db().compactMode)
         self.feed:Rebuild(groups)
+        self.feed:UpdateMessageFade(
+            (type(GetTime) == 'function') and GetTime() or 0,
+            db().fadeDelay or 15, db().fadeEnabled == true
+        )
         if preserveBrowse then
             local removedHeight = math.max(previousContentHeight - self.feed:GetContentHeight(), 0)
             self.feed:RestoreScrollOffset(math.max(previousOffset - removedHeight, 0))
@@ -1288,7 +1391,7 @@ function chat:ClosePanel()
     Input:Deactivate()
     self.fadeAlpha = db().backgroundOpacity
     if self.panel then self.panel:SetAlpha(self.fadeAlpha) end
-    if self.borderFrame then self.borderFrame:SetAlpha(BORDER_ALPHA * self.fadeAlpha) end
+    self:ApplyBorderOpacity()
 end
 
 function chat:ScrollUp()
@@ -1330,8 +1433,8 @@ function chat:GetDefaults()
             -- Character-by-character reveal (same behaviour as Chat Bubbles)
             revealText = true,
             revealSpeed = 44,
-            -- History
-            historyCap = 500,
+            -- Seconds between feed updates after the first message in a burst.
+            messagePace = 0.35,
             groupWindow = 60,
             filter = 'ALL',
             -- Identity
@@ -1538,14 +1641,14 @@ function chat:BuildArgs()
                     get = function() return db().revealSpeed end,
                     set = function(_, v) db().revealSpeed = v; chat:Recompute() end,
                 },
-                historyCap = {
-                    name = 'History Cap', desc = 'Maximum messages kept for the current login (not saved).',
-                    type = 'range', min = 50, max = 2000, step = 50, order = 20,
-                    get = function() return db().historyCap end,
+                messagePace = {
+                    name = 'Message Pace',
+                    desc = 'Seconds between messages displayed during a burst. Messages remain queued and are shown in order. Set to 0 for the fastest possible display.',
+                    type = 'range', min = 0, max = 1, step = 0.05, order = 20,
+                    get = function() return db().messagePace end,
                     set = function(_, v)
-                        db().historyCap = v
-                        while #chat.session > v do table.remove(chat.session, 1) end
-                        chat:Recompute()
+                        db().messagePace = v
+                        chat:UpdateMessageQueuePace()
                     end,
                 },
             },

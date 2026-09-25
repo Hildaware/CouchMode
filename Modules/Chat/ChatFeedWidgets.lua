@@ -4,7 +4,7 @@ The visual anatomy of a single message group in the Chat feed.
 Owns the group frame hierarchy (portrait, identity header and message lines),
 the shared geometry constants, the hyperlink interaction policy, and per-group
 measurement and rendering. Everything that spans *many* groups -
-pooling, admission, layout, scrolling, fading and motion - lives in
+pooling, layout, scrolling, fading and motion - lives in
 `ChatFeed`, which drives this module through `RenderGroup`/`ResetGroup`.
 
 Styling (colors, fonts, icons, aliases) stays in `addon.Chat` so it remains in
@@ -227,9 +227,7 @@ function M.ResetGroup(g)
     g.channel:SetText('')
     g:ClearAllPoints()
     g._wasLaidOut = false
-    g._hasVisibleMessages = nil
     g._displayed = nil
-    g._firstVisibleMessage = nil
     g._lineAlphas = nil
     g._lineHeights = nil
     g._metrics = nil
@@ -441,8 +439,8 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         return math.max(textBottom, iconBottom) + MSG_TOP_GAP
     end
 
-    -- Measure every line against its complete text. The admission planner uses
-    -- these cached heights to trim within a grouped speaker block.
+    -- Measure every line against its complete text so the scroll geometry stays
+    -- stable while the visible text is being revealed.
     local messageLeft = compactMode and hasIcon and (iconSize + iconGap) or 0
     local available = math.max(feed.width - PADDING * 2 - messageLeft, 40)
     local msgFace, msgSize = feed.fonts.msg.face, feed.fonts.msg.size
@@ -466,12 +464,11 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         heights[i] = math.max(messageTopFor(0) + suffixHeight, iconTopPad + iconSize)
     end
     g._metrics = {
-        firstEligible = g._hasVisibleMessages == false and nil or (g._firstVisibleMessage or 1),
         lastMessage = messageCount,
         heights = heights,
     }
 
-    firstMessage = math.max(1, math.min(firstMessage or g._metrics.firstEligible or 1, messageCount))
+    firstMessage = math.max(1, math.min(firstMessage or 1, messageCount))
     g._firstDisplayedMessage = firstMessage
     local historyVisible = feed:IsHistoryVisible()
     local lineAlphas = g._lineAlphas
