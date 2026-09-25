@@ -75,6 +75,7 @@ local function moneySet()
     return {
         { kind = 'money', amount = 12345, total = 987654 },
         { kind = 'money', amount = 500000, total = 1487654 },
+        { kind = 'money', amount = 42, total = 1487696 },
     }
 end
 
@@ -82,6 +83,7 @@ local function currencySet()
     return {
         { kind = 'currency', currencyID = 3008, name = 'Valor Points', amount = 25, total = 1350, icon = 236689, quality = 3 },
         { kind = 'currency', currencyID = 1166, name = 'Timewarped Badge', amount = 50, total = 250, icon = 463446, quality = 3 },
+        { kind = 'currency', currencyID = 2000, name = "Delver's Bounty", amount = 3, total = 47, icon = 134400, quality = 2 },
     }
 end
 
@@ -99,6 +101,23 @@ local function systemSet()
     return {
         { kind = 'system', event = 'CHAT_MSG_SYSTEM', text = 'You are now AFK.' },
         { kind = 'system', event = 'CHAT_MSG_SYSTEM', text = 'No player named "Ghost" is currently playing.' },
+        { kind = 'system', event = 'CHAT_MSG_COLLECTED_APPEARANCE', text = 'You collected a new appearance.' },
+        { kind = 'system', event = 'CHAT_MSG_COLLECTED_APPEARANCE', text = 'Appearance collected: a new transmog option is now available.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_XP_GAIN', text = 'You gain 125 experience.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_XP_GAIN', text = 'You gain 2,450 experience.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_XP_GAIN', text = 'You gain 8,000 experience for completing a quest.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_HONOR_GAIN', text = 'You gain 50 honor.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_HONOR_GAIN', text = 'You gain 125 honor.' },
+        { kind = 'system', event = 'CHAT_MSG_COMBAT_HONOR_GAIN', text = 'You gain 250 honor.' },
+        { kind = 'system', event = 'CHAT_MSG_SKILL', text = 'Your skill in Herbalism has increased to 25.' },
+        { kind = 'system', event = 'CHAT_MSG_SKILL', text = 'Your skill in Mining has increased to 40.' },
+        { kind = 'system', event = 'CHAT_MSG_SKILL', text = 'Your Cooking skill has increased to 75.' },
+        { kind = 'system', event = 'UI_ERROR_MESSAGE', text = 'You are too far away.' },
+        { kind = 'system', event = 'UI_ERROR_MESSAGE', text = 'You cannot do that right now.' },
+        { kind = 'system', event = 'UI_INFO_MESSAGE', text = 'Your item has been repaired.' },
+        { kind = 'system', event = 'UI_INFO_MESSAGE', text = 'New recipe learned.' },
+        { kind = 'system', event = 'SYSMSG', text = 'Your inventory is full.' },
+        { kind = 'system', event = 'SYSMSG', text = 'Quest accepted: A Worthy Ally.' },
     }
 end
 

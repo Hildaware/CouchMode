@@ -14,10 +14,12 @@ Feed.__index = Feed
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local ROW_HEIGHT = 30
+local ROW_HEIGHT = 36
 local ROW_GAP = 2
 local PADDING = 4
 local ICON_SIZE = 22
+local ICON_FRAME_SIZE = 28
+local ICON_FRAME_ATLAS = 'UI-Journeys-Delve-rewardicon-square-frame'
 local ICON_LEFT = 6
 local ICON_GAP = 6
 local QUEST_ICON_SIZE = 16
@@ -25,6 +27,17 @@ local QUEST_ICON_GAP = 4
 local TEXT_PAD = 6
 local WRAPPED_TEXT_PAD = 12
 local FADE_TIME = 0.25
+
+local ROW_BORDER_LAYOUT = {
+    TopLeftCorner = { atlas = 'characterupdate-9slice-topleftcorner', layer = 'OVERLAY', subLevel = 7 },
+    TopRightCorner = { atlas = 'characterupdate-9slice-toprightcorner', layer = 'OVERLAY', subLevel = 7 },
+    BottomRightCorner = { atlas = 'characterupdate-9slice-bottomrightcorner', layer = 'OVERLAY', subLevel = 7 },
+    BottomLeftCorner = { atlas = 'characterupdate-9slice-bottomleftcorner', layer = 'OVERLAY', subLevel = 7 },
+    TopEdge = { atlas = '_characterupdate-9slice-topedge', layer = 'OVERLAY', subLevel = 7 },
+    BottomEdge = { atlas = '_characterupdate-9slice-bottomedge', layer = 'OVERLAY', subLevel = 7 },
+    RightEdge = { atlas = '!characterupdate-9slice-rightedge', layer = 'OVERLAY', subLevel = 7 },
+    LeftEdge = { atlas = '!characterupdate-9slice-leftedge', layer = 'OVERLAY', subLevel = 7 },
+}
 
 --#endregion
 
@@ -39,13 +52,32 @@ local function createRow(parent)
     bg:SetAllPoints()
     row.bg = bg
 
-    row.border = addon.Utils.create_border_textures(row, row)
+    if NineSliceUtil and NineSliceUtil.ApplyLayout then
+        NineSliceUtil.ApplyLayout(row, ROW_BORDER_LAYOUT)
+        -- The source corners are 44px square. Scale them to fit a compact row
+        -- while keeping the 9-slice edges as narrow accents.
+        row.TopLeftCorner:SetSize(16, 16)
+        row.TopRightCorner:SetSize(16, 16)
+        row.BottomRightCorner:SetSize(16, 16)
+        row.BottomLeftCorner:SetSize(16, 16)
+        row.TopEdge:SetHeight(3)
+        row.BottomEdge:SetHeight(3)
+        row.LeftEdge:SetWidth(3)
+        row.RightEdge:SetWidth(3)
+    end
 
     local icon = row:CreateTexture(nil, 'ARTWORK')
     icon:SetSize(ICON_SIZE, ICON_SIZE)
     icon:SetPoint('LEFT', row, 'LEFT', ICON_LEFT, 0)
     icon:Hide()
     row.icon = icon
+
+    local iconFrame = row:CreateTexture(nil, 'OVERLAY', nil, 1)
+    iconFrame:SetAtlas(ICON_FRAME_ATLAS)
+    iconFrame:SetSize(ICON_FRAME_SIZE, ICON_FRAME_SIZE)
+    iconFrame:SetPoint('CENTER', icon)
+    iconFrame:Hide()
+    row.iconFrame = iconFrame
 
     local questIcon = row:CreateTexture(nil, 'ARTWORK')
     questIcon:SetSize(QUEST_ICON_SIZE, QUEST_ICON_SIZE)
@@ -203,6 +235,7 @@ function Feed:ReleaseRow(row)
     row.label:SetTextColor(1, 1, 1, 1)
     row.icon:Hide()
     row.icon:SetTexture(nil)
+    row.iconFrame:Hide()
     row.questIcon:Hide()
     row.questIcon:SetTexture(nil)
     row:Hide()
@@ -231,18 +264,20 @@ function Feed:RenderRow(row, entry)
     local bg = presented.bg or { 0.1, 0.1, 0.1, 1 }
     row.bg:SetColorTexture(bg[1], bg[2], bg[3], bg[4] or 1)
 
-    local border = presented.border
-    addon.Utils.apply_border_textures(row, row.border, true, 1,
-        border and border[1] or 0.3, border and border[2] or 0.3, border and border[3] or 0.3, 1)
-
     local labelOffset = TEXT_PAD
-    if presented.icon then
-        row.icon:SetTexture(presented.icon)
+    if presented.icon or presented.iconAtlas then
+        if presented.iconAtlas then
+            row.icon:SetAtlas(presented.iconAtlas)
+        else
+            row.icon:SetTexture(presented.icon)
+        end
         row.icon:Show()
+        row.iconFrame:Show()
         labelOffset = ICON_LEFT + ICON_SIZE + ICON_GAP
     else
         row.icon:Hide()
         row.icon:SetTexture(nil)
+        row.iconFrame:Hide()
     end
 
     row.questIcon:ClearAllPoints()

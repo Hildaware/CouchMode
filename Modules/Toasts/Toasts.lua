@@ -31,7 +31,35 @@ local REPUTATION = { r = 0.30, g = 0.58, b = 0.95 }
 local SYSTEM = { r = 0.46, g = 0.79, b = 0.92 }
 local QUEST = { r = 1, g = 0.82, b = 0 }
 local QUEST_ICON_ATLAS = 'QuestNormal'
+local GOLD_ICON_ID = 901746
 local REPUTATION_ICON = 'Interface\\Icons\\achievement_reputation_01'
+local SYSTEM_ICON_ID = 4279397
+local SYSTEM_EVENT_ICONS = {
+    CHAT_MSG_COMBAT_XP_GAIN = 'Interface\\Icons\\XP_Icon',
+    CHAT_MSG_COMBAT_HONOR_GAIN = 'Interface\\Icons\\Spell_Misc_HellifrePVPHonorHoldFavor',
+    CHAT_MSG_SKILL = 'Interface\\Icons\\INV_Misc_Book_09',
+}
+local WEAPON_SKILL_ICONS = {
+    [43] = 'Interface\\Icons\\INV_Sword_04',
+    [44] = 'Interface\\Icons\\INV_Axe_04',
+    [45] = 'Interface\\Icons\\INV_Weapon_Bow_05',
+    [46] = 'Interface\\Icons\\INV_Weapon_Rifle_01',
+    [54] = 'Interface\\Icons\\INV_Mace_01',
+    [55] = 'Interface\\Icons\\INV_Sword_07',
+    [136] = 'Interface\\Icons\\INV_Staff_08',
+    [160] = 'Interface\\Icons\\INV_Mace_04',
+    [162] = 'Interface\\Icons\\INV_Gauntlets_04',
+    [172] = 'Interface\\Icons\\INV_Axe_09',
+    [173] = 'Interface\\Icons\\INV_Weapon_ShortBlade_05',
+    [176] = 'Interface\\Icons\\INV_ThrowingKnife_04',
+    [226] = 'Interface\\Icons\\INV_Weapon_Crossbow_01',
+    [228] = 'Interface\\Icons\\INV_Staff_30',
+    [229] = 'Interface\\Icons\\INV_Weapon_Halberd_10',
+    [3014] = 'Interface\\Icons\\Ability_Druid_CatForm',
+}
+local SYSTEM_EVENT_ICON_ATLASES = {
+    CHAT_MSG_COLLECTED_APPEARANCE = 'transmog-nav-slot-head',
+}
 
 -- Row backgrounds are semi-transparent so the feed behind them shows through.
 local ROW_BG_ALPHA = 0.5
@@ -49,6 +77,7 @@ toasts.fadeAlpha = 1
 toasts.refreshPending = false
 toasts.filters = nil      ---@type { event: string, callback: fun(...) }[]?
 toasts.filtersInstalled = false
+toasts.pendingAppearanceIcons = {}
 
 --#endregion
 
@@ -58,6 +87,74 @@ local function db() return addon.db.profile.toasts end
 
 local function now()
     return (type(GetTime) == 'function') and GetTime() or 0
+end
+
+local function validIcon(icon)
+    if Sources.isSecret(icon) then return false end
+    return (type(icon) == 'number' and icon > 0)
+        or (type(icon) == 'string' and icon ~= '')
+end
+
+local function getAppearanceSourceIcon(sourceID)
+    local transmog = C_TransmogCollection
+    if not (transmog and transmog.GetSourceIcon) then return nil end
+    local ok, icon = pcall(transmog.GetSourceIcon, sourceID)
+    if ok and validIcon(icon) then return icon end
+end
+
+local function latestAppearanceSourceIcon()
+    local transmog = C_TransmogCollection
+    if not (transmog and transmog.GetLatestAppearance and transmog.GetAllAppearanceSources) then
+        return nil
+    end
+
+    local ok, appearanceID = pcall(transmog.GetLatestAppearance)
+    appearanceID = ok and Sources.SafeNumber(appearanceID) or nil
+    if not appearanceID then return nil end
+
+    local sourcesOK, sourceIDs = pcall(transmog.GetAllAppearanceSources, appearanceID)
+    if not sourcesOK or type(sourceIDs) ~= 'table' then return nil end
+    for _, sourceID in ipairs(sourceIDs) do
+        sourceID = Sources.SafeNumber(sourceID)
+        if sourceID then
+            local icon = getAppearanceSourceIcon(sourceID)
+            if icon then return icon end
+        end
+    end
+end
+
+--- CHAT_MSG_SKILL has localized text rather than a skill ID. Match its skill
+--- name against the skill list, then ask the profession API for its real icon.
+local function skillIconFromMessage(text)
+    local skillInfo = C_SkillInfo
+    local tradeSkills = C_TradeSkillUI
+    if not (skillInfo and skillInfo.GetNumSkillLines and skillInfo.GetSkillLineInfo) then return nil end
+
+    local ok, count = pcall(skillInfo.GetNumSkillLines)
+    if not ok or type(count) ~= 'number' then return nil end
+
+    for index = 1, count do
+        local infoOK, info = pcall(skillInfo.GetSkillLineInfo, index)
+        local name = infoOK and type(info) == 'table' and Sources.SafeString(info.name)
+        if name and text:find(name, 1, true) then
+            if tradeSkills and tradeSkills.GetProfessionInfoBySkillLineID
+                and tradeSkills.GetTradeSkillTexture then
+                local skillID = Sources.SafeNumber(info.skillID)
+                if skillID then
+                    local professionOK, profession = pcall(tradeSkills.GetProfessionInfoBySkillLineID, skillID)
+                    local professionID = professionOK and type(profession) == 'table'
+                        and Sources.SafeNumber(profession.professionID)
+                    if professionID then
+                        local iconOK, icon = pcall(tradeSkills.GetTradeSkillTexture, professionID)
+                        if iconOK and validIcon(icon) then return icon end
+                    end
+                end
+            end
+            local skillID = Sources.SafeNumber(info.skillID)
+            if skillID then return WEAPON_SKILL_ICONS[skillID] end
+            return nil
+        end
+    end
 end
 
 --- Reads an item quality's RGB from the client, tolerating older clients.
@@ -295,13 +392,48 @@ function toasts:OnReputationMessage(_event, text)
     if entry then self:AddEntry(entry) end
 end
 
---- Displays the same system-event family currently categorized by Chat.
+--- TRANSMOG_COLLECTION_SOURCE_ADDED carries the exact item appearance source ID.
+function toasts:OnTransmogSourceAdded(_event, sourceID)
+    local icon = Sources.SafeNumber(sourceID) and getAppearanceSourceIcon(sourceID)
+    if icon then
+        self.pendingAppearanceIcons[#self.pendingAppearanceIcons + 1] = {
+            icon = icon,
+            timestamp = now(),
+        }
+    end
+end
+
+local function takePendingAppearanceIcon(self)
+    local queue = self.pendingAppearanceIcons
+    local timestamp = now()
+    while queue[1] and timestamp - queue[1].timestamp > 5 do
+        table.remove(queue, 1)
+    end
+    local pending = table.remove(queue, 1)
+    return pending and pending.icon
+end
+
+--- Displays system messages and system-style chat events in the system category.
 ---@param event string
 ---@param text any
 function toasts:OnSystemMessage(event, text)
     if not db().system then return end
     local entry = Sources.NormalizeSystem(event, text, now())
-    if entry then self:AddEntry(entry) end
+    if not entry then return end
+
+    if event == 'CHAT_MSG_COLLECTED_APPEARANCE' then
+        entry.icon = takePendingAppearanceIcon(self) or latestAppearanceSourceIcon()
+    elseif event == 'CHAT_MSG_SKILL' then
+        entry.icon = skillIconFromMessage(entry.originalText)
+    end
+
+    self:AddEntry(entry)
+end
+
+--- UI_ERROR_MESSAGE/UI_INFO_MESSAGE provide (messageType, text); the message
+--- is the second event argument. SYSMSG already uses OnSystemMessage directly.
+function toasts:OnUIMessage(event, _messageType, text)
+    self:OnSystemMessage(event, text)
 end
 
 --#endregion
@@ -508,6 +640,7 @@ function toasts:PresentEntry(entry)
         if entry.total then text = text .. '   (' .. moneyString(entry.total) .. ')' end
         return {
             text = text,
+            icon = GOLD_ICON_ID,
             bg = { 0.20, 0.15, 0.03, ROW_BG_ALPHA },
             border = { MONEY.r, MONEY.g, MONEY.b },
             textColor = { 1, 0.93, 0.62 },
@@ -544,7 +677,9 @@ function toasts:PresentEntry(entry)
         }
     elseif entry.kind == 'system' then
         return {
-            text = 'SYSTEM  ' .. (entry.originalText or ''),
+            text = entry.originalText or '',
+            icon = entry.icon or SYSTEM_EVENT_ICONS[entry.event] or SYSTEM_ICON_ID,
+            iconAtlas = not entry.icon and SYSTEM_EVENT_ICON_ATLASES[entry.event] or nil,
             wrap = true,
             bg = { 0.07, 0.16, 0.21, 0.72 },
             border = { SYSTEM.r, SYSTEM.g, SYSTEM.b },
@@ -591,7 +726,10 @@ function toasts:BuildPanel()
 
     self.feed = addon.ToastFeedProto.New(scrollArea)
     self.feed.presenter = function(entry) return toasts:PresentEntry(entry) end
-    self.feed.onScrollChanged = function() toasts:OnFeedChanged() end
+    self.feed.onScrollChanged = function()
+        toasts:Touch()
+        toasts:OnFeedChanged()
+    end
 
     -- Rows enable the mouse for tooltips, so hover is tracked on the padding
     -- regions here and per-row inside the feed.
@@ -780,16 +918,21 @@ end
 function toasts:UpdateFade(dt)
     if not self.panel then return end
 
+    local currentTime = now()
     local browsing = self.feed and self.feed:IsBrowsingHistory()
     local fadeEnabled = db().fadeEnabled == true
+    local fadeDelay = db().fadeDelay or 15
     local hasVisible = true
     if self.feed then
-        hasVisible = self.feed:UpdateRowFade(now(), db().fadeDelay or 15, fadeEnabled and not browsing)
+        hasVisible = self.feed:UpdateRowFade(currentTime, fadeDelay, fadeEnabled and not browsing)
     end
 
     local hovered = self.feed and self.feed.hovering
     local target = db().activeOpacity or 1
-    if fadeEnabled and not hasVisible and not hovered then
+    -- Browsing history keeps its rows opaque, but the panel should still fade
+    -- after the reader stops interacting with it.
+    local idleWhileBrowsing = browsing and (currentTime - (self.lastActivity or currentTime)) >= fadeDelay
+    if fadeEnabled and not hovered and ((not browsing and not hasVisible) or idleWhileBrowsing) then
         target = db().backgroundOpacity or 0
     end
 
@@ -1105,7 +1248,12 @@ function toasts:MockEntry(spec)
             return
         end
     elseif spec.kind == 'system' then
-        self:OnSystemMessage(spec.event or 'CHAT_MSG_SYSTEM', spec.text)
+        local event = spec.event or 'CHAT_MSG_SYSTEM'
+        if event == 'UI_ERROR_MESSAGE' or event == 'UI_INFO_MESSAGE' then
+            self:OnUIMessage(event, nil, spec.text)
+        else
+            self:OnSystemMessage(event, spec.text)
+        end
         return
     end
 
@@ -1165,6 +1313,10 @@ toasts.EVENT_HANDLERS = {
     ITEM_DATA_LOAD_RESULT = 'OnItemInfoReceived',
     BAG_UPDATE_DELAYED = 'OnItemInfoReceived',
     PLAYER_ENTERING_WORLD = 'OnPlayerEnteringWorld',
+    TRANSMOG_COLLECTION_SOURCE_ADDED = 'OnTransmogSourceAdded',
+    SYSMSG = 'OnSystemMessage',
+    UI_ERROR_MESSAGE = 'OnUIMessage',
+    UI_INFO_MESSAGE = 'OnUIMessage',
 }
 for _, event in ipairs(Sources.SYSTEM_EVENTS) do
     toasts.EVENT_HANDLERS[event] = 'OnSystemMessage'

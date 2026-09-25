@@ -67,10 +67,15 @@ end
 ---@type RewardKind[]
 M.KINDS = { 'items', 'money', 'currency', 'reputation' }
 
--- Keep this list aligned with the SYSTEM events in ChatSources until Chat's
--- own routing is moved. Toasts registers independently of Chat.
+-- Toasts owns its routing independently of Chat. These are chat events shown
+-- as system-style rows, including reward-like messages with dedicated events.
 M.SYSTEM_EVENTS = {
     'CHAT_MSG_SYSTEM',
+    -- Other visible system-style chat channels, delivered as distinct events.
+    'CHAT_MSG_COLLECTED_APPEARANCE',
+    'CHAT_MSG_COMBAT_XP_GAIN',
+    'CHAT_MSG_COMBAT_HONOR_GAIN',
+    'CHAT_MSG_SKILL',
     'CHAT_MSG_CHANNEL_NOTICE',
     'CHAT_MSG_CHANNEL_NOTICE_USER',
     'CHAT_MSG_IGNORED',
@@ -82,6 +87,11 @@ M.SYSTEM_EVENTS = {
 }
 M.SYSTEM_EVENT_SET = {}
 for _, event in ipairs(M.SYSTEM_EVENTS) do M.SYSTEM_EVENT_SET[event] = true end
+M.UI_SYSTEM_EVENT_SET = {
+    SYSMSG = true,
+    UI_ERROR_MESSAGE = true,
+    UI_INFO_MESSAGE = true,
+}
 
 --- The Blizzard chat event that carries each reward category's text.
 ---@type table<RewardKind, string>
@@ -120,6 +130,12 @@ M.SUPPORT_EVENTS = {
     'ITEM_DATA_LOAD_RESULT',
     'BAG_UPDATE_DELAYED',
     'PLAYER_ENTERING_WORLD',
+    -- UI errors and info notices are rendered by UIErrorsFrame rather than chat.
+    'SYSMSG',
+    'UI_ERROR_MESSAGE',
+    'UI_INFO_MESSAGE',
+    -- Carries itemModifiedAppearanceID for precise appearance item icons.
+    'TRANSMOG_COLLECTION_SOURCE_ADDED',
 }
 for _, event in ipairs(M.SYSTEM_EVENTS) do M.SUPPORT_EVENTS[#M.SUPPORT_EVENTS + 1] = event end
 
@@ -399,10 +415,10 @@ end
 ---@param timestamp number
 ---@return ToastEntry?
 function M.NormalizeSystem(event, text, timestamp)
-    if not M.SYSTEM_EVENT_SET[event] then return nil end
+    if not M.SYSTEM_EVENT_SET[event] and not M.UI_SYSTEM_EVENT_SET[event] then return nil end
     text = M.SafeString(text)
     if not text then return nil end
-    return { kind = 'system', timestamp = timestamp, originalText = text }
+    return { kind = 'system', timestamp = timestamp, event = event, originalText = text }
 end
 
 --- Builds an item entry from a raw CHAT_MSG_LOOT line.
