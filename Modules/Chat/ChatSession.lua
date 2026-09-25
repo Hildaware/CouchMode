@@ -26,6 +26,84 @@ local function db() return addon.db.profile.chat end
 
 --#endregion
 
+--#region ── Blizzard General chat filtering ───────────────────────────────────
+
+local messageGroupsByEvent
+
+local function getMessageGroupsByEvent()
+    if messageGroupsByEvent then return messageGroupsByEvent end
+
+    messageGroupsByEvent = {}
+    for group, events in pairs(ChatTypeGroup or {}) do
+        for _, event in pairs(events) do
+            local groups = messageGroupsByEvent[event]
+            if not groups then
+                groups = {}
+                messageGroupsByEvent[event] = groups
+            end
+            groups[#groups + 1] = group
+        end
+    end
+    return messageGroupsByEvent
+end
+
+local function generalChannelEnabled(frame, msg)
+    local channels = frame.channelList
+    if type(channels) ~= 'table' then return true end
+
+    local base = msg.channelBase
+    local zoneID = msg.zoneChannelID
+    -- Channel notices without channel metadata cannot be matched to a setting.
+    if not base and not zoneID then return true end
+    if msg.event == 'CHAT_MSG_CHANNEL_NOTICE_USER'
+        and Sources.isSafe(msg.text) and msg.text == 'INVITE' then
+        return true
+    end
+
+    local uppercase = strupper or string.upper
+    for index, name in pairs(channels) do
+        if zoneID and frame.zoneChannelList and frame.zoneChannelList[index] == zoneID then
+            return true
+        end
+        if base and type(name) == 'string' and uppercase(name) == uppercase(base) then
+            return true
+        end
+    end
+    return false
+end
+
+--- Read the General window's live message groups. Blizzard registers public
+--- channels separately, so those also need the window's selected channel list.
+--- This decision is made on receipt; changing a checkbox never rewrites history.
+---@param msg ChatMessage
+---@return boolean
+function chat:IsEnabledInBlizzardGeneral(msg)
+    local frame = _G.ChatFrame1
+    if not frame or type(frame.ContainsMessageGroup) ~= 'function' then return true end
+
+    local event = msg.event
+    local isChannel = event == 'CHAT_MSG_CHANNEL' or event == 'CHAT_MSG_COMMUNITIES_CHANNEL'
+    if not isChannel then
+        local groups = getMessageGroupsByEvent()[event]
+        if groups then
+            for _, group in ipairs(groups) do
+                if frame:ContainsMessageGroup(group) then
+                    return true
+                end
+            end
+            return false
+        end
+    end
+
+    if isChannel or event == 'CHAT_MSG_CHANNEL_NOTICE'
+        or event == 'CHAT_MSG_CHANNEL_NOTICE_USER' then
+        return generalChannelEnabled(frame, msg)
+    end
+    return true
+end
+
+--#endregion
+
 --#region ── State ─────────────────────────────────────────────────────────────
 
 chat.session = {}         ---@type ChatMessage[] accepted this login
@@ -147,6 +225,7 @@ end
 ---@param msg ChatMessage
 function chat:ChatMessage(msg)
     if not db().enabled then return end
+    if not self:IsEnabledInBlizzardGeneral(msg) then return end
     if self:ApplyBlockFilter(msg) then return end
 
     local wasEmpty = not self:HasQueuedMessages()

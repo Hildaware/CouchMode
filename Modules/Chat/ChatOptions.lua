@@ -123,6 +123,21 @@ function chat:BuildAliasList()
     return values
 end
 
+function chat:OpenBlizzardChatFiltering()
+    local frame = _G.ChatConfigFrame
+    if not frame then return end
+
+    if ShowUIPanel then ShowUIPanel(frame) else frame:Show() end
+    if frame.ChatTabManager and frame.ChatTabManager.UpdateSelection then
+        frame.ChatTabManager:UpdateSelection(1)
+    else
+        _G.CURRENT_CHAT_FRAME_ID = 1
+    end
+    if ChatConfigCategory_OnClick and _G.ChatConfigCategoryFrameButton1 then
+        ChatConfigCategory_OnClick(_G.ChatConfigCategoryFrameButton1)
+    end
+end
+
 function chat:BuildArgs()
     local args = {
         description = {
@@ -365,6 +380,20 @@ function chat:BuildArgs()
                 },
             },
         },
+        filtering = {
+            name = 'Filtering',
+            type = 'group',
+            order = 40,
+            args = {
+                openBlizzardFiltering = {
+                    name = 'Open Blizzard Chat Filtering',
+                    desc = 'Configure the General chat window. Changes affect new CouchMode Chat messages.',
+                    type = 'execute',
+                    order = 1,
+                    func = function() chat:OpenBlizzardChatFiltering() end,
+                },
+            },
+        },
         misc = {
             name = 'Misc',
             type = 'group',
@@ -394,6 +423,7 @@ function chat:GetOptions()
         name = 'Chat',
         type = 'group',
         order = PANEL_ORDER,
+        childGroups = 'tab',
         args = self.optionsArgs,
     }
 end
