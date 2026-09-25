@@ -7,7 +7,6 @@ local addonName, addon = ...
 ---@field Loot LootModule
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local LibEditMode = LibStub('LibEditMode')
-local LSM = LibStub('LibSharedMedia-3.0')
 
 ---@class LootModule: AceModule
 ---@field HandleCommand fun(self: LootModule, sub: string, arg: string)
@@ -17,7 +16,6 @@ local Sources = addon.LootSources
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local FALLBACK_FONT = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
 local PAD = 8
 local MIN_HEIGHT = 120
 local PANEL_ORDER = 12
@@ -59,10 +57,6 @@ local function db() return addon.db.profile.loot end
 
 local function now()
     return (type(GetTime) == 'function') and GetTime() or 0
-end
-
-local function fetchFont(face)
-    return LSM:Fetch(LSM.MediaType.FONT, face) or FALLBACK_FONT
 end
 
 --- Reads an item quality's RGB from the client, tolerating older clients.
@@ -537,7 +531,7 @@ end
 ---@return table
 function loot:FontMetrics()
     return {
-        label = { face = fetchFont(db().fontFace), size = db().fontSize },
+        label = { face = addon.Media.ResolveFont(db().fontFace), size = db().fontSize },
     }
 end
 
