@@ -6,6 +6,7 @@
     <Include file = 'Map/Map.xml' />
     <Include file = 'Nameplates/Nameplates.xml' />
     <Include file = 'Bags/Bags.xml' />
+    <Include file = 'Merchant/Merchant.xml' />
     <Include file = 'Tips/Tips.xml' />
     <Include file = 'Chat/Chat.xml' />
     <Include file = 'Toasts/Toasts.xml' />

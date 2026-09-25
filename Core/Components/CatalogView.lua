@@ -141,12 +141,15 @@ function catalog.proto:ReleaseContent() release(self.sectionPool, self.activeSec
 function catalog.proto:Render(sections, resetScroll)
     local position = resetScroll and 0 or self.scrollFrame:GetVerticalScroll()
     self:ReleaseContent()
-    local y, width = 0, self.content:GetWidth()
+    local y, width = 0, math.max(self.scrollFrame:GetWidth(), self.content:GetWidth(), 1)
+    self.content:SetWidth(width)
     for _, section in ipairs(sections or {}) do
-        local header = acquire(self.sectionPool, self.options.sectionRenderer)
-        self.activeSections[#self.activeSections + 1] = header
-        header:bind(section, y, self.content, width)
-        y = y + (header.height or self.options.sectionHeight or 1)
+        if self.options.sectionRenderer then
+            local header = acquire(self.sectionPool, self.options.sectionRenderer)
+            self.activeSections[#self.activeSections + 1] = header
+            header:bind(section, y, self.content, width)
+            y = y + (header.height or self.options.sectionHeight or 1)
+        end
         if section.expanded ~= false then
             for _, rowData in ipairs(section.rows or {}) do
                 local row = acquire(self.rowPool, self.options.rowRenderer)
