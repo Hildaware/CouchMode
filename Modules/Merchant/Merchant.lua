@@ -24,6 +24,33 @@ local function addButton(parent, label, width, anchor, relative, x, y, onClick)
     return button
 end
 
+local function addIconButton(parent, atlas, tooltip, point, relative, relativePoint, x, y, onClick)
+    local button = CreateFrame('Button', nil, parent)
+    button:SetSize(36, 36)
+    button:SetPoint(point, relative, relativePoint, x, y)
+
+    local background = button:CreateTexture(nil, 'BACKGROUND')
+    background:SetTexture('Interface\\Buttons\\UI-EmptySlot')
+    background:SetSize(64, 64)
+    background:SetPoint('TOPLEFT', button, 'TOPLEFT', -13, 14)
+
+    button.icon = button:CreateTexture(nil, 'BORDER')
+    button.icon:SetAtlas(atlas)
+    button.icon:SetPoint('CENTER')
+    button.icon:SetSize(32, 32)
+
+    button:SetPushedTexture('Interface\\Buttons\\UI-Quickslot-Depress')
+    button:SetHighlightTexture('Interface\\Buttons\\ButtonHilight-Square', 'ADD')
+    button:SetScript('OnClick', onClick)
+    button:SetScript('OnEnter', function(self)
+        GameTooltip:SetOwner(self, 'ANCHOR_TOP')
+        GameTooltip:SetText(tooltip)
+        GameTooltip:Show()
+    end)
+    button:SetScript('OnLeave', function() GameTooltip:Hide() end)
+    return button
+end
+
 local function disableMouseRecursively(frame, saved)
     if frame.EnableMouse and frame.IsMouseEnabled then
         if not saved.mouseStateByFrame[frame] then
@@ -249,7 +276,7 @@ function merchant:BuildRows()
     local found = {}
     local buyback = self.mode == 'buyback'
     local count = buyback and GetNumBuybackItems() or GetMerchantNumItems()
-    local needle = self.searchText and self.searchText:lower()
+    local needle = not buyback and self.searchText and self.searchText:lower()
     for index = 1, count do
         local name
         if buyback then
@@ -263,10 +290,56 @@ function merchant:BuildRows()
             end
         end
         if name and (not needle or needle == '' or name:lower():find(needle, 1, true)) then
-            found[#found + 1] = { index = index, buyback = buyback }
+            local price
+            if buyback then
+                local _, _, buybackPrice = GetBuybackItemInfo(index)
+                price = buybackPrice
+            else
+                local info = C_MerchantFrame.GetItemInfo(index)
+                price = info and info.price
+            end
+            found[#found + 1] = { index = index, buyback = buyback, name = name, price = price or 0 }
         end
     end
+    local sortField = self.sortField or 'name'
+    local descending = self.sortDescending == true
+    table.sort(found, function(a, b)
+        local left, right
+        if sortField == 'cost' then
+            left, right = a.price, b.price
+        else
+            left, right = a.name:lower(), b.name:lower()
+        end
+        if left == right then return a.index < b.index end
+        if descending then return left > right end
+        return left < right
+    end)
     return found
+end
+
+function merchant:UpdateSortHeader()
+    if not self.sortButtons then return end
+    for field, button in pairs(self.sortButtons) do
+        local selected = self.sortField == field
+        button.text:SetTextColor(selected and 1 or 0.85, selected and 0.82 or 0.85, selected and 0 or 0.85)
+        button.arrow:SetShown(selected)
+        if selected then
+            button.arrow:SetTexture(self.sortDescending
+                and 'Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Arrow_Down'
+                or 'Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Arrow_Up')
+        end
+    end
+end
+
+function merchant:SortBy(field)
+    if self.sortField == field then
+        self.sortDescending = not self.sortDescending
+    else
+        self.sortField = field
+        self.sortDescending = false
+    end
+    self:UpdateSortHeader()
+    self:Refresh(true)
 end
 
 function merchant:OnRefreshEvent()
@@ -291,8 +364,8 @@ function merchant:Refresh(resetScroll)
     end
     local title = self.mode == 'buyback' and (MERCHANT_BUYBACK or 'Buyback') or (UnitName('npc') or MERCHANT or 'Merchant')
     self.catalog.frame.TitleText:SetText(title)
-    self.buyTab:SetEnabled(self.mode ~= 'merchant')
-    self.buybackTab:SetEnabled(self.mode ~= 'buyback')
+    PanelTemplates_SetTab(self.catalog.headerActions, self.mode == 'buyback' and 2 or 1)
+    self.catalog.searchBox:SetShown(self.mode == 'merchant')
     self.filterDropdown:SetShown(self.mode == 'merchant' and self:HasMerchantFilter())
     if self.filterDropdown:IsShown() then self.filterDropdown:Update() end
     self.catalog:Render({ { rows = self:BuildRows() } }, resetScroll)
@@ -309,22 +382,43 @@ function merchant:HasMerchantFilter()
     return true
 end
 
+function merchant:LayoutCurrencies()
+    if not self.money or not self.currencies then return end
+    local currencyCount = self.currencyCount or 0
+    local currencyStart = 12 + self.money:GetStringWidth() + 24
+    local availableWidth = math.max(50, self.catalog.footer:GetWidth() - currencyStart - 12)
+    local spacing = currencyCount > 1
+        and math.min(56, math.max(50, (availableWidth - 50) / (currencyCount - 1))) or 56
+    for index, slot in ipairs(self.currencies) do
+        slot:ClearAllPoints()
+        slot:SetPoint('TOPLEFT', self.catalog.footer, 'TOPLEFT', currencyStart + (index - 1) * spacing, -4)
+    end
+end
+
 function merchant:RefreshFooter()
     local canRepair = CanMerchantRepair()
     local repairCost, hasRepairs = GetRepairAllCost()
-    self.repairAll:SetShown(canRepair)
-    self.repairSingle:SetShown(canRepair)
-    self.repairAll:SetEnabled(canRepair and hasRepairs and repairCost <= GetMoney())
+    self.repairAll:Show()
+    self.repairSingle:Show()
+    local canRepairAll = canRepair and hasRepairs and repairCost <= GetMoney()
+    self.repairAll:SetEnabled(canRepairAll)
+    self.repairAll.icon:SetDesaturated(not canRepairAll)
     self.repairSingle:SetEnabled(canRepair)
+    self.repairSingle.icon:SetDesaturated(false)
+    if InRepairMode() then self.repairSingle:LockHighlight() else self.repairSingle:UnlockHighlight() end
     local canGuildRepair = canRepair and CanGuildBankRepair and CanGuildBankRepair()
     self.repairGuild:SetShown(canGuildRepair and true or false)
     self.repairGuild:SetEnabled(canGuildRepair and hasRepairs)
+    local sellJunkEnabled = C_MerchantFrame.GetNumJunkItems
+        and C_MerchantFrame.GetNumJunkItems() > 0 or false
     self.sellJunk:SetShown(self.mode == 'merchant' and C_MerchantFrame.IsSellAllJunkEnabled
         and C_MerchantFrame.IsSellAllJunkEnabled() or false)
-    self.sellJunk:SetEnabled(C_MerchantFrame.GetNumJunkItems and C_MerchantFrame.GetNumJunkItems() > 0 or false)
+    self.sellJunk:SetEnabled(sellJunkEnabled)
+    self.sellJunk.icon:SetDesaturated(not sellJunkEnabled)
     self.money:SetText(C_CurrencyInfo.GetCoinTextureString(GetMoney()))
 
     local currencies = C_MerchantFrame.GetMerchantCurrencies and C_MerchantFrame.GetMerchantCurrencies() or {}
+    self.currencyCount = #currencies
     for index, slot in ipairs(self.currencies) do
         local currencyID = currencies[index]
         local info = currencyID and C_CurrencyInfo.GetCurrencyInfo(currencyID)
@@ -335,6 +429,7 @@ function merchant:RefreshFooter()
             slot.count:SetText(tostring(info.quantity))
         end
     end
+    self:LayoutCurrencies()
 end
 
 function merchant:CreateView()
@@ -346,7 +441,7 @@ function merchant:CreateView()
         name = 'CouchModeMerchant', title = MERCHANT or 'Merchant', strata = 'HIGH',
         width = self.profile.width, height = self.profile.height,
         minWidth = 480, minHeight = 360, maxWidth = 1200, maxHeight = 1200,
-        headerHeight = 32, toolbarHeight = 34, columnHeaderHeight = 0, footerHeight = 76,
+        headerHeight = 32, toolbarHeight = 34, columnHeaderHeight = 24, footerHeight = 76,
         rowHeight = addon.MerchantRows:GetHeight(), scrollTemplate = scrollTemplate, search = true,
         onSearch = function(text)
             if self.settingSearchText then return end
@@ -361,6 +456,7 @@ function merchant:CreateView()
         onResize = function() self:SaveGeometry() end,
         onLayoutChanged = function(catalog)
             for _, row in ipairs(catalog.activeRows) do row:resize(catalog.content:GetWidth()) end
+            if self.money then self:LayoutCurrencies() end
         end,
         rowRenderer = addon.MerchantRows:CreateRenderer(self),
     })
@@ -370,10 +466,60 @@ function merchant:CreateView()
     shade:SetAllPoints(frame)
     shade:SetColorTexture(0, 0, 0, 0.8)
 
-    self.buyTab = addButton(self.catalog.headerActions, MERCHANT or 'Buy', 94,
-        'LEFT', self.catalog.headerActions, 4, 0, function() self:SetTab('merchant') end)
-    self.buybackTab = addButton(self.catalog.headerActions, MERCHANT_BUYBACK or 'Buyback', 94,
-        'LEFT', self.buyTab, 96, 0, function() self:SetTab('buyback') end)
+    local tabs = self.catalog.headerActions
+    tabs.Tabs = {}
+    tabs.tabPadding = 12
+    self.buyTab = CreateFrame('Button', nil, tabs, 'PanelTabButtonTemplate')
+    self.buyTab:SetID(1)
+    self.buyTab:SetText(MERCHANT or 'Merchant')
+    self.buyTab:SetPoint('TOPLEFT', tabs, 'TOPLEFT', 0, 0)
+    self.buyTab:SetScript('OnClick', function() self:SetTab('merchant') end)
+    tabs.Tabs[1] = self.buyTab
+
+    self.buybackTab = CreateFrame('Button', nil, tabs, 'PanelTabButtonTemplate')
+    self.buybackTab:SetID(2)
+    self.buybackTab:SetText(MERCHANT_BUYBACK or 'Buyback')
+    tabs.Tabs[2] = self.buybackTab
+    PanelTemplates_SetNumTabs(tabs, 2)
+    PanelTemplates_SetTab(tabs, 1)
+    self.buybackTab:SetScript('OnClick', function() self:SetTab('buyback') end)
+
+    local columnHeader = self.catalog.columnHeader
+    local underline = columnHeader:CreateTexture(nil, 'BACKGROUND')
+    underline:SetPoint('BOTTOMLEFT', columnHeader, 'BOTTOMLEFT', 0, 2)
+    underline:SetPoint('BOTTOMRIGHT', columnHeader, 'BOTTOMRIGHT', 0, 2)
+    underline:SetHeight(1)
+    underline:SetColorTexture(1, 1, 1, 0.4)
+    self.sortButtons = {}
+    local function createSortButton(field, label, anchor, relative, x, width)
+        local button = CreateFrame('Button', nil, columnHeader)
+        button:SetSize(width, 22)
+        button:SetPoint(anchor, relative, anchor, x, 0)
+        button.text = button:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
+        button.text:SetPoint(field == 'name' and 'LEFT' or 'RIGHT', button, field == 'name' and 'LEFT' or 'RIGHT', 0, 0)
+        button.text:SetText(label)
+        button.arrow = button:CreateTexture(nil, 'ARTWORK')
+        button.arrow:SetSize(8, 12)
+        button.arrow:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\Arrow_Up')
+        if field == 'name' then
+            button.arrow:SetPoint('LEFT', button.text, 'RIGHT', 3, 0)
+        else
+            button.arrow:SetPoint('RIGHT', button.text, 'LEFT', -3, 0)
+        end
+        button:SetScript('OnClick', function() self:SortBy(field) end)
+        button:SetScript('OnEnter', function()
+            GameTooltip:SetOwner(button, 'ANCHOR_TOP')
+            GameTooltip:SetText((SORT_BY or 'Sort by') .. ' ' .. label)
+            GameTooltip:Show()
+        end)
+        button:SetScript('OnLeave', function() GameTooltip:Hide() end)
+        self.sortButtons[field] = button
+    end
+    createSortButton('name', NAME or 'Name', 'LEFT', columnHeader, 48, 220)
+    createSortButton('cost', COST or 'Cost', 'RIGHT', columnHeader, -8, 155)
+    self.sortField = self.sortField or 'name'
+    if self.sortDescending == nil then self.sortDescending = false end
+    self:UpdateSortHeader()
 
     local filter = CreateFrame('DropdownButton', nil, self.catalog.toolbar, 'WowStyle1DropdownTemplate')
     filter:SetPoint('LEFT', self.catalog.toolbar, 'LEFT', 10, 0)
@@ -405,8 +551,8 @@ function merchant:CreateView()
     self.filterDropdown = filter
 
     local footer = self.catalog.footer
-    self.repairSingle = addButton(footer, REPAIR_ITEM or 'Repair item', 105,
-        'TOPLEFT', footer, 0, -3, function()
+    self.repairSingle = addIconButton(footer, 'SpellIcon-256x256-Repair', REPAIR_AN_ITEM or 'Repair',
+        'RIGHT', footer, 'BOTTOMRIGHT', -66, 32, function()
             if InRepairMode() then
                 HideRepairCursor()
                 if nativeGamepadEnabled() then SmartNavigation:ClearOverrideIconAtlas() end
@@ -419,28 +565,31 @@ function merchant:CreateView()
             end
             self:RefreshFooter()
         end)
-    self.repairAll = addButton(footer, REPAIR_ALL_ITEMS or 'Repair all', 105,
-        'TOPLEFT', footer, 110, -3, function()
+    self.repairAll = addIconButton(footer, 'SpellIcon-256x256-RepairAll', REPAIR_ALL_ITEMS or 'Repair all items',
+        'RIGHT', footer, 'BOTTOMRIGHT', -24, 32, function()
             RepairAllItems()
             PlaySound(SOUNDKIT.ITEM_REPAIR)
             self:RefreshFooter()
         end)
     self.repairGuild = addButton(footer, GUILDBANK_REPAIR or 'Guild repair', 105,
-        'TOPLEFT', footer, 220, -3, function()
+        'TOPLEFT', footer, 0, -9, function()
             RepairAllItems(true)
             PlaySound(SOUNDKIT.ITEM_REPAIR)
             self:RefreshFooter()
         end)
-    self.sellJunk = addButton(footer, SELL_ALL_JUNK_ITEMS or 'Sell junk', 100,
-        'TOPRIGHT', footer, 0, -3, function() MerchantFrame_OnSellAllJunkButtonClicked() end)
-    self.money = footer:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
-    self.money:SetPoint('BOTTOMRIGHT', footer, 'BOTTOMRIGHT', -2, 5)
+    self.sellJunk = addIconButton(footer, 'SpellIcon-256x256-SellJunk', SELL_ALL_JUNK_ITEMS or 'Sell all junk',
+        'RIGHT', self.repairSingle, 'LEFT', -20, 0, function() MerchantFrame_OnSellAllJunkButtonClicked() end)
+    self.repairGuild:ClearAllPoints()
+    self.repairGuild:SetPoint('RIGHT', self.sellJunk, 'LEFT', -20, 0)
+    self.money = footer:CreateFontString(nil, 'ARTWORK', 'GameFontNormal')
+    self.money:SetPoint('LEFT', footer, 'BOTTOMLEFT', 12, 32)
+    self.money:SetJustifyH('LEFT')
 
     self.currencies = {}
     for index = 1, 6 do
         local slot = CreateFrame('Button', nil, footer)
         slot:SetSize(50, 22)
-        slot:SetPoint('BOTTOMLEFT', footer, 'BOTTOMLEFT', (index - 1) * 56, 2)
+        slot:SetPoint('TOPLEFT', footer, 'TOPLEFT', 156 + (index - 1) * 56, -4)
         slot.icon = slot:CreateTexture(nil, 'ARTWORK')
         slot.icon:SetSize(18, 18)
         slot.icon:SetPoint('LEFT', slot, 'LEFT', 0, 0)

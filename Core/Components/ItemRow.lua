@@ -127,12 +127,13 @@ function itemRow.SetQuality(frame, quality, itemLinkOrID, isBound)
     return r, g, b
 end
 
----Returns the font size used by the Bags item-row style at this geometry.
+---Returns the font size used by an item row at this geometry.
 ---@param width number
 ---@param height number
+---@param baseSize number?
 ---@return number
-function itemRow.GetFontSize(width, height)
-    return 12 * math.min(width / 600, height / 28)
+function itemRow.GetFontSize(width, height, baseSize)
+    return (baseSize or 16) * math.min(width / 600, height / 28)
 end
 
 ---Clears reusable visual state and releases the row from its parent.

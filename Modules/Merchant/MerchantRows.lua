@@ -101,7 +101,7 @@ local function createRow(owner)
         local iconSize = math.max(1, height - 6)
         local iconColumnWidth = math.max(32, iconSize)
         local font = database:GetFont()
-        local fontSize = rowStyle.GetFontSize(width, height)
+        local fontSize = rowStyle.GetFontSize(width, height, 20)
 
         self.height = height
         self.compact = height < COMPACT_HEIGHT
