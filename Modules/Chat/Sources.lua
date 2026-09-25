@@ -272,6 +272,7 @@ end
 ---@field category    string   Source category (NPC/WHISPER/GROUP/GUILD/PUBLIC/SYSTEM)
 ---@field direction   string   'in'|'out'
 ---@field timestamp   number   GetTime() when received
+---@field displayedAt number? GetTime() when shown in the Chat feed
 ---@field clock       string   Wall-clock HH:MM:SS
 ---@field lineID      number?  Blizzard line id (nil when unavailable/secret)
 ---@field text        string   Raw display text (may be a secret value)

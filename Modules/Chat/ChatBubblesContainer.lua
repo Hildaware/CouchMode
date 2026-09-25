@@ -2,7 +2,6 @@ local addonName = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
-local LSM = LibStub('LibSharedMedia-3.0')
 
 ---@class ChatBubblesModule
 local bubbles = addon:GetModule('ChatBubbles')
@@ -10,7 +9,6 @@ local Animations = addon.Animations
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
-local FONT_PATH = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
 local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widget
 
 --#endregion
@@ -18,10 +16,6 @@ local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widg
 --#region ── Helpers ──────────────────────────────────────────────────────────
 
 local function db() return addon.db.profile.chatBubbles end
-
-local function fetchFont(face)
-    return LSM:Fetch(LSM.MediaType.FONT, face) or FONT_PATH
-end
 
 --#endregion
 
@@ -62,7 +56,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     local rightPad = noPortrait and 8 or 24
     local availableWidth = d.itemWidth - leftPad - rightPad
 
-    local fontPath = fetchFont(d.msgFontFace)
+    local fontPath = addon.Media.ResolveFont(d.msgFontFace)
     self.message:SetWidth(availableWidth)
     self.message:SetText(text)
 
@@ -147,7 +141,7 @@ local function _MessageCreate()
     local message = content:FontString({ justifyH = 'LEFT', justifyV = 'TOP' })
     message:SetPoint('TOPLEFT', content, 'TOPLEFT', 48, 0)
     message:SetPoint('TOPRIGHT', content, 'TOPRIGHT', -24, 0)
-    message.fs:SetFont(fetchFont(d.msgFontFace), d.msgFontSize, 'OUTLINE')
+    message.fs:SetFont(addon.Media.ResolveFont(d.msgFontFace), d.msgFontSize, 'OUTLINE')
     message.fs:SetShadowColor(0, 0, 0, 1)
     message.fs:SetShadowOffset(2, -2)
 
@@ -460,7 +454,7 @@ local function _BubbleCreate()
     local nameOverlay = L:Container(container, { frameLevel = container.frame:GetFrameLevel() + 20 })
     nameOverlay:SetAllPoints(container)
     local name = L:FontString(nameOverlay, { justifyH = 'LEFT', maxLines = 1 })
-    name.fs:SetFont(fetchFont(d.nameFontFace), d.nameFontSize, 'OUTLINE')
+    name.fs:SetFont(addon.Media.ResolveFont(d.nameFontFace), d.nameFontSize, 'OUTLINE')
     local c = FACTION_BAR_COLORS[4]
     name:SetTextColor(c.r, c.g, c.b)
     name:SetPoint('BOTTOMLEFT', bTex, 'TOPLEFT', -2, -8)
@@ -469,7 +463,7 @@ local function _BubbleCreate()
 
     -- Channel label (NPCs use it for the speech type, e.g. YELL)
     local channelLabel = L:FontString(nameOverlay, { justifyH = 'RIGHT', maxLines = 1 })
-    channelLabel.fs:SetFont(fetchFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
+    channelLabel.fs:SetFont(addon.Media.ResolveFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
     channelLabel.fs:SetTextColor(1, 1, 1, 0.75)
     channelLabel:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 44, -16)
     channelLabel.fs:SetShadowColor(0, 0, 0, 1)

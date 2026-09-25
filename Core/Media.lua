@@ -17,6 +17,17 @@ for name, path in pairs(FONTS) do
     end
 end
 
+-- Bundled font used when a configured face is not registered with LibSharedMedia.
+local FALLBACK_FONT = 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
+
+--- Resolves a configured font face to a usable font path, falling back to the
+--- bundled default when LibSharedMedia does not know the face.
+---@param face string?
+---@return string
+function addon.Media.ResolveFont(face)
+    return LSM:Fetch(LSM.MediaType.FONT, face) or FALLBACK_FONT
+end
+
 --- Returns AceConfig select values with human-readable names for both keys and labels.
 ---@return table<string, string>
 function addon.Media.GetFontOptions()

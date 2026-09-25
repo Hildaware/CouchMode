@@ -5,7 +5,7 @@
     <Include file = 'Animations.lua' />
     <Include file = 'Layout.lua' />
     <Include file = 'Components/CatalogView.lua' />
-    <Include file = 'Components/MetalHeader.lua' />
+    <Include file = 'Components/Metal.lua' />
     <Include file = 'StatusBarBase.lua' />
     <Include file = 'QuestUtils.lua' />
     <Include file = 'TRPUtils.lua' />

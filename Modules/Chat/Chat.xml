@@ -14,4 +14,13 @@
     <Include file='ChatFeed.lua'/>
     <Include file='ChatInput.lua'/>
     <Include file='Chat.lua'/>
+    <Include file='ChatSuppression.lua'/>
+    <Include file='ChatReveal.lua'/>
+    <Include file='ChatStyle.lua'/>
+    <Include file='ChatIdentity.lua'/>
+    <Include file='ChatSession.lua'/>
+    <Include file='ChatPanel.lua'/>
+    <Include file='ChatModeration.lua'/>
+    <Include file='ChatOptions.lua'/>
+    <Include file='ChatCommands.lua'/>
 </UI>

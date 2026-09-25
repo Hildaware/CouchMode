@@ -56,13 +56,13 @@ function map.applyBorder()
     local db = addon.db.profile.minimap ---@type MinimapDB
     local show = db.borderEnabled
     local r, g, b, a = db.borderR, db.borderG, db.borderB, db.borderA
-    local size = map.MapUtils.WOW_BORDER_SIZE
-    local outset = map.MapUtils.WOW_BORDER_OUTSET
+    local size = addon.Components.Metal.BORDER_SIZE
+    local outset = addon.Components.Metal.BORDER_OUTSET
 
     if map.borderFrame then
-        map.MapUtils.position_wow_border_frame(map.borderFrame, map.container, outset)
+        addon.Components.Metal.PositionBorderFrame(map.borderFrame, map.container, outset)
     end
-    map.MapUtils.apply_wow_border_textures(map.borders, show, r, g, b, a, size)
+    addon.Components.Metal.ApplyBorderTextures(map.borders, show, r, g, b, a, size)
 end
 
 function map.createZoneText()

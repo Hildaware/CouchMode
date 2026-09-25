@@ -125,11 +125,9 @@ function bubbles:BuildBubble(msg)
     bubble.id = msg.npcId or msg.displayId or 0
 
     local d = db()
-    local LSM = LibStub('LibSharedMedia-3.0')
 
     local nameWidget = bubble.widget.subWidgets.name
-    local nameFontPath = LSM:Fetch(LSM.MediaType.FONT, d.nameFontFace)
-        or 'Interface/AddOns/CouchMode/Resources/Fonts/BebasNeue-Regular.ttf'
+    local nameFontPath = addon.Media.ResolveFont(d.nameFontFace)
     nameWidget:SetText(msg.sender or '')
     nameWidget:SetFont(nameFontPath, d.nameFontSize, 'OUTLINE')
     local nc = d.nameFontColor

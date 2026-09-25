@@ -134,6 +134,18 @@ local function richSet()
     }
 end
 
+local function burstSet()
+    local entries = {}
+    for i = 1, 12 do
+        entries[i] = {
+            event = 'CHAT_MSG_SAY',
+            sender = ('BurstSpeaker%02d'):format(i),
+            text = ('Pacing burst message %02d'):format(i),
+        }
+    end
+    return entries
+end
+
 --#endregion
 
 --#region ── Scenario registry ──────────────────────────────────────────────────
@@ -146,13 +158,17 @@ M.SETS = {
     public = publicSet,
     system = systemSet,
     rich = richSet,
+    burst = burstSet,
 }
 
 M.ORDER = { 'npc', 'whisper', 'group', 'guild', 'public', 'system', 'rich' }
 
 ---@return string[]
 function M.Names()
-    return M.ORDER
+    local names = {}
+    for i = 1, #M.ORDER do names[i] = M.ORDER[i] end
+    names[#names + 1] = 'burst'
+    return names
 end
 
 --- Flattens the requested set (or every set for 'all').
@@ -210,6 +226,11 @@ end
 ---@return number fired
 function M.Run(router, setName, stepDelay)
     local entries = M.Collect(setName)
+    if setName == 'burst' then
+        for i = 1, #entries do M.Fire(router, entries[i]) end
+        return #entries
+    end
+
     stepDelay = stepDelay or M.STEP_DELAY
     for i = 1, #entries do
         local entry = entries[i]

@@ -141,7 +141,7 @@ function map.createToolbar()
     map.toolbar:SetFrameLevel(map.container:GetFrameLevel() + 50)
     map.toolbar:Hide()
 
-    addon.Components.MetalHeader.Create(map.toolbar)
+    addon.Components.Metal.CreateHeader(map.toolbar)
 
     -- Settings button
     local settings_btn = map.MapUtils.create_toolbar_button(map.toolbar, "echoes-icon", function()
