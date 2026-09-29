@@ -17,12 +17,14 @@ local Sources = addon.ToastSources
 --#region ── Constants ────────────────────────────────────────────────────────
 
 local PAD = 8
-local MIN_HEIGHT = 120
 local PANEL_ORDER = 12
 local REFRESH_DELAY = 0.25
+local PRESENTATION_PACE = 0.35
+local DEFAULT_MAX_ITEMS = 15
+local MAX_ITEMS_LIMIT = 20
 
 local DEFAULT_WIDTH = 360
-local DEFAULT_HEIGHT = 300
+local FADE_DELAY_DESC = 'Maximum seconds a toast remains visible before fading. Toast type and item quality use shorter weighted durations.'
 
 -- Stable palettes for rows that have no item quality of their own.
 local NEUTRAL = { r = 0.16, g = 0.16, b = 0.16 }
@@ -98,11 +100,14 @@ local ROW_BG_ALPHA = 0.5
 
 --#region ── Module state ──────────────────────────────────────────────────────
 
-toasts.session = {}       ---@type ToastEntry[]
+toasts.presentationQueue = {}
+toasts.presentationQueueHead = 1
+toasts.presentationQueueTail = 0
+toasts.presentationQueueScheduled = false
+toasts.presentationQueueToken = 0
 toasts.lastMoney = nil    ---@type number?
 toasts.panel = nil        ---@type Frame?
 toasts.feed = nil
-toasts.returnButton = nil ---@type Button?
 toasts.fadeAlpha = 1
 toasts.refreshPending = false
 toasts.filters = nil      ---@type { event: string, callback: fun(...) }[]?
@@ -114,6 +119,28 @@ toasts.pendingAppearanceIcons = {}
 --#region ── Small helpers ───────────────────────────────────────────────────────
 
 local function db() return addon.db.profile.toasts end
+
+-- The profile delay is the maximum: at 15 seconds, the tiers last 8, 10,
+-- 12, and 15 seconds. Item quality can arrive after the initial toast, so
+-- resolve the weight from the current entry without changing its timestamp.
+local function fadeDuration(entry)
+    local weight = 8 / 15
+    if entry.kind == 'items' then
+        local quality = Sources.SafeNumber(entry.quality)
+        if quality and quality >= 4 then
+            weight = 1
+        elseif quality == 3 then
+            weight = 12 / 15
+        elseif quality == 2 then
+            weight = 10 / 15
+        end
+    elseif entry.kind == 'currency' then
+        weight = 12 / 15
+    elseif entry.kind == 'reputation' then
+        weight = 10 / 15
+    end
+    return math.max(db().fadeDelay or 15, 0) * weight
+end
 
 local function normalizeSystemMessage(text)
     if Sources.isSecret(text) or type(text) ~= 'string' then return nil end
@@ -325,6 +352,75 @@ function toasts:RegisterValidEvent(event, handler)
     return addon.Utils.RegisterEventIfValid(self, event, handler)
 end
 
+function toasts:HasQueuedEntries()
+    return self.presentationQueueHead <= self.presentationQueueTail
+end
+
+function toasts:StopPresentationQueue()
+    self.presentationQueueToken = self.presentationQueueToken + 1
+    self.presentationQueueScheduled = false
+end
+
+function toasts:SchedulePresentationQueue(delay)
+    if self.presentationQueueScheduled or not db().enabled then return end
+
+    self.presentationQueueScheduled = true
+    self.presentationQueueToken = self.presentationQueueToken + 1
+    local token = self.presentationQueueToken
+    C_Timer.After(math.max(delay or 0, 0), function()
+        if token ~= toasts.presentationQueueToken then return end
+        toasts.presentationQueueScheduled = false
+        if not db().enabled or not toasts:HasQueuedEntries() then return end
+        toasts:ProcessNextQueuedEntry()
+    end)
+end
+
+function toasts:ProcessNextQueuedEntry()
+    if not db().enabled or not self:HasQueuedEntries() then return end
+
+    if self.feed then
+        local hidden = self.panel and not self.panel:IsShown()
+        local removed = self.feed:RemoveExpiredRows(now(), hidden)
+        if removed > 0 then self:ApplyLayout() end
+        local maxItems = math.max(1, math.floor(db().maxItems or DEFAULT_MAX_ITEMS))
+        if #self.feed.rows >= maxItems then
+            self:SchedulePresentationQueue(0.25)
+            return
+        end
+    end
+
+    local entry
+    entry = self.presentationQueue[self.presentationQueueHead]
+    self.presentationQueue[self.presentationQueueHead] = nil
+    self.presentationQueueHead = self.presentationQueueHead + 1
+
+    if not self:HasQueuedEntries() then
+        self.presentationQueue = {}
+        self.presentationQueueHead = 1
+        self.presentationQueueTail = 0
+    end
+
+    if entry then
+        entry.displayedAt = now()
+        if self.feed then
+            self.feed:Append(entry)
+            self:ApplyLayout()
+        end
+        self:Touch()
+    end
+
+    if entry then
+        self:SchedulePresentationQueue(PRESENTATION_PACE)
+    end
+end
+
+function toasts:ClearPresentationQueue()
+    self:StopPresentationQueue()
+    self.presentationQueue = {}
+    self.presentationQueueHead = 1
+    self.presentationQueueTail = 0
+end
+
 function toasts:OnEnable()
     if not db().enabled then
         self:Disable()
@@ -343,13 +439,19 @@ function toasts:OnEnable()
     end
 
     self:Touch()
+    if self:HasQueuedEntries() then self:SchedulePresentationQueue(0) end
 end
 
 function toasts:OnDisable()
+    self:ClearPresentationQueue()
     for _, event in ipairs(Sources.SUPPORT_EVENTS) do
         self:UnregisterEvent(event)
     end
     self:RemoveChatFilters()
+    if self.feed then
+        self.feed:Clear()
+        self:ApplyLayout()
+    end
     if self.panel then self.panel:Hide() end
 end
 
@@ -378,25 +480,13 @@ end
 function toasts:AddEntry(entry)
     if not db().enabled then return end
 
-    self.session[#self.session + 1] = entry
+    self.presentationQueueTail = self.presentationQueueTail + 1
+    self.presentationQueue[self.presentationQueueTail] = entry
 
-    local cap = db().historyCap or 200
-    local overflow = #self.session - cap
-    local atBottom = self.feed and self.feed:IsAtBottom()
-    if atBottom then self.feed:ResumeLive() end
-
-    if overflow > 0 then
-        for _ = 1, overflow do table.remove(self.session, 1) end
-        if self.feed then self.feed:Rebuild(self.session) end
-    elseif self.feed then
-        self.feed:Append(entry)
+    if self.presentationQueueHead == self.presentationQueueTail
+        and not self.presentationQueueScheduled then
+        self:ProcessNextQueuedEntry()
     end
-
-    if self.feed then
-        if atBottom ~= false then self.feed:ScrollToBottom() end
-        self:OnFeedChanged()
-    end
-    self:Touch()
 end
 
 --- CHAT_MSG_LOOT: local-player item acquisitions only.
@@ -552,8 +642,7 @@ function toasts:RefreshItems()
     if not db().enabled then return end
     local changed = false
     local questItemIDs
-    for i = 1, #self.session do
-        local entry = self.session[i]
+    local function refreshEntry(entry)
         if entry.kind == 'items' and entry.needsRefresh then
             questItemIDs = questItemIDs or getQuestItemIDsInBags()
             local itemID = entry.itemID
@@ -566,7 +655,20 @@ function toasts:RefreshItems()
             if Sources.IsItemResolved(entry) then entry.needsRefresh = nil end
         end
     end
-    if changed and self.feed then self.feed:Rebuild(self.session) end
+
+    if self.feed then
+        for i = 1, #self.feed.rows do
+            refreshEntry(self.feed.rows[i]._entry)
+        end
+    end
+    for i = self.presentationQueueHead, self.presentationQueueTail do
+        local entry = self.presentationQueue[i]
+        if entry then refreshEntry(entry) end
+    end
+    if changed and self.feed then
+        self.feed:Rebuild(self.feed:GetEntries())
+        self:ApplyLayout()
+    end
 end
 
 function toasts:ScheduleRefresh()
@@ -789,16 +891,10 @@ function toasts:BuildPanel()
     end
 
     local frame = CreateFrame('Frame', 'CouchModeToasts', UIParent)
-    frame:SetSize(db().width, db().height)
-    frame:SetScale(db().scale or 1)
+    frame:SetSize(db().width or DEFAULT_WIDTH, PAD * 2 + 1)
     frame:SetFrameStrata('LOW')
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
-
-    local bg = frame:CreateTexture(nil, 'BACKGROUND')
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
-    frame.bg = bg
 
     local scrollArea = CreateFrame('Frame', nil, frame)
     scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD, -PAD)
@@ -807,10 +903,7 @@ function toasts:BuildPanel()
 
     self.feed = addon.ToastFeedProto.New(scrollArea)
     self.feed.presenter = function(entry) return toasts:PresentEntry(entry) end
-    self.feed.onScrollChanged = function()
-        toasts:Touch()
-        toasts:OnFeedChanged()
-    end
+    self.feed.durationForEntry = fadeDuration
 
     -- Rows enable the mouse for tooltips, so hover is tracked on the padding
     -- regions here and per-row inside the feed.
@@ -821,15 +914,6 @@ function toasts:BuildPanel()
         region:SetScript('OnEnter', onEnter)
         region:SetScript('OnLeave', onLeave)
     end
-
-    local returnBtn = CreateFrame('Button', nil, frame)
-    returnBtn:SetSize(22, 22)
-    returnBtn:SetPoint('BOTTOMRIGHT', scrollArea, 'BOTTOMRIGHT', -4, 4)
-    returnBtn:SetFrameLevel(frame:GetFrameLevel() + 20)
-    returnBtn:SetNormalTexture('Interface\\ChatFrame\\ChatFrameExpandArrow')
-    returnBtn:SetScript('OnClick', function() toasts:ScrollToBottom() end)
-    returnBtn:Hide()
-    self.returnButton = returnBtn
 
     frame:SetScript('OnUpdate', function(_, dt) toasts:UpdateFade(dt) end)
 
@@ -854,22 +938,14 @@ function toasts:BuildPanel()
         },
         {
             kind = EditMode.SettingType.Slider,
-            name = 'Height', desc = 'Feed height in pixels.',
-            default = DEFAULT_HEIGHT, minValue = MIN_HEIGHT, maxValue = 900, valueStep = 10,
-            get = function() return db().height end,
+            name = 'Max Items', desc = 'Maximum number of active toast rows shown at once. Additional rewards wait in the queue.',
+            default = DEFAULT_MAX_ITEMS, minValue = 1, maxValue = MAX_ITEMS_LIMIT, valueStep = 1,
+            get = function() return db().maxItems or DEFAULT_MAX_ITEMS end,
             set = function(_, value, fromReset)
-                db().height = (fromReset and DEFAULT_HEIGHT or value)
+                db().maxItems = (fromReset and DEFAULT_MAX_ITEMS or value)
+                if toasts.feed then toasts.feed:TrimToCount(db().maxItems) end
                 toasts:ApplyLayout()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Scale', desc = 'Overall feed scale.',
-            default = 1, minValue = 0.5, maxValue = 2, valueStep = 0.05,
-            get = function() return db().scale end,
-            set = function(_, value, fromReset)
-                db().scale = (fromReset and 1 or value)
-                if toasts.panel then toasts.panel:SetScale(db().scale) end
+                if toasts:HasQueuedEntries() then toasts:SchedulePresentationQueue(0) end
             end,
         },
         {
@@ -884,20 +960,7 @@ function toasts:BuildPanel()
         },
         {
             kind = EditMode.SettingType.Slider,
-            name = 'Background Opacity', desc = 'Feed opacity after all rewards fade.',
-            default = 0, minValue = 0, maxValue = 1, valueStep = 0.05,
-            get = function() return db().backgroundOpacity end,
-            set = function(_, value, fromReset)
-                db().backgroundOpacity = (fromReset and 0 or value)
-                if toasts.panel and toasts.panel.bg then
-                    toasts.panel.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity)
-                end
-                toasts:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Fade Delay', desc = 'Seconds each reward remains visible before fading.',
+            name = 'Fade Delay', desc = FADE_DELAY_DESC,
             default = 15, minValue = 0, maxValue = 120, valueStep = 1,
             get = function() return db().fadeDelay end,
             set = function(_, value, fromReset)
@@ -923,16 +986,6 @@ function toasts:BuildPanel()
                 toasts:ApplyFont()
             end,
         },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'History Cap', desc = 'Rewards retained for the current login.',
-            default = 200, minValue = 20, maxValue = 1000, valueStep = 20,
-            get = function() return db().historyCap end,
-            set = function(_, value, fromReset)
-                db().historyCap = (fromReset and 200 or value)
-                toasts:TrimSession()
-            end,
-        },
     })
 
     EditMode:RegisterCallback('layout', function(layoutName)
@@ -949,12 +1002,12 @@ function toasts:BuildPanel()
     self.panel = frame
     self:ApplyFont()
     self:ApplyLayout()
-    self:OnFeedChanged()
 end
 
 function toasts:ApplyFont()
     if not self.feed then return end
     self.feed:SetFonts(self:FontMetrics())
+    self:ApplyLayout()
 end
 
 --#endregion
@@ -965,24 +1018,15 @@ function toasts:ApplyLayout()
     local frame = self.panel
     if not frame then return end
 
-    local height = math.max(db().height or DEFAULT_HEIGHT, MIN_HEIGHT)
-    frame:SetSize(db().width or DEFAULT_WIDTH, height)
-    frame:SetScale(db().scale or 1)
-    if frame.bg then frame.bg:SetColorTexture(0, 0, 0, db().backgroundOpacity or 0) end
+    local width = db().width or DEFAULT_WIDTH
 
     if self.feed then
-        self.feed:SetWidth((db().width or DEFAULT_WIDTH) - PAD * 2)
-        self.feed:SetViewportHeight(height - PAD * 2)
-    end
-end
-
-function toasts:TrimSession()
-    local cap = db().historyCap or 200
-    local overflow = #self.session - cap
-    if overflow > 0 then
-        for _ = 1, overflow do table.remove(self.session, 1) end
-        if self.feed then self.feed:Rebuild(self.session) end
-        self:OnFeedChanged()
+        self.feed:SetWidth(width - PAD * 2)
+        local viewportHeight = self.feed:GetTailHeight(db().maxItems or DEFAULT_MAX_ITEMS)
+        frame:SetSize(width, viewportHeight + PAD * 2)
+        self.feed:SetViewportHeight(viewportHeight)
+    else
+        frame:SetSize(width, PAD * 2 + 1)
     end
 end
 
@@ -998,21 +1042,19 @@ function toasts:UpdateFade(dt)
     if not self.panel then return end
 
     local currentTime = now()
-    local browsing = self.feed and self.feed:IsBrowsingHistory()
-    local fadeEnabled = db().fadeEnabled == true
-    local fadeDelay = db().fadeDelay or 15
     local hasVisible = true
     if self.feed then
-        hasVisible = self.feed:UpdateRowFade(currentTime, fadeDelay, fadeEnabled and not browsing)
+        hasVisible = self.feed:UpdateRowFade(currentTime)
+        if self.feed:RemoveExpiredRows(currentTime) > 0 then
+            self:ApplyLayout()
+            if self:HasQueuedEntries() then self:SchedulePresentationQueue(0) end
+        end
     end
 
     local hovered = self.feed and self.feed.hovering
     local target = db().activeOpacity or 1
-    -- Browsing history keeps its rows opaque, but the panel should still fade
-    -- after the reader stops interacting with it.
-    local idleWhileBrowsing = browsing and (currentTime - (self.lastActivity or currentTime)) >= fadeDelay
-    if fadeEnabled and not hovered and ((not browsing and not hasVisible) or idleWhileBrowsing) then
-        target = db().backgroundOpacity or 0
+    if not hovered and not hasVisible then
+        target = 0
     end
 
     local current = self.fadeAlpha or 0
@@ -1029,15 +1071,6 @@ function toasts:UpdateFade(dt)
     end
 end
 
-function toasts:OnFeedChanged()
-    if not self.returnButton or not self.feed then return end
-    if self.feed:IsAtBottom() then
-        self.returnButton:Hide()
-    else
-        self.returnButton:Show()
-    end
-end
-
 --#endregion
 
 --#region ── Panel controls ─────────────────────────────────────────────────────
@@ -1048,43 +1081,18 @@ function toasts:Toggle()
         self.panel:Hide()
     else
         self.panel:Show()
-        self:OnFeedChanged()
         self:Touch()
     end
 end
 
 function toasts:ClosePanel()
-    if self.feed then
-        self.feed:ResumeLive()
-        self.feed:ScrollToBottom()
-    end
     if self.panel then self.panel:Hide() end
 end
 
-function toasts:ScrollUp()
-    if self.feed then self.feed:ScrollBy(60) end
-    self:Touch()
-end
-
-function toasts:ScrollDown()
-    if self.feed then self.feed:ScrollBy(-60) end
-    self:Touch()
-end
-
-function toasts:ScrollToBottom()
-    if self.feed then
-        -- An explicit return to the bottom resumes live fading.
-        self.feed:ResumeLive()
-        self.feed:ScrollToBottom()
-    end
-    self:OnFeedChanged()
-    self:Touch()
-end
-
-function toasts:ClearSession()
-    wipe(self.session)
+function toasts:ClearToasts()
+    self:ClearPresentationQueue()
     if self.feed then self.feed:Clear() end
-    self:OnFeedChanged()
+    self:ApplyLayout()
 end
 
 --#endregion
@@ -1099,11 +1107,8 @@ function toasts:GetDefaults()
             positions = {},
             -- Sizing / appearance
             width = DEFAULT_WIDTH,
-            height = DEFAULT_HEIGHT,
-            scale = 1,
+            maxItems = DEFAULT_MAX_ITEMS,
             activeOpacity = 1,
-            backgroundOpacity = 0,
-            fadeEnabled = true,
             fadeDelay = 15,
             fontFace = 'Arial Narrow',
             fontSize = 14,
@@ -1114,8 +1119,6 @@ function toasts:GetDefaults()
             reputation = true,
             system = true,
             filterJunk = true,
-            -- History
-            historyCap = 200,
         },
     }
 end
@@ -1132,7 +1135,7 @@ end
 function toasts:BuildArgs()
     return {
         description = {
-            name = 'A scrolling feed for rewards and system messages. Recognized lines are removed '
+            name = 'A live feed for rewards and system messages. Recognized lines are removed '
                 .. 'from Blizzard chat while their Toasts category is enabled. System messages are '
                 .. 'also removed from CouchMode Chat when both Toasts and this category are enabled.',
             type = 'description',
@@ -1207,17 +1210,17 @@ function toasts:BuildArgs()
                     get = function() return db().width end,
                     set = function(_, value) db().width = value; toasts:ApplyLayout() end,
                 },
-                height = {
-                    name = 'Height', desc = 'Feed height in pixels.',
-                    type = 'range', min = MIN_HEIGHT, max = 900, step = 10, order = 2,
-                    get = function() return db().height end,
-                    set = function(_, value) db().height = value; toasts:ApplyLayout() end,
-                },
-                scale = {
-                    name = 'Scale', desc = 'Overall feed scale.',
-                    type = 'range', min = 0.5, max = 2, step = 0.05, order = 3,
-                    get = function() return db().scale end,
-                    set = function(_, value) db().scale = value; toasts:ApplyLayout() end,
+                maxItems = {
+                    name = 'Max Items',
+                    desc = 'Maximum number of active toast rows shown at once. Additional rewards wait in the queue.',
+                    type = 'range', min = 1, max = MAX_ITEMS_LIMIT, step = 1, order = 2,
+                    get = function() return db().maxItems or DEFAULT_MAX_ITEMS end,
+                    set = function(_, value)
+                        db().maxItems = value
+                        if toasts.feed then toasts.feed:TrimToCount(value) end
+                        toasts:ApplyLayout()
+                        if toasts:HasQueuedEntries() then toasts:SchedulePresentationQueue(0) end
+                    end,
                 },
                 activeOpacity = {
                     name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
@@ -1225,21 +1228,9 @@ function toasts:BuildArgs()
                     get = function() return db().activeOpacity end,
                     set = function(_, value) db().activeOpacity = value; toasts:Touch() end,
                 },
-                backgroundOpacity = {
-                    name = 'Background Opacity', desc = 'Feed opacity after all rewards fade.',
-                    type = 'range', min = 0, max = 1, step = 0.05, order = 5,
-                    get = function() return db().backgroundOpacity end,
-                    set = function(_, value) db().backgroundOpacity = value; toasts:ApplyLayout() end,
-                },
-                fadeEnabled = {
-                    name = 'Auto-fade', desc = 'Fade each reward after its delay.',
-                    type = 'toggle', order = 6,
-                    get = function() return db().fadeEnabled end,
-                    set = function(_, value) db().fadeEnabled = value; toasts:Touch() end,
-                },
                 fadeDelay = {
-                    name = 'Fade Delay', desc = 'Seconds each reward remains visible before fading.',
-                    type = 'range', min = 0, max = 120, step = 1, order = 7,
+                    name = 'Fade Delay', desc = FADE_DELAY_DESC,
+                    type = 'range', min = 0, max = 120, step = 1, order = 6,
                     get = function() return db().fadeDelay end,
                     set = function(_, value) db().fadeDelay = value; toasts:Touch() end,
                 },
@@ -1256,12 +1247,6 @@ function toasts:BuildArgs()
                     get = function() return db().fontSize end,
                     set = function(_, value) db().fontSize = value; toasts:ApplyFont() end,
                 },
-                historyCap = {
-                    name = 'History Cap', desc = 'Maximum rewards kept for the current login (not saved).',
-                    type = 'range', min = 20, max = 1000, step = 20, order = 10,
-                    get = function() return db().historyCap end,
-                    set = function(_, value) db().historyCap = value; toasts:TrimSession() end,
-                },
             },
         },
         misc = {
@@ -1270,15 +1255,10 @@ function toasts:BuildArgs()
             inline = true,
             order = 99,
             args = {
-                clear = {
-                    name = 'Clear History', desc = 'Clear the current login\'s toast history.',
-                    type = 'execute', order = 1,
-                    func = function() toasts:ClearSession() end,
-                },
                 testRewards = {
                     name = 'Test Rewards',
                     desc = 'Fire mock toasts for every category.\n\nAlso available as /cm toasts mock.',
-                    type = 'execute', order = 2,
+                    type = 'execute', order = 1,
                     func = function() toasts:RunMock('all') end,
                 },
             },
@@ -1378,8 +1358,8 @@ function toasts:HandleCommand(sub, arg)
         -- Convenience shortcut for the item reward set.
         toasts:RunMock('item')
     elseif sub == 'clear' then
-        toasts:ClearSession()
-        toasts:Notify('Toasts history cleared.')
+        toasts:ClearToasts()
+        toasts:Notify('Active Toasts and queued rewards cleared.')
     elseif sub == 'sets' then
         toasts:Notify('Toasts mock sets: ' .. table.concat(addon.ToastMock.Names(), ', ') .. ', all')
     else
@@ -1415,15 +1395,9 @@ end
 --#region ── Bindings ──────────────────────────────────────────────────────────
 
 function CouchMode_ToastsToggle() addon.Toasts:Toggle() end
-function CouchMode_ToastsScrollUp() addon.Toasts:ScrollUp() end
-function CouchMode_ToastsScrollDown() addon.Toasts:ScrollDown() end
-function CouchMode_ToastsBottom() addon.Toasts:ScrollToBottom() end
 function CouchMode_ToastsClose() addon.Toasts:ClosePanel() end
 
 BINDING_NAME_COUCHMODE_TOASTS_TOGGLE = 'Toggle Toasts'
-BINDING_NAME_COUCHMODE_TOASTS_SCROLL_UP = 'Scroll Toasts Up'
-BINDING_NAME_COUCHMODE_TOASTS_SCROLL_DOWN = 'Scroll Toasts Down'
-BINDING_NAME_COUCHMODE_TOASTS_BOTTOM = 'Scroll Toasts to Bottom'
 BINDING_NAME_COUCHMODE_TOASTS_CLOSE = 'Close Toasts'
 
 --#endregion

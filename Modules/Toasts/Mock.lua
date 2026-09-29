@@ -3,7 +3,7 @@ Representative rewards and system messages for Toasts:
 
     /cm toasts mock           -- every set
     /cm toasts mock item      -- a single set
-    /cm toasts clear          -- wipe the session history
+    /cm toasts clear          -- clear visible and queued toasts
 
 Item entries are emitted as real CHAT_MSG_LOOT lines (built from the client's
 own localized format strings when available) so a mock run exercises

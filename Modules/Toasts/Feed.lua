@@ -1,9 +1,8 @@
 --[[ Feed.lua
-A pooled, bottom-anchored scrolling list of toast rows.
+A pooled, bottom-anchored list of live toast rows.
 
-The feed owns no policy: it renders the entries it is handed and reports its
-scroll state. Styling is delegated to `addon.Toasts` through a presenter, so
-colors, icons and labels stay in one place.
+The feed renders active entries and handles row layout and pooling. Styling and
+fade timing are delegated to `addon.Toasts` through presenters.
 ]]
 
 local addonName, addon = ...
@@ -52,6 +51,14 @@ local function createRow(parent)
     local bg = row:CreateTexture(nil, 'BACKGROUND')
     bg:SetAllPoints()
     row.bg = bg
+
+    -- A second copy of the background drains toward the left as the toast
+    -- approaches its fade. Keep it behind the icon, label, and border.
+    local countdown = row:CreateTexture(nil, 'BACKGROUND', nil, 1)
+    countdown:SetPoint('TOPLEFT', row, 'TOPLEFT')
+    countdown:SetPoint('BOTTOMLEFT', row, 'BOTTOMLEFT')
+    countdown:Hide()
+    row.countdown = countdown
 
     if NineSliceUtil and NineSliceUtil.ApplyLayout then
         NineSliceUtil.ApplyLayout(row, ROW_BORDER_LAYOUT)
@@ -125,7 +132,6 @@ end
 function Feed.New(parent)
     local scrollFrame = CreateFrame('ScrollFrame', nil, parent)
     scrollFrame:SetAllPoints(parent)
-    if scrollFrame.EnableMouseWheel then scrollFrame:EnableMouseWheel(true) end
     scrollFrame:SetClipsChildren(true)
 
     local scrollChild = CreateFrame('Frame', nil, scrollFrame)
@@ -142,21 +148,11 @@ function Feed.New(parent)
         width = 300,
         viewportHeight = 0,
         contentHeight = 0,
-        historyMode = false,
         hoverCount = 0,
         hovering = false,
         presenter = nil,
-        onScrollChanged = nil,
+        durationForEntry = nil,
     }, Feed)
-
-    scrollFrame:SetScript('OnScrollRangeChanged', function()
-        if feed.onScrollChanged then feed.onScrollChanged() end
-    end)
-    scrollFrame:SetScript('OnMouseWheel', function(_, delta)
-        feed:ScrollBy(delta * 30)
-        return false
-    end)
-
     feed:SetWidth(300)
     return feed
 end
@@ -206,7 +202,21 @@ end
 function Feed:SetViewportHeight(height)
     self.viewportHeight = math.max(height or 0, 1)
     self:Layout()
-    if not self.historyMode then self:ScrollToBottom() end
+    self:ScrollToBottom()
+end
+
+--- Height occupied by the newest `count` rows, including their gaps.
+---@param count number
+---@return number
+function Feed:GetTailHeight(count)
+    count = math.max(0, math.floor(count or 0))
+    local first = math.max(1, #self.rows - count + 1)
+    local height = 0
+    for i = first, #self.rows do
+        if height > 0 then height = height + ROW_GAP end
+        height = height + self.rows[i]:GetHeight()
+    end
+    return height
 end
 
 --#endregion
@@ -236,6 +246,8 @@ function Feed:ReleaseRow(row)
     row._entry = nil
     row._presented = nil
     row._alpha = nil
+    row._countdownWidth = nil
+    row.countdown:Hide()
     row.label:SetText('')
     row.label:SetTextColor(1, 1, 1, 1)
     row.icon:Hide()
@@ -268,6 +280,9 @@ function Feed:RenderRow(row, entry)
 
     local bg = presented.bg or { 0.1, 0.1, 0.1, 1 }
     row.bg:SetColorTexture(bg[1], bg[2], bg[3], bg[4] or 1)
+    row.countdown:SetColorTexture(bg[1], bg[2], bg[3], bg[4] or 1)
+    row._countdownWidth = nil
+    row.countdown:Hide()
 
     local labelOffset = TEXT_PAD
     if presented.icon or presented.iconAtlas then
@@ -311,20 +326,54 @@ function Feed:Append(entry)
     self:Layout()
 end
 
---- Drops the oldest `count` rows (used when the session cap trims history).
+--- Drops the oldest rows when the live display limit is reduced.
 ---@param count number
-function Feed:TrimFirst(count)
-    for _ = 1, math.min(count, #self.rows) do
+function Feed:TrimToCount(count)
+    while #self.rows > count do
         local row = table.remove(self.rows, 1)
-        if row then self:ReleaseRow(row) end
+        self:ReleaseRow(row)
     end
     self:Layout()
 end
 
---- Re-renders the whole list from `entries`, preserving the scroll position.
+--- Removes rows whose weighted fade has completed, freeing display slots.
+---@param now number
+---@param ignoreHover boolean?
+---@return number removedCount
+function Feed:RemoveExpiredRows(now, ignoreHover)
+    if self.hovering and not ignoreHover then return 0 end
+
+    local removed = 0
+    for i = #self.rows, 1, -1 do
+        local row = self.rows[i]
+        local entry = row._entry
+        local timestamp = type(entry) == 'table' and (entry.displayedAt or entry.timestamp)
+        local duration = self.durationForEntry and self.durationForEntry(entry) or 0
+        local fadedOut = row._alpha ~= nil and row._alpha <= 0
+        local fadeEnded = type(timestamp) == 'number'
+            and now - timestamp >= duration + FADE_TIME
+        if fadedOut or fadeEnded then
+            table.remove(self.rows, i)
+            self:ReleaseRow(row)
+            removed = removed + 1
+        end
+    end
+
+    if removed > 0 then self:Layout() end
+    return removed
+end
+
+--- Returns the currently displayed entries in feed order.
+---@return ToastEntry[]
+function Feed:GetEntries()
+    local entries = {}
+    for i = 1, #self.rows do entries[i] = self.rows[i]._entry end
+    return entries
+end
+
+--- Re-renders the current rows from `entries`.
 ---@param entries ToastEntry[]
 function Feed:Rebuild(entries)
-    local offset = self.scrollFrame:GetVerticalScroll() or 0
     for i = #self.rows, 1, -1 do
         self:ReleaseRow(self.rows[i])
         self.rows[i] = nil
@@ -335,9 +384,6 @@ function Feed:Rebuild(entries)
         self.rows[i] = row
     end
     self:Layout()
-    local range = self.scrollFrame:GetVerticalScrollRange() or 0
-    self.scrollFrame:SetVerticalScroll(math.min(offset, range))
-    if self.onScrollChanged then self.onScrollChanged() end
 end
 
 function Feed:Clear()
@@ -346,7 +392,6 @@ function Feed:Clear()
         self.rows[i] = nil
     end
     self:Layout()
-    if self.onScrollChanged then self.onScrollChanged() end
 end
 
 --#endregion
@@ -383,26 +428,40 @@ end
 
 --#region ── Fading ────────────────────────────────────────────────────────────
 
---- Fades each row from its own receive timestamp. While the feed is hovered the
---- fade pauses (row timestamps are never rewritten); while history is being
---- browsed fading is disabled outright. Returns whether any row is visible.
+--- Fades each row from its presentation timestamp and drains its countdown over
+--- the same weighted duration. Hover keeps the existing row alpha in place.
 ---@param now number
----@param delay number
----@param enabled boolean
 ---@return boolean hasVisibleRows
-function Feed:UpdateRowFade(now, delay, enabled)
+function Feed:UpdateRowFade(now)
     local hasVisibleRows = false
     for i = 1, #self.rows do
         local row = self.rows[i]
         local entry = row._entry
         local alpha = row._alpha or 1
+        local timestamp = type(entry) == 'table' and (entry.displayedAt or entry.timestamp)
+        local duration = self.durationForEntry and self.durationForEntry(entry) or 0
+        local elapsed = type(timestamp) == 'number' and now - timestamp or 0
 
-        if not enabled then
-            alpha = 1
-        elseif type(entry) == 'table' and type(entry.timestamp) == 'number' then
+        if type(timestamp) == 'number' and duration > 0 then
+            local remaining = math.max(0, math.min(1, 1 - elapsed / duration))
+            local width = row:GetWidth() * remaining
+            if width > 0 then
+                if row._countdownWidth ~= width then
+                    row.countdown:SetWidth(width)
+                    row._countdownWidth = width
+                end
+                row.countdown:Show()
+            else
+                row.countdown:Hide()
+            end
+        else
+            row.countdown:Hide()
+        end
+
+        if type(timestamp) == 'number' then
             local target = 1
-            local elapsed = now - entry.timestamp - delay
-            if elapsed > 0 then target = math.max(1 - elapsed / FADE_TIME, 0) end
+            local fadeElapsed = elapsed - duration
+            if fadeElapsed > 0 then target = math.max(1 - fadeElapsed / FADE_TIME, 0) end
             if self.hovering then target = math.max(target, alpha) end
             alpha = target
         else
@@ -434,45 +493,13 @@ end
 
 --#region ── Scrolling ─────────────────────────────────────────────────────────
 
-function Feed:IsAtBottom()
-    local range = self.scrollFrame:GetVerticalScrollRange() or 0
-    local offset = self.scrollFrame:GetVerticalScroll() or 0
-    return offset >= (range - 1)
-end
-
---- History mode persists after a reader scrolls upward, including when they
---- later reach the bottom. A new live entry explicitly resumes live mode.
----@return boolean
-function Feed:IsBrowsingHistory()
-    return self.historyMode == true
-end
-
-function Feed:ResumeLive()
-    self.historyMode = false
-end
-
 function Feed:ScrollToBottom()
     local function go()
         self.scrollFrame:SetVerticalScroll(self.scrollFrame:GetVerticalScrollRange() or 0)
-        if self.onScrollChanged then self.onScrollChanged() end
     end
     go()
     -- The scroll range lags a frame behind content changes; re-apply once.
     if C_Timer then C_Timer.After(0, go) end
-end
-
---- Scrolls the viewport. A positive `upAmount` reveals older entries.
----@param upAmount number
-function Feed:ScrollBy(upAmount)
-    if upAmount > 0 and not self.historyMode then
-        self.historyMode = true
-        if self.onScrollChanged then self.onScrollChanged() end
-    end
-    local range = self.scrollFrame:GetVerticalScrollRange() or 0
-    local offset = self.scrollFrame:GetVerticalScroll() or 0
-    offset = math.max(0, math.min(range, offset - upAmount))
-    self.scrollFrame:SetVerticalScroll(offset)
-    if self.onScrollChanged then self.onScrollChanged() end
 end
 
 --#endregion

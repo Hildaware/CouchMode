@@ -35,15 +35,6 @@
     <Binding name="COUCHMODE_TOASTS_TOGGLE" category="CouchMode">
         CouchMode_ToastsToggle()
     </Binding>
-    <Binding name="COUCHMODE_TOASTS_SCROLL_UP" category="CouchMode">
-        CouchMode_ToastsScrollUp()
-    </Binding>
-    <Binding name="COUCHMODE_TOASTS_SCROLL_DOWN" category="CouchMode">
-        CouchMode_ToastsScrollDown()
-    </Binding>
-    <Binding name="COUCHMODE_TOASTS_BOTTOM" category="CouchMode">
-        CouchMode_ToastsBottom()
-    </Binding>
     <Binding name="COUCHMODE_TOASTS_CLOSE" category="CouchMode">
         CouchMode_ToastsClose()
     </Binding>

@@ -19,14 +19,15 @@ Utilities that make World of Warcraft feel more like a console experience.
 - **Chat Bubbles** — reskins NPC overhead speech bubbles with portraits and a
   reveal animation. NPC lines that cannot be replaced overhead are routed into
   Chat. Chat and Chat Bubbles can be enabled independently.
-- **Toasts** — a standalone, session-scoped feed. It shows item
+- **Toasts** — a standalone live feed. It shows item
   acquisitions (icon, name and carried count, tinted by rarity), money gains,
-  currency gains, reputation increases and system messages as bottom-anchored, auto-fading rows
-  with mouse-wheel scrolling, history browsing and a return-to-bottom button.
+  currency gains, reputation increases and system messages as bottom-anchored,
+  auto-fading rows with a weighted countdown. The active-row limit defaults to
+  15; additional rewards wait in order until a slot opens.
   System messages use a distinct color and wrap across multiple lines. Recognized
   lines are removed from Blizzard chat while the matching category is enabled;
   group loot, losses and unsupported-client reward lines stay in native chat.
-  Placed and scaled independently through Edit Mode.
+  Placed independently through Edit Mode.
 - **Bags**, **CastBar**, **Nameplates**, **Map**, **Tips**, **Player Bars** — see
   the in-game options under *Options → AddOns → Couch Mode*.
 
