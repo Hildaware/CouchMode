@@ -47,6 +47,7 @@ local function createRow(parent)
     local row = CreateFrame('Frame', nil, parent)
     row:SetHeight(ROW_HEIGHT)
     row:EnableMouse(true)
+    row._mouseEnabled = true
 
     local bg = row:CreateTexture(nil, 'BACKGROUND')
     bg:SetAllPoints()
@@ -93,6 +94,7 @@ local function createRow(parent)
     row.label = label
 
     row:SetScript('OnEnter', function(self)
+        if self._hover then return end
         self._hover = true
         local feed = self._feed
         if feed then feed:NoteHover(1) end
@@ -104,6 +106,7 @@ local function createRow(parent)
         end
     end)
     row:SetScript('OnLeave', function(self)
+        if not self._hover then return end
         self._hover = false
         local feed = self._feed
         if feed then feed:NoteHover(-1) end
@@ -215,6 +218,8 @@ function Feed:AcquireRow()
     if not row then row = createRow(self.scrollChild) end
     row:SetParent(self.scrollChild)
     row._feed = self
+    row._mouseEnabled = true
+    row:EnableMouse(true)
     row:Show()
     return row
 end
@@ -407,6 +412,18 @@ function Feed:UpdateRowFade(now, delay, enabled)
         if row._alpha ~= alpha then
             row._alpha = alpha
             row:SetAlpha(alpha)
+        end
+        local mouseEnabled = alpha > 0
+        if row._mouseEnabled ~= mouseEnabled then
+            row._mouseEnabled = mouseEnabled
+            row:EnableMouse(mouseEnabled)
+        end
+        if not mouseEnabled and row._hover then
+            row._hover = false
+            self:NoteHover(-1)
+            if GameTooltip and GameTooltip.GetOwner and GameTooltip:GetOwner() == row then
+                GameTooltip:Hide()
+            end
         end
         if alpha > 0 then hasVisibleRows = true end
     end

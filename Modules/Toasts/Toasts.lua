@@ -61,6 +61,36 @@ local SYSTEM_EVENT_ICON_ATLASES = {
     CHAT_MSG_COLLECTED_APPEARANCE = 'transmog-nav-slot-head',
 }
 
+-- Keep junk filtering data-driven so new noisy system lines can be added here.
+-- Prefer Blizzard's localized global strings, with English fallbacks for
+-- messages whose global-string name differs between client flavors.
+local JUNK_SYSTEM_MESSAGES = {
+    {
+        globals = { 'ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS', 'LE_GAME_ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS' },
+        fallbacks = { 'Another action is in progress' },
+    },
+    {
+        globals = { 'ERR_GENERIC_NO_TARGET', 'LE_GAME_ERR_GENERIC_NO_TARGET' },
+        fallbacks = { 'You have no target' },
+    },
+    {
+        globals = { 'ERR_INVALID_TARGET', 'ERR_GENERIC_INVALID_TARGET', 'LE_GAME_ERR_GENERIC_NO_VALID_TARGETS' },
+        fallbacks = { 'Invalid Target' },
+    },
+    {
+        globals = { 'ERR_OUT_OF_RANGE', 'LE_GAME_ERR_OUT_OF_RANGE' },
+        fallbacks = { 'Out of range' },
+    },
+    {
+        globals = { 'ERR_NOT_WHILE_MOVING', 'ERR_CANT_DO_THAT_WHILE_MOVING' },
+        fallbacks = { "Can't do that while moving" },
+    },
+    {
+        globals = { 'INTERRUPTED', 'ERR_INTERRUPTED', 'ERR_SPELL_INTERRUPTED' },
+        fallbacks = { 'Interrupted' },
+    },
+}
+
 -- Row backgrounds are semi-transparent so the feed behind them shows through.
 local ROW_BG_ALPHA = 0.5
 
@@ -84,6 +114,37 @@ toasts.pendingAppearanceIcons = {}
 --#region ── Small helpers ───────────────────────────────────────────────────────
 
 local function db() return addon.db.profile.toasts end
+
+local function normalizeSystemMessage(text)
+    if Sources.isSecret(text) or type(text) ~= 'string' then return nil end
+    return text:lower():gsub('[%p%s]+', '')
+end
+
+local function isJunkSystemMessage(text)
+    local normalized = normalizeSystemMessage(text)
+    if not normalized then return false end
+
+    for _, message in ipairs(JUNK_SYSTEM_MESSAGES) do
+        for _, globalName in ipairs(message.globals or {}) do
+            local localized = normalizeSystemMessage(_G[globalName])
+            if localized and localized == normalized then return true end
+        end
+        for _, fallback in ipairs(message.fallbacks or {}) do
+            if normalizeSystemMessage(fallback) == normalized then return true end
+        end
+    end
+    return false
+end
+
+local function isSystemMessageEvent(event)
+    return Sources.SYSTEM_EVENT_SET[event] == true or Sources.UI_SYSTEM_EVENT_SET[event] == true
+end
+
+local function isQuestProgressMessage(event, text)
+    if not isSystemMessageEvent(event) then return false end
+    text = Sources.SafeString(text)
+    return text ~= nil and text:match('^.+%d+%s*/%s*%d+%s*$') ~= nil
+end
 
 local function now()
     return (type(GetTime) == 'function') and GetTime() or 0
@@ -417,9 +478,14 @@ end
 ---@param event string
 ---@param text any
 function toasts:OnSystemMessage(event, text)
+    if db().filterJunk and isJunkSystemMessage(text) then return end
     if not db().system then return end
     local entry = Sources.NormalizeSystem(event, text, now())
     if not entry then return end
+
+    if isQuestProgressMessage(event, entry.originalText) then
+        entry.iconAtlas = QUEST_ICON_ATLAS
+    end
 
     if event == 'CHAT_MSG_COLLECTED_APPEARANCE' then
         entry.icon = takePendingAppearanceIcon(self) or latestAppearanceSourceIcon()
@@ -435,8 +501,11 @@ end
 ---@param text any
 ---@return boolean
 function toasts:ShouldSuppressSystemMessageFromChat(event, text)
-    return db().enabled == true and db().system == true
-        and Sources.NormalizeSystem(event, text, 0) ~= nil
+    if db().enabled ~= true then return false end
+    if db().filterJunk and isSystemMessageEvent(event) and isJunkSystemMessage(text) then
+        return true
+    end
+    return db().system == true and Sources.NormalizeSystem(event, text, 0) ~= nil
 end
 
 --- UI_ERROR_MESSAGE/UI_INFO_MESSAGE provide (messageType, text); the message
@@ -568,6 +637,9 @@ end
 ---@return boolean?
 function toasts:FilterChatMessage(event, text)
     if not db().enabled then return nil end
+    if db().filterJunk and isSystemMessageEvent(event) and isJunkSystemMessage(text) then
+        return true
+    end
     if self:IsRecognizedChatLine(event, text) then return true end
     return nil
 end
@@ -688,7 +760,7 @@ function toasts:PresentEntry(entry)
         return {
             text = entry.originalText or '',
             icon = entry.icon or SYSTEM_EVENT_ICONS[entry.event] or SYSTEM_ICON_ID,
-            iconAtlas = not entry.icon and SYSTEM_EVENT_ICON_ATLASES[entry.event] or nil,
+            iconAtlas = not entry.icon and (entry.iconAtlas or SYSTEM_EVENT_ICON_ATLASES[entry.event]) or nil,
             wrap = true,
             bg = { 0.07, 0.16, 0.21, 0.72 },
             border = { SYSTEM.r, SYSTEM.g, SYSTEM.b },
@@ -1041,6 +1113,7 @@ function toasts:GetDefaults()
             currency = true,
             reputation = true,
             system = true,
+            filterJunk = true,
             -- History
             historyCap = 200,
         },
@@ -1114,6 +1187,13 @@ function toasts:BuildArgs()
             type = 'toggle', order = 11,
             get = function() return db().system end,
             set = function(_, value) db().system = value end,
+        },
+        filterJunk = {
+            name = 'Filter Junk',
+            desc = 'Hide repetitive action errors such as “Out of range” and “You have no target.”',
+            type = 'toggle', order = 12,
+            get = function() return db().filterJunk end,
+            set = function(_, value) db().filterJunk = value end,
         },
         appearance = {
             name = 'Appearance',
