@@ -144,6 +144,7 @@ function chat:ClearSession()
     self.lastGroup = nil
     self.lastVisible = nil
     if self.feed then self.feed:Clear() end
+    self:ClearHistoryView()
     if self.panel then
         self:ApplyLayout()
         self:OnFeedChanged()
@@ -225,6 +226,11 @@ end
 ---@param msg ChatMessage
 function chat:ChatMessage(msg)
     if not db().enabled then return end
+    local toasts = addon.Toasts
+    if not msg.synthetic and toasts and toasts.ShouldSuppressSystemMessageFromChat
+        and toasts:ShouldSuppressSystemMessageFromChat(msg.event, msg.text) then
+        return
+    end
     if not self:IsEnabledInBlizzardGeneral(msg) then return end
     if self:ApplyBlockFilter(msg) then return end
 
@@ -251,14 +257,17 @@ function chat:ProcessChatMessage(msg)
     end
 
     local followBottom = self.feed and not self.feed:IsBrowsingHistory()
+    local historyFollowBottom = self:HistoryShouldFollowBottom()
     if self.lastVisible and Grouping.ShouldGroup(self.lastVisible, msg, db().groupWindow) and self.lastGroup then
         self.lastGroup.messages[#self.lastGroup.messages + 1] = msg
         if self.feed then self.feed:RefreshLastGroup(self.lastGroup, followBottom) end
+        self:HistoryRefreshLastGroup(self.lastGroup, historyFollowBottom)
     else
         local group = { messages = { msg } }
         self.groups[#self.groups + 1] = group
         self.lastGroup = group
         if self.feed then self.feed:AppendGroup(group, followBottom) end
+        self:HistoryAppendGroup(group, historyFollowBottom)
     end
     self.lastVisible = msg
 
@@ -285,6 +294,7 @@ function chat:Recompute()
     self.groups = groups
     self.lastGroup = groups[#groups]
     self.lastVisible = filtered[#filtered]
+    self:RebuildHistoryView(groups)
     if self.feed then
         self.feed:SetFonts(self:FontMetrics())
         self.feed:SetCompactMode(db().compactMode)
@@ -314,6 +324,10 @@ function chat:OnFeedChanged()
 end
 
 function chat:ScrollToBottom()
+    if self:IsHistoryModeOpen() then
+        self:HistoryToBottom()
+        return
+    end
     if self.feed then self.feed:ScrollToBottom() end
     self:OnFeedChanged()
     self:Touch()

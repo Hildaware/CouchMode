@@ -32,8 +32,10 @@ local LAYOUT_ANIMATION_TIME = 0.3
 --#region ── Construction ───────────────────────────────────────────────────────
 
 ---@param parent Frame  the scroll child
+---@param options table? { historyOnly = boolean }
 ---@return table feed
-function Feed.New(parent)
+function Feed.New(parent, options)
+    local historyOnly = options and options.historyOnly == true
     local scrollFrame = CreateFrame('ScrollFrame', nil, parent)
     scrollFrame:SetAllPoints(parent)
     if scrollFrame.EnableMouseWheel then scrollFrame:EnableMouseWheel(true) end
@@ -61,7 +63,8 @@ function Feed.New(parent)
             name    = { face = nil, size = 12 },
             channel = { face = nil, size = 10 },
         },
-        historyMode = false,
+        historyMode = historyOnly,
+        historyOnly = historyOnly,
         viewportHeight = nil,
         maxLiveMessages = 6,
         maxContentHeight = math.huge,
@@ -245,7 +248,7 @@ function Feed:IsHistoryVisible()
 end
 
 function Feed:ResumeLive()
-    if not self.historyMode then return end
+    if self.historyOnly or not self.historyMode then return end
     self.historyMode = false
     self:Layout(false)
     if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
@@ -257,7 +260,7 @@ end
 function Feed:ScrollToBottom(preserveHistory, defer)
     self:StopLayoutAnimation(true)
     local wasHistory = self.historyMode
-    if not preserveHistory then self.historyMode = false end
+    if not preserveHistory and not self.historyOnly then self.historyMode = false end
     if wasHistory and not self.historyMode then
         self:Layout(false)
         if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
@@ -339,7 +342,7 @@ function Feed:ScrollBy(upAmount)
             offset = math.max(0, math.min(range, offset - upAmount))
         end
         self.scrollFrame:SetVerticalScroll(offset)
-        if upAmount < 0 and self:IsAtBottom() and self.historyMode then
+        if upAmount < 0 and self:IsAtBottom() and self.historyMode and not self.historyOnly then
             self.historyMode = false
             if self.onHistoryModeChanged then self.onHistoryModeChanged(false) end
             self:ScrollToLiveEdge()
@@ -393,15 +396,17 @@ end
 ---@param group ChatGroup
 ---@param followBottom boolean?
 function Feed:AppendGroup(group, followBottom)
-    local snapshot = self:CaptureLayoutPositions()
-    local fromOffset = self:GetScrollOffset()
+    local animate = not self.historyOnly
+    local snapshot = animate and self:CaptureLayoutPositions() or nil
+    local fromOffset = animate and self:GetScrollOffset() or nil
     -- Chat and Feed intentionally share the grouped history table. The Chat
     -- owner may already have appended this logical group.
     if self.groups[#self.groups] ~= group then self.groups[#self.groups + 1] = group end
     local g = self:AcquireGroup()
     self.widgets[#self.widgets + 1] = g
-    Widgets.RenderGroup(self, g, group, true, 1)
-    self:Layout(true, snapshot, followBottom, fromOffset)
+    Widgets.RenderGroup(self, g, group, animate, 1)
+    self:Layout(animate, snapshot, followBottom, fromOffset)
+    if self.historyOnly and followBottom then self:ScrollToBottom(true) end
     return g
 end
 
@@ -411,18 +416,20 @@ end
 function Feed:RefreshLastGroup(group, followBottom)
     local g = self.widgets[#self.widgets]
     if not g then return end
-    local snapshot = self:CaptureLayoutPositions()
-    local fromOffset = self:GetScrollOffset()
+    local animate = not self.historyOnly
+    local snapshot = animate and self:CaptureLayoutPositions() or nil
+    local fromOffset = animate and self:GetScrollOffset() or nil
     g._lineAlphas = g._lineAlphas or {}
     g._lineAlphas[#group.messages] = 1
-    Widgets.RenderGroup(self, g, group, true, 1)
-    self:Layout(true, snapshot, followBottom, fromOffset)
+    Widgets.RenderGroup(self, g, group, animate, 1)
+    self:Layout(animate, snapshot, followBottom, fromOffset)
+    if self.historyOnly and followBottom then self:ScrollToBottom(true) end
 end
 
 function Feed:Clear()
     self:StopLayoutAnimation()
     self.scrollRequest = self.scrollRequest + 1
-    self.historyMode = false
+    self.historyMode = self.historyOnly
     for i = #self.widgets, 1, -1 do
         self:ReleaseGroup(table.remove(self.widgets, i))
     end

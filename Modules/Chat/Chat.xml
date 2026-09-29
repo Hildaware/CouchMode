@@ -20,6 +20,7 @@
     <Include file='ChatIdentity.lua'/>
     <Include file='ChatSession.lua'/>
     <Include file='ChatPanel.lua'/>
+    <Include file='ChatHistory.lua'/>
     <Include file='ChatModeration.lua'/>
     <Include file='ChatOptions.lua'/>
     <Include file='ChatCommands.lua'/>

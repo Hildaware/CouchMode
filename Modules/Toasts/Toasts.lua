@@ -430,6 +430,15 @@ function toasts:OnSystemMessage(event, text)
     self:AddEntry(entry)
 end
 
+--- Whether this system line will be presented by Toasts instead of Chat.
+---@param event string
+---@param text any
+---@return boolean
+function toasts:ShouldSuppressSystemMessageFromChat(event, text)
+    return db().enabled == true and db().system == true
+        and Sources.NormalizeSystem(event, text, 0) ~= nil
+end
+
 --- UI_ERROR_MESSAGE/UI_INFO_MESSAGE provide (messageType, text); the message
 --- is the second event argument. SYSMSG already uses OnSystemMessage directly.
 function toasts:OnUIMessage(event, _messageType, text)
@@ -1051,7 +1060,8 @@ function toasts:BuildArgs()
     return {
         description = {
             name = 'A scrolling feed for rewards and system messages. Recognized lines are removed '
-                .. 'from Blizzard chat while their Toasts category is enabled.',
+                .. 'from Blizzard chat while their Toasts category is enabled. System messages are '
+                .. 'also removed from CouchMode Chat when both Toasts and this category are enabled.',
             type = 'description',
             order = 1,
         },
@@ -1100,7 +1110,7 @@ function toasts:BuildArgs()
         },
         system = {
             name = 'System Messages',
-            desc = 'Show system messages in a distinct toast style.',
+            desc = 'Show system messages in a distinct toast style instead of duplicating them in CouchMode Chat.',
             type = 'toggle', order = 11,
             get = function() return db().system end,
             set = function(_, value) db().system = value end,

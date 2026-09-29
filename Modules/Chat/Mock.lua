@@ -199,11 +199,12 @@ end
 
 --#region ── Firing ─────────────────────────────────────────────────────────────
 
---- Emits one scenario entry as a raw Blizzard chat event.
+--- Emits one scenario entry as a synthetic chat event through the real router.
 ---@param router table
 ---@param entry table
 function M.Fire(router, entry)
-    router:OnEvent(entry.event,
+    local route = router.OnSyntheticEvent or router.OnEvent
+    route(router, entry.event,
         entry.text,           -- arg1  text
         entry.sender,         -- arg2  playerName
         entry.language or '', -- arg3  languageName

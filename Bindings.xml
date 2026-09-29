@@ -8,6 +8,9 @@
     <Binding name="COUCHMODE_CHAT_TOGGLE" category="CouchMode">
         CouchMode_ChatToggle()
     </Binding>
+    <Binding name="COUCHMODE_CHAT_HISTORY_TOGGLE" category="CouchMode">
+        CouchMode_ChatHistoryToggle()
+    </Binding>
     <Binding name="COUCHMODE_CHAT_FOCUS" category="CouchMode">
         CouchMode_ChatFocus()
     </Binding>

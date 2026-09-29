@@ -17,9 +17,10 @@ local EditMode = addon.EditMode
 --#region ── Constants ────────────────────────────────────────────────────────
 
 local PAD = 8
+local FEED_SIDE_PAD = 32
 local FILTER_BAR_H = 32
 local INPUT_STRIP_H = 28
-local EDGE_PAD = 4
+local EDGE_PAD = 12
 local CONTROL_GAP = 4
 local FEED_CONTROL_GAP = 4
 local FEED_PADDING = addon.ChatFeedProto.PADDING or 8
@@ -60,11 +61,12 @@ chat.inputReserved = false
 
 --- Resolved font metrics for the three text fields, passed to the feed.
 ---@return table
-function chat:FontMetrics()
+function chat:FontMetrics(multiplier)
+    multiplier = multiplier or 1
     return {
-        msg     = { face = addon.Media.ResolveFont(db().msgFontFace),     size = db().msgFontSize },
-        name    = { face = addon.Media.ResolveFont(db().nameFontFace),    size = db().nameFontSize },
-        channel = { face = addon.Media.ResolveFont(db().channelFontFace), size = db().channelFontSize },
+        msg     = { face = addon.Media.ResolveFont(db().msgFontFace),     size = math.floor(db().msgFontSize * multiplier + 0.5) },
+        name    = { face = addon.Media.ResolveFont(db().nameFontFace),    size = math.floor(db().nameFontSize * multiplier + 0.5) },
+        channel = { face = addon.Media.ResolveFont(db().channelFontFace), size = math.floor(db().channelFontSize * multiplier + 0.5) },
     }
 end
 
@@ -106,7 +108,7 @@ function chat:BuildFilterBar(parent)
     for _, filter in ipairs(Sources.FILTERS) do
         -- Plain text buttons keep the atlas header visually continuous.
         local btn = CreateFrame('Button', nil, bar)
-        btn:SetSize(60, 22)
+        btn:SetSize(56, 22)
         local label = btn:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
         label:SetPoint('CENTER')
         label:SetText(filter.label)
@@ -123,6 +125,21 @@ function chat:BuildFilterBar(parent)
         self.filterBtns[filter.key] = btn
         prev = btn
     end
+    local historyButton = CreateFrame('Button', nil, bar)
+    historyButton:SetSize(50, 22)
+    historyButton:SetPoint('RIGHT', bar, 'RIGHT', -6, 0)
+    historyButton:RegisterForClicks('LeftButtonUp')
+    historyButton:SetScript('OnClick', function() chat:ToggleHistoryMode() end)
+    historyButton:SetScript('OnEnter', function(button)
+        GameTooltip:SetOwner(button, 'ANCHOR_TOP')
+        GameTooltip:SetText('History Mode')
+        GameTooltip:Show()
+    end)
+    historyButton:SetScript('OnLeave', function() GameTooltip:Hide() end)
+    local historyLabel = historyButton:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
+    historyLabel:SetPoint('CENTER')
+    historyLabel:SetText('History')
+    self.historyButton = historyButton
     self.filterBar = bar
     return bar
 end
@@ -312,7 +329,7 @@ function chat:ApplyLayout(rebuild)
 
     local direction = db().growthDirection == 'top' and 'top' or 'bottom'
     self:SetPanelScale(db().scale or 1, direction)
-    self.feed:SetWidth(db().width - PAD * 2)
+    self.feed:SetWidth(db().width - FEED_SIDE_PAD * 2)
     local historyMode = self.feed:IsBrowsingHistory()
     local controlHeight = (self.filterReserved and FILTER_BAR_H or 0)
         + (self.inputReserved and INPUT_STRIP_H or 0)
@@ -367,9 +384,9 @@ function chat:ApplyLayout(rebuild)
             self.filterBar:ClearAllPoints()
         end
         self.scrollArea:ClearAllPoints()
-        self.scrollArea:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', PAD,
+        self.scrollArea:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', FEED_SIDE_PAD,
             bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
-        self.scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -PAD,
+        self.scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -FEED_SIDE_PAD,
             bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
     else
         if self.filterReserved then
@@ -389,9 +406,9 @@ function chat:ApplyLayout(rebuild)
             topOffset = topOffset + INPUT_STRIP_H
         end
         self.scrollArea:ClearAllPoints()
-        self.scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', PAD,
+        self.scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', FEED_SIDE_PAD,
             -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
-        self.scrollArea:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -PAD,
+        self.scrollArea:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -FEED_SIDE_PAD,
             -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
     end
     Input:SetMouseEnabled(self.inputReserved)
@@ -485,6 +502,7 @@ end
 
 function chat:OnScreenSizeChanged()
     self:ApplyLayout()
+    self:ApplyHistoryLayout()
 end
 
 --#endregion
@@ -532,7 +550,7 @@ function chat:UpdateFade(dt)
     if focusManager and focusManager.isUIFocused and focusManager.GetActiveFrame then
         gamepadFocused = focusManager:GetActiveFrame() == self.panel
     end
-    local engaged = historyVisible or panelHovered or inputFocused or gamepadFocused
+    local engaged = historyVisible or self:IsHistoryModeOpen() or panelHovered or inputFocused or gamepadFocused
     if self.feed then self.feed:SetFadePaused(engaged, now) end
     local hasVisibleMessages, displayChanged = false, false
     if self.feed then
@@ -586,6 +604,7 @@ function chat:SetFilter(filter)
     db().filter = filter
     self:RefreshFilterButtons()
     self:Recompute()
+    self:HistoryFilterChanged()
     self:Touch()
 end
 
@@ -611,6 +630,7 @@ end
 function chat:Toggle()
     if not db().enabled then return end
     if not self.panel then return end
+    if self:IsHistoryModeOpen() then self:CloseHistoryMode() end
     if Input:HasFocus() then
         Input:Deactivate()
         self:Touch()
@@ -621,10 +641,12 @@ function chat:Toggle()
 end
 
 function chat:FocusInput()
+    if self:IsHistoryModeOpen() then self:CloseHistoryMode() end
     if self.panel then Input:Focus(); self:Touch() end
 end
 
 function chat:ClosePanel()
+    if self:IsHistoryModeOpen() then self:CloseHistoryMode(); return end
     Input:Deactivate()
     self.fadeAlpha = db().backgroundOpacity
     if self.panel then self.panel:SetAlpha(self.fadeAlpha) end
@@ -632,11 +654,13 @@ function chat:ClosePanel()
 end
 
 function chat:ScrollUp()
+    if self:IsHistoryModeOpen() then self:MoveHistorySelection(-1); return end
     if self.feed then self.feed:ScrollBy(60) end
     self:Touch()
 end
 
 function chat:ScrollDown()
+    if self:IsHistoryModeOpen() then self:MoveHistorySelection(1); return end
     if self.feed then self.feed:ScrollBy(-60) end
     self:Touch()
 end

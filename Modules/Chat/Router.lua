@@ -232,7 +232,7 @@ end
 --- `now`/`clock` are injectable so tests remain deterministic.
 ---@param event string
 ---@param ...
-function M:OnEvent(event, ...)
+local function routeEvent(self, event, synthetic, ...)
     if not Sources or not Sources.CATEGORY_BY_EVENT[event] then return end
 
     local now = (type(GetTime) == 'function') and GetTime() or 0
@@ -240,11 +240,24 @@ function M:OnEvent(event, ...)
 
     local msg = Sources.Normalize(event, now, clock, ...)
     if not msg then return end
+    if synthetic then msg.synthetic = true end
     if self:IsDuplicate(msg) then return end
     -- Locally blocked senders are dropped before alerts, grouping, filters and
     -- session history (including the overhead bubble path).
     if self.blockCheck and self.blockCheck(msg) then return end
     self:Dispatch(msg)
+end
+
+function M:OnEvent(event, ...)
+    return routeEvent(self, event, false, ...)
+end
+
+--- Routes an addon-generated or mock message without treating it as a live
+--- Blizzard event for cross-module filtering decisions.
+---@param event string
+---@param ...
+function M:OnSyntheticEvent(event, ...)
+    return routeEvent(self, event, true, ...)
 end
 
 --- The shared router instance every module talks to. `M.New()` remains

@@ -83,6 +83,33 @@ function Animations.Progress(owner, duration, easing, onUpdate, onComplete)
     return animation
 end
 
+--- Smoothly interpolates a frame's alpha to the requested value.
+--- The owner must be visible for the duration of the fade.
+---@param owner Frame
+---@param targetAlpha number
+---@param duration number
+---@param onComplete? fun()
+---@return CouchModeProgressAnimation?
+function Animations.FadeTo(owner, targetAlpha, duration, onComplete)
+    assert(owner and owner.GetAlpha and owner.SetAlpha, 'Animations.FadeTo requires a frame')
+    assert(type(targetAlpha) == 'number', 'targetAlpha must be a number')
+
+    targetAlpha = math.max(0, math.min(1, targetAlpha))
+    local startAlpha = owner:GetAlpha()
+    if math.abs(startAlpha - targetAlpha) < 0.001 then
+        owner:SetAlpha(targetAlpha)
+        if onComplete then onComplete() end
+        return nil
+    end
+
+    return Animations.Progress(owner, duration, Animations.Smoothstep, function(progress)
+        owner:SetAlpha(startAlpha + (targetAlpha - startAlpha) * progress)
+    end, function()
+        owner:SetAlpha(targetAlpha)
+        if onComplete then onComplete() end
+    end)
+end
+
 driver:SetScript('OnUpdate', function(_, elapsed)
     frameNumber = frameNumber + 1
     for i = #active, 1, -1 do

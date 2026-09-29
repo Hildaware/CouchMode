@@ -220,6 +220,7 @@ function M.ResetGroup(g)
     g.iconBorder:Hide()
     g.spec:Hide()
     g.identityMenu:Hide()
+    if g.historyHighlight then g.historyHighlight:Hide() end
     g.icon:SetAlpha(1)
     g.iconBorder:SetAlpha(1)
     g.spec:SetAlpha(1)
@@ -353,7 +354,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         -- next identity so GetStringWidth measures the new speaker's name.
         g.name:SetWidth(0)
         g.channel:SetWidth(0)
-        hasIcon = chat:StyleIdentity(g, first) == true
+        hasIcon = chat:StyleIdentity(g, first, feed) == true
         local headerX = hasIcon and (iconSize + iconGap) or 0
         local channelTop = top + (hasIcon and iconTopPad or 0)
 

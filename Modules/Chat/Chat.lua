@@ -53,6 +53,7 @@ function chat:OnEnable()
     end
 
     self:BuildPanel()
+    self:BuildHistoryMode()
     addon.ChatRouter:Subscribe(self)
     if self:HasQueuedMessages() then self:ScheduleMessageQueue(0) end
 
@@ -83,11 +84,13 @@ end
 
 --- Restores Blizzard's UI when the addon is unloaded (logout/reload).
 function chat:OnLogout()
+    self:CloseHistoryMode()
     Input:Detach()
     self:RestoreBlizzard()
 end
 
 function chat:OnDisable()
+    self:CloseHistoryMode()
     self:StopMessageQueue()
     addon.ChatRouter:Unsubscribe(self)
     self:UnregisterEvent('UPDATE_CHAT_WINDOWS')

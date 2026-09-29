@@ -77,11 +77,15 @@ end
 --- Applies the group's identity (name, channel, icon).
 ---@param g Frame
 ---@param msg ChatMessage
+---@param feed table?
 ---@return boolean hasIcon  whether an icon was drawn
-function chat:StyleIdentity(g, msg)
+function chat:StyleIdentity(g, msg, feed)
     local name = msg.sender or (msg.category == 'SYSTEM' and 'System') or msg.type or ''
     self:SetTextPlain(g.name, name)
-    g.name:SetFont(addon.Media.ResolveFont(db().nameFontFace), db().nameFontSize, 'OUTLINE')
+    local nameFont = feed and feed.fonts and feed.fonts.name
+    local channelFont = feed and feed.fonts and feed.fonts.channel
+    g.name:SetFont(nameFont and nameFont.face or addon.Media.ResolveFont(db().nameFontFace),
+        nameFont and nameFont.size or db().nameFontSize, 'OUTLINE')
 
     local identity
     if msg.guid and not isSecret(msg.guid) then
@@ -100,7 +104,8 @@ function chat:StyleIdentity(g, msg)
     local r, gg, b = chatTypeColor(msg.event)
     self:SetTextPlain(g.channel, alias or (msg.category == 'SYSTEM' and ''
         or (msg.channelBase or Sources.DisplayType(msg.event))))
-    g.channel:SetFont(addon.Media.ResolveFont(db().channelFontFace), db().channelFontSize, 'OUTLINE')
+    g.channel:SetFont(channelFont and channelFont.face or addon.Media.ResolveFont(db().channelFontFace),
+        channelFont and channelFont.size or db().channelFontSize, 'OUTLINE')
     g.channel:SetTextColor(r, gg, b, 0.85)
 
     -- 2D icon selection only: no 3D models in the feed.

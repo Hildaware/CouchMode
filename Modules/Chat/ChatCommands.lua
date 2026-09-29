@@ -24,7 +24,7 @@ local function db() return addon.db.profile.chat end
 ---@param text string
 function chat:Notify(text)
     if not db().enabled then print('CouchMode: ' .. tostring(text)); return end
-    addon.ChatRouter:OnEvent('CHAT_MSG_SYSTEM', text, '', '', '', '', '', 0, 0, '', 0, nil, nil)
+    addon.ChatRouter:OnSyntheticEvent('CHAT_MSG_SYSTEM', text, '', '', '', '', '', 0, 0, '', 0, nil, nil)
 end
 
 --- Fires a set of representative mock messages through the real router.
@@ -70,6 +70,7 @@ end
 --#region ── Bindings ──────────────────────────────────────────────────────────
 
 function CouchMode_ChatToggle() addon.Chat:Toggle() end
+function CouchMode_ChatHistoryToggle() addon.Chat:ToggleHistoryMode() end
 function CouchMode_ChatFocus() addon.Chat:FocusInput() end
 function CouchMode_ChatFilterNext() addon.Chat:CycleFilter(1) end
 function CouchMode_ChatFilterPrev() addon.Chat:CycleFilter(-1) end
@@ -77,5 +78,6 @@ function CouchMode_ChatScrollUp() addon.Chat:ScrollUp() end
 function CouchMode_ChatScrollDown() addon.Chat:ScrollDown() end
 function CouchMode_ChatBottom() addon.Chat:ScrollToBottom() end
 function CouchMode_ChatClose() addon.Chat:ClosePanel() end
+BINDING_NAME_COUCHMODE_CHAT_HISTORY_TOGGLE = 'Toggle Chat History Mode' ---@diagnostic disable-line: lowercase-global
 
 --#endregion

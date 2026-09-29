@@ -36,6 +36,6 @@ so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 ## TODO
 
 ### Chat
-- System: (Receieved X, Experience Gained)
-  - Truly, System messages should be outside the chat in like a 'toast'. Do we need a 'toast' section?
-- Filter by type. Maybe I don't want any messages!
+
+### Map
+- There's a new gamepad map scroll thing added to Forever. Once it's out of alpha we should adopt it for the gamepad map scroll.
