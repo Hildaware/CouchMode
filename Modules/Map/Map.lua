@@ -6,7 +6,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 ---@class MapModule
 local map = addon:NewModule('Minimap')
 
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 
 local _G = _G
 local unpack = unpack
@@ -79,13 +79,14 @@ function map:OnEnable()
         local db = addon.db.profile.minimap ---@type MinimapDB
         local frame = map.container
 
-        LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+        EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+            if not layoutName then return end
             db.positions[layoutName] = { point = point, x = x, y = y }
         end, { point = 'TOPRIGHT', x = -20, y = -20 }, 'CouchMode Map')
 
-        LibEditMode:AddFrameSettings(frame, {
+        EditMode:RegisterFrameSettings(frame, {
             {
-                kind = LibEditMode.SettingType.Dropdown,
+                kind = EditMode.SettingType.Dropdown,
                 name = 'Shape',
                 desc = 'Square: full square. Rectangle: wide letterbox.',
                 default = 'rectangle',
@@ -100,7 +101,7 @@ function map:OnEnable()
                 end,
             },
             {
-                kind = LibEditMode.SettingType.Slider,
+                kind = EditMode.SettingType.Slider,
                 name = 'Size',
                 desc = 'Normal minimap width in pixels.',
                 default = 200,
@@ -115,7 +116,7 @@ function map:OnEnable()
             },
         })
 
-        LibEditMode:RegisterCallback('layout', function(layoutName)
+        EditMode:RegisterCallback('layout', function(layoutName)
             local pos = db.positions[layoutName]
             frame:ClearAllPoints()
             if pos then
@@ -125,11 +126,11 @@ function map:OnEnable()
             end
         end)
 
-        LibEditMode:RegisterCallback('enter', function()
+        EditMode:RegisterCallback('enter', function()
             frame:Show()
         end)
 
-        LibEditMode:RegisterCallback('exit', function()
+        EditMode:RegisterCallback('exit', function()
             -- nothing to do; map visibility is managed by normal gameplay state
         end)
     end

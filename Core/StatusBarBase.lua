@@ -2,7 +2,7 @@ local addonName = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 local isSecretValue = addon.Utils.IsSecretValue
 
 local SMOOTH_RATE = 2 -- exponential lerp factor (higher = snappier)
@@ -93,7 +93,7 @@ end
 --#region ── Shared helpers ────────────────────────────────────────────────────
 
 --- Applies size and label visibility from the config to the gui.
---- Position is managed by LibEditMode; this function intentionally does not touch anchors.
+--- Position is managed by EditMode; this function intentionally does not touch anchors.
 ---@param gui StatusBarBaseGUI
 ---@param c   table  the module's config subtable
 function StatusBarBase.Refresh(gui, c)
@@ -361,7 +361,7 @@ end
 
 --#endregion
 
---#region ── LibEditMode helpers ──────────────────────────────────────────────
+--#region ── EditMode helpers ──────────────────────────────────────────────
 
 ---@class StatusBarBaseEditModeOpts
 ---@field label         string  Edit Mode label (e.g. 'CouchMode Health')
@@ -369,7 +369,7 @@ end
 ---@field heightDefault number  Default/reset value for the Height slider
 ---@field exitFn?       fun()   Exit callback; defaults to module:UpdateValue()
 
---- Registers a standard horizontal bar frame with LibEditMode.
+--- Registers a standard horizontal bar frame with EditMode.
 --- Sets the initial position, wires up AddFrame + AddFrameSettings (Width, Height, Frame Strata),
 --- and registers layout / enter / exit callbacks.
 ---@param frame  Frame
@@ -379,13 +379,14 @@ end
 function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
     frame:SetPoint('CENTER', UIParent, 'CENTER', db.xPos, db.yPos)
 
-    LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+    EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+        if not layoutName then return end
         db.positions[layoutName] = { point = point, x = x, y = y }
     end, { point = 'CENTER', x = db.xPos, y = db.yPos }, opts.label)
 
-    LibEditMode:AddFrameSettings(frame, {
+    EditMode:RegisterFrameSettings(frame, {
         {
-            kind      = LibEditMode.SettingType.Slider,
+            kind      = EditMode.SettingType.Slider,
             name      = 'Width',
             desc      = 'Width of the bar in pixels.',
             default   = opts.widthDefault,
@@ -399,7 +400,7 @@ function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
             end,
         },
         {
-            kind      = LibEditMode.SettingType.Slider,
+            kind      = EditMode.SettingType.Slider,
             name      = 'Height',
             desc      = 'Height of the bar in pixels.',
             default   = opts.heightDefault,
@@ -413,7 +414,7 @@ function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
             end,
         },
         {
-            kind    = LibEditMode.SettingType.Dropdown,
+            kind    = EditMode.SettingType.Dropdown,
             name    = 'Frame Strata',
             desc    = 'Rendering layer for the bar. Raise this if other frames overlap it.',
             default = 'MEDIUM',
@@ -435,7 +436,7 @@ function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
         },
     })
 
-    LibEditMode:RegisterCallback('layout', function(layoutName)
+    EditMode:RegisterCallback('layout', function(layoutName)
         local pos = db.positions[layoutName]
         frame:ClearAllPoints()
         if pos then
@@ -445,8 +446,8 @@ function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
         end
     end)
 
-    LibEditMode:RegisterCallback('enter', function() frame:Show() end)
-    LibEditMode:RegisterCallback('exit',  opts.exitFn or function() module:UpdateValue() end)
+    EditMode:RegisterCallback('enter', function() frame:Show() end)
+    EditMode:RegisterCallback('exit',  opts.exitFn or function() module:UpdateValue() end)
 end
 
 --#endregion

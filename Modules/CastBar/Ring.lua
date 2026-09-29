@@ -9,7 +9,7 @@ local addon         = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local castRing      = addon:NewModule('CastRing', 'AceEvent-3.0')
 ---@cast castRing +AceEvent-3.0
 
-local LibEditMode   = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 local CastUtil      = addon.CastUtil
 
 local ringHomePt    = { point = 'CENTER', x = 0, y = -150 }
@@ -450,13 +450,14 @@ function castRing:OnEnable()
         ringHomePt.y = db.yPos
         frame:SetPoint(ringHomePt.point, UIParent, ringHomePt.point, ringHomePt.x, ringHomePt.y)
 
-        LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+        EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+            if not layoutName then return end
             db.positions[layoutName] = { point = point, x = x, y = y }
         end, { point = 'CENTER', x = db.xPos, y = db.yPos }, 'CouchMode Cast Ring')
 
-        LibEditMode:AddFrameSettings(frame, {
+        EditMode:RegisterFrameSettings(frame, {
             {
-                kind      = LibEditMode.SettingType.Slider,
+                kind      = EditMode.SettingType.Slider,
                 name      = 'Size',
                 desc      = 'Diameter of the ring in pixels.',
                 default   = 128,
@@ -470,7 +471,7 @@ function castRing:OnEnable()
                 end,
             },
             {
-                kind    = LibEditMode.SettingType.Dropdown,
+                kind    = EditMode.SettingType.Dropdown,
                 name    = 'Frame Strata',
                 desc    = 'Rendering layer for the ring. Raise this if other frames overlap it.',
                 default = 'MEDIUM',
@@ -492,7 +493,7 @@ function castRing:OnEnable()
             },
         })
 
-        LibEditMode:RegisterCallback('layout', function(layoutName)
+        EditMode:RegisterCallback('layout', function(layoutName)
             local pos = db.positions[layoutName]
             ringHomePt.point = pos and pos.point or 'CENTER'
             ringHomePt.x     = pos and pos.x     or db.xPos
@@ -501,8 +502,8 @@ function castRing:OnEnable()
             frame:SetPoint(ringHomePt.point, UIParent, ringHomePt.point, ringHomePt.x, ringHomePt.y)
         end)
 
-        LibEditMode:RegisterCallback('enter', function() frame:Show() end)
-        LibEditMode:RegisterCallback('exit',  function()
+        EditMode:RegisterCallback('enter', function() frame:Show() end)
+        EditMode:RegisterCallback('exit',  function()
             if not castRing.castEndTime and not castRing.preview then
                 frame:Hide()
             end

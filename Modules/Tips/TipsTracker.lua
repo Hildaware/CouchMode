@@ -2,7 +2,7 @@ local addon_name = ...
 
 ---@class CouchMode: AceAddon
 local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 local isSecretValue = addon.Utils.IsSecretValue
 local Animations = addon.Animations
 
@@ -185,15 +185,17 @@ function tips:OnEnable()
     self:RegisterEvent("PLAYER_GUILD_UPDATE", "OnGuildUpdate")
     self:RegisterEvent("INSPECT_READY", "OnInspectReady")
 
-    -- Initialize LibEditMode frame if not already done
+    -- Initialize EditMode frame if not already done
     if not tips.editModeFrame then
         local f = CreateFrame('Frame', 'CouchModeTipsAnchor', UIParent)
         f:SetSize(tips.TIP_W + 4, 180)
         f:Hide()
         tips.editModeFrame = f
 
-        LibEditMode:AddFrame(tips.editModeFrame, function(_, layoutName, point, x, y)
-            tips.tipsDB().positions[layoutName] = { point = point, x = x, y = y }
+        EditMode:RegisterFrame(tips.editModeFrame, function(_, layoutName, point, x, y)
+            if not layoutName then return end
+            local positions = tips.tipsDB().positions
+            positions[layoutName] = { point = point, x = x, y = y }
         end, { point = 'TOPLEFT', x = 0, y = -400 }, 'CouchMode Tips')
 
         --     tips.tipsDB().positions = tips.tipsDB().positions or {}
@@ -203,9 +205,9 @@ function tips:OnEnable()
         --     end
         -- end, { point = 'TOP', x = 0, y = -200 }, 'CouchMode Tips')
 
-        LibEditMode:AddFrameSettings(tips.editModeFrame, {
+        EditMode:RegisterFrameSettings(tips.editModeFrame, {
             {
-                kind = LibEditMode.SettingType.Slider,
+                kind = EditMode.SettingType.Slider,
                 name = 'Width',
                 desc = 'Width of the tooltip frame in pixels.',
                 default = 240,
@@ -220,7 +222,7 @@ function tips:OnEnable()
             },
         })
 
-        LibEditMode:RegisterCallback('layout', function(layoutName)
+        EditMode:RegisterCallback('layout', function(layoutName)
             local pos = tips.tipsDB().positions[layoutName]
             tips.editModeFrame:ClearAllPoints()
             if pos then
@@ -230,14 +232,14 @@ function tips:OnEnable()
             end
         end)
 
-        LibEditMode:RegisterCallback('enter', function()
+        EditMode:RegisterCallback('enter', function()
             tips.editModeFrame:Show()
             if tips.activeFrame then
                 tips.activeFrame:Show()
             end
         end)
 
-        LibEditMode:RegisterCallback('exit', function()
+        EditMode:RegisterCallback('exit', function()
             tips.editModeFrame:Hide()
         end)
     end

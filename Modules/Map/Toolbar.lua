@@ -44,6 +44,23 @@ local function wrap_blizz_btn(btn, blizz, on_click)
     btn:SetScript("OnClick", on_click)
 end
 
+local function useNativeCompartmentButton(btn, blizz)
+    -- Keep the Blizzard dropdown's intrinsic mouse handler on Forever. Forwarding
+    -- the click from our addon button taints the gamepad menu focus transition.
+    blizz:ClearAllPoints()
+    blizz:SetSize(btn:GetSize())
+    blizz:SetPoint("CENTER", btn, "CENTER")
+    blizz:SetFrameStrata(btn:GetFrameStrata())
+    blizz:SetFrameLevel(btn:GetFrameLevel() + 1)
+    blizz:SetAlpha(0)
+    blizz:EnableMouse(true)
+    blizz:SetShown(btn:IsVisible())
+
+    btn:SetScript("OnClick", nil)
+    btn:HookScript("OnShow", function() blizz:Show() end)
+    btn:HookScript("OnHide", function() blizz:Hide() end)
+end
+
 local function minimap_defs()
     local day = _G.C_DateAndTime and _G.C_DateAndTime.GetCurrentCalendarTime().monthDay or 1
     return {
@@ -70,14 +87,18 @@ local function minimap_defs()
             tooltip = "Addons",
             blizz = map.blizzCompartment,
             setup = function(btn, blizz)
-                blizz:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
-                local is_open = false
-                hooksecurefunc(blizz, "CloseMenu", function() is_open = false end)
-                wrap_blizz_btn(btn, blizz, function()
-                    if is_open then blizz:CloseMenu() else
-                        is_open = true; blizz:OpenMenu()
-                    end
-                end)
+                if addon.Utils.IsFlavor('forever') then
+                    useNativeCompartmentButton(btn, blizz)
+                else
+                    blizz:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
+                    local is_open = false
+                    hooksecurefunc(blizz, "CloseMenu", function() is_open = false end)
+                    wrap_blizz_btn(btn, blizz, function()
+                        if is_open then blizz:CloseMenu() else
+                            is_open = true; blizz:OpenMenu()
+                        end
+                    end)
+                end
             end
         },
         {

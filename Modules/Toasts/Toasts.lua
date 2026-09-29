@@ -6,7 +6,7 @@ local addonName, addon = ...
 ---@field ToastMock table
 ---@field Toasts ToastsModule
 local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 
 ---@class ToastsModule: AceModule
 ---@field HandleCommand fun(self: ToastsModule, sub: string, arg: string)
@@ -752,19 +752,17 @@ function toasts:BuildPanel()
 
     frame:SetScript('OnUpdate', function(_, dt) toasts:UpdateFade(dt) end)
 
-    LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
-        -- LibEditMode can dispatch a frame-position callback before it has
-        -- resolved the active layout name. There is nowhere valid to persist
-        -- that position yet, so wait for a layout-scoped callback instead.
+    EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+        -- Position callbacks cannot be persisted until the active layout is known.
         if not layoutName then return end
         local settings = db()
         settings.positions = settings.positions or {}
         settings.positions[layoutName] = { point = point, x = x, y = y }
     end, { point = 'BOTTOMRIGHT', x = -40, y = 40 }, 'CouchMode Toasts')
 
-    LibEditMode:AddFrameSettings(frame, {
+    EditMode:RegisterFrameSettings(frame, {
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Width', desc = 'Feed width in pixels.',
             default = DEFAULT_WIDTH, minValue = 200, maxValue = 900, valueStep = 10,
             get = function() return db().width end,
@@ -774,7 +772,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Height', desc = 'Feed height in pixels.',
             default = DEFAULT_HEIGHT, minValue = MIN_HEIGHT, maxValue = 900, valueStep = 10,
             get = function() return db().height end,
@@ -784,7 +782,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Scale', desc = 'Overall feed scale.',
             default = 1, minValue = 0.5, maxValue = 2, valueStep = 0.05,
             get = function() return db().scale end,
@@ -794,7 +792,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
             default = 1, minValue = 0.1, maxValue = 1, valueStep = 0.05,
             get = function() return db().activeOpacity end,
@@ -804,7 +802,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Background Opacity', desc = 'Feed opacity after all rewards fade.',
             default = 0, minValue = 0, maxValue = 1, valueStep = 0.05,
             get = function() return db().backgroundOpacity end,
@@ -817,7 +815,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Fade Delay', desc = 'Seconds each reward remains visible before fading.',
             default = 15, minValue = 0, maxValue = 120, valueStep = 1,
             get = function() return db().fadeDelay end,
@@ -827,7 +825,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Dropdown,
+            kind = EditMode.SettingType.Dropdown,
             name = 'Font', desc = 'Font used for reward text.',
             default = 'Arial Narrow',
             values = (function()
@@ -845,7 +843,7 @@ function toasts:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'History Cap', desc = 'Rewards retained for the current login.',
             default = 200, minValue = 20, maxValue = 1000, valueStep = 20,
             get = function() return db().historyCap end,
@@ -856,7 +854,7 @@ function toasts:BuildPanel()
         },
     })
 
-    LibEditMode:RegisterCallback('layout', function(layoutName)
+    EditMode:RegisterCallback('layout', function(layoutName)
         local pos = db().positions[layoutName]
         frame:ClearAllPoints()
         if pos then

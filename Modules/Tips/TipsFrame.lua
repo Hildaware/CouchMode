@@ -12,8 +12,8 @@ local tips = addon:GetModule('Tips')
 function tips.applyAnchor(f)
     if not f then return end
     local db = tips.tipsDB()
-    local LibEditMode = LibStub('LibEditMode')
-    local layoutName = LibEditMode:GetActiveLayoutName() or 'Default'
+    local EditMode = addon.EditMode
+    local layoutName = EditMode:GetActiveLayoutName() or 'Default'
     local pos = db.positions[layoutName] or db.positions['Default']
 
     f:ClearAllPoints()

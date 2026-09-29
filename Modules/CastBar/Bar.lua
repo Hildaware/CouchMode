@@ -10,7 +10,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 local castBar = addon:NewModule('PlayerCastBar', 'AceEvent-3.0')
 ---@cast castBar +AceEvent-3.0
 
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 
 ---@type CastUtil
 local CastUtil = addon.CastUtil
@@ -438,6 +438,7 @@ function castBar:HideFallback()
     self.castDuration = nil
     self.isChannel = nil
     self.isEmpowered = false
+    if not gui.leftBar then return end
     gui.leftBar.bar:SetWidth(0)
     gui.rightBar.bar:SetWidth(0)
     gui.leftBar.latency:Hide()
@@ -535,13 +536,14 @@ function castBar:OnEnable()
         barHomePt.y = db.yPos
         frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
 
-        LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
+        EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+            if not layoutName then return end
             db.positions[layoutName] = { point = point, x = x, y = y }
         end, { point = 'CENTER', x = db.xPos, y = db.yPos }, 'CouchMode Cast Bar')
 
-        LibEditMode:AddFrameSettings(frame, {
+        EditMode:RegisterFrameSettings(frame, {
             {
-                kind = LibEditMode.SettingType.Slider,
+                kind = EditMode.SettingType.Slider,
                 name = 'Width',
                 desc = 'Width of the cast bar in pixels.',
                 default = 250,
@@ -555,7 +557,7 @@ function castBar:OnEnable()
                 end,
             },
             {
-                kind = LibEditMode.SettingType.Slider,
+                kind = EditMode.SettingType.Slider,
                 name = 'Height',
                 desc = 'Height of the cast bar in pixels.',
                 default = 24,
@@ -569,7 +571,7 @@ function castBar:OnEnable()
                 end,
             },
             {
-                kind = LibEditMode.SettingType.Dropdown,
+                kind = EditMode.SettingType.Dropdown,
                 name = 'Frame Strata',
                 desc = 'Rendering layer for the bar. Raise this if other frames overlap it.',
                 default = 'MEDIUM',
@@ -591,7 +593,7 @@ function castBar:OnEnable()
             },
         })
 
-        LibEditMode:RegisterCallback('layout', function(layoutName)
+        EditMode:RegisterCallback('layout', function(layoutName)
             local pos = db.positions[layoutName]
             barHomePt.point = pos and pos.point or 'CENTER'
             barHomePt.x = pos and pos.x or db.xPos
@@ -600,8 +602,8 @@ function castBar:OnEnable()
             frame:SetPoint(barHomePt.point, UIParent, barHomePt.point, barHomePt.x, barHomePt.y)
         end)
 
-        LibEditMode:RegisterCallback('enter', function() frame:Show() end)
-        LibEditMode:RegisterCallback('exit', function()
+        EditMode:RegisterCallback('enter', function() frame:Show() end)
+        EditMode:RegisterCallback('exit', function()
             if not castBar.castEndTime and not castBar.preview then
                 frame:Hide()
             end

@@ -80,6 +80,8 @@ function view:Create(inventoryType)
     local g, sizes = geometry(inventoryType), session.Settings.Defaults.Sections
     i.catalog = addon.CatalogView:Create({
         name = 'CouchModeBags' .. name, title = name, strata = 'HIGH', scrollTemplate = scrollTemplate,
+        frameTemplate = 'PortraitFrameFlatTemplate', headerTopOffset = 60,
+        portraitAsset = 'Interface/Icons/Inv_misc_bag_08',
         width = g.width, height = g.height, point = g.point, relativePoint = g.relativePoint, x = g.x, y = g.y,
         minWidth = 600, minHeight = 436, maxWidth = 1200, maxHeight = 2000,
         headerHeight = sizes.Header, toolbarHeight = sizes.Filters + 20, columnHeaderHeight = sizes.ListViewHeader, footerHeight = sizes.Footer,

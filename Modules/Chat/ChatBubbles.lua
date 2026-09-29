@@ -5,7 +5,6 @@ local addonName, addon = ...
 ---@field ChatSources table
 local stub = LibStub('AceAddon-3.0')
 local addon = stub:GetAddon(addonName)
-local LibEditMode = LibStub('LibEditMode')
 
 ---@class ChatBubblesModule: AceModule
 ---@field CalculateDisplayDuration fun(message: string): number

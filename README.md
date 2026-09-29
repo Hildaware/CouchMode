@@ -33,45 +33,9 @@ Utilities that make World of Warcraft feel more like a console experience.
 Chat and Chat Bubbles share a single message router (`Modules/Chat/Router.lua`)
 so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 
-## Development
+## TODO
 
-Syntax-check every Lua file:
-
-```sh
-rg --files -g '*.lua' | xargs luac -p
-```
-
-### In-game mock messages
-
-`Modules/Chat/Mock.lua` fires representative chat events through the real router
-so normalization, grouping, filters and identity all behave as in live chat:
-
-```
-/cm chat mock          -- every source set
-/cm chat mock npc      -- a single set
-/cm chat sets          -- list the available sets
-/cm chat clear         -- wipe the current login's history
-```
-
-Sets: `npc`, `whisper`, `group`, `guild`, `public`, `system`, `rich` (links,
-emotes and long wrapping text), plus `all`. There is also a **Test Messages**
-button under *Options → AddOns → Couch Mode → Chat*.
-
-`Modules/Toasts/Mock.lua` fires representative rewards and system messages:
-
-```
-/cm toasts items             -- a few item rewards
-/cm toasts mock              -- every category
-/cm toasts mock system       -- system messages
-/cm toasts sets              -- list the available sets
-/cm toasts clear             -- wipe the current login's history
-```
-
-Sets: `item`, `money`, `currency`, `reputation`, `system`, plus `all`. There is
-also a **Test Rewards** button under *Options → AddOns → Couch Mode → Toasts*.
-
-Chat currently keeps its own System category. Its removal from the Chat feed is
-reserved for the separate Chat module change.
-
-For current Blizzard UI implementation details, consult the extracted client
-source described in `AGENTS.md`.
+### Chat
+- System: (Receieved X, Experience Gained)
+  - Truly, System messages should be outside the chat in like a 'toast'. Do we need a 'toast' section?
+- Filter by type. Maybe I don't want any messages!

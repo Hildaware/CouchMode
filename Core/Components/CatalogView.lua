@@ -5,6 +5,10 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 ---@class CatalogViewOptions
 ---@field name string
 ---@field title string|nil
+---@field frameTemplate string|nil
+---@field headerTopOffset number|nil
+---@field headerSideInset number|nil
+---@field portraitAsset string|nil
 ---@field parent Frame|nil
 ---@field strata string|nil
 ---@field width number|nil
@@ -90,20 +94,27 @@ end
 function catalog:Create(options)
     assert(options and options.name, 'CatalogView requires a frame name')
     local i = setmetatable({ options = options, sectionPool = {}, rowPool = {}, activeSections = {}, activeRows = {}, scratch = {} }, { __index = self.proto })
-    local f = CreateFrame('Frame', options.name, options.parent or UIParent, 'BasicFrameTemplateWithInset')
+    local f = CreateFrame('Frame', options.name, options.parent or UIParent, options.frameTemplate or 'BasicFrameTemplateWithInset')
     f:SetFrameStrata(options.strata or 'HIGH')
     f:SetSize(options.width or 600, options.height or 436)
     f:SetPoint(options.point or 'CENTER', options.relativeTo or UIParent, options.relativePoint or options.point or 'CENTER', options.x or 0, options.y or 0)
     f:SetMovable(true); f:SetUserPlaced(true); f:EnableMouse(true); f:SetResizable(true)
     f:SetResizeBounds(options.minWidth or 600, options.minHeight or 436, options.maxWidth or 1200, options.maxHeight or 2000)
-    f.TitleText:SetText(options.title or '')
+    if options.portraitAsset and f.SetPortraitToAsset then f:SetPortraitToAsset(options.portraitAsset) end
+    -- PortraitFrame templates nest TitleText under TitleContainer and expose
+    -- SetTitle(), while BasicFrameTemplateWithInset exposes it directly.
+    if not f.TitleText and f.TitleContainer then f.TitleText = f.TitleContainer.TitleText end
+    if f.SetTitle then f:SetTitle(options.title or '')
+    elseif f.TitleText then f.TitleText:SetText(options.title or '') end
     f.CloseButton:SetScript('OnClick', function() if options.onClose then options.onClose() else f:Hide() end end)
     f:SetScript('OnShow', function(frame) if options.onShow then options.onShow(frame) end end)
     f:SetScript('OnHide', function(frame) if options.onHide then options.onHide(frame) end end)
     f:SetScript('OnSizeChanged', function(frame) i:Relayout(); if options.onResize then options.onResize(frame) end end)
 
     local header = CreateFrame('Frame', nil, f)
-    header:SetPoint('TOPLEFT', f, 'TOPLEFT', 10, -28); header:SetPoint('TOPRIGHT', f, 'TOPRIGHT', -32, -28); header:SetHeight(options.headerHeight or 32)
+    local headerTopOffset = options.headerTopOffset or 28
+    local headerSideInset = options.headerSideInset or 10
+    header:SetPoint('TOPLEFT', f, 'TOPLEFT', headerSideInset, -headerTopOffset); header:SetPoint('TOPRIGHT', f, 'TOPRIGHT', -32, -headerTopOffset); header:SetHeight(options.headerHeight or 32)
     header:EnableMouse(true)
     header:RegisterForDrag('LeftButton')
     header:SetScript('OnDragStart', function() f:StartMoving() end)
@@ -127,7 +138,7 @@ function catalog:Create(options)
     end
     scroll:ClearAllPoints()
     scroll:SetPoint('TOPLEFT', f, 'TOPLEFT', 0,
-        -(28 + (options.headerHeight or 32) + (options.toolbarHeight or 0) + (options.columnHeaderHeight or 0)))
+        -(headerTopOffset + (options.headerHeight or 32) + (options.toolbarHeight or 0) + (options.columnHeaderHeight or 0)))
     scroll:SetPoint('BOTTOMRIGHT', f, 'BOTTOMRIGHT', -10, 10 + (options.footerHeight or 0))
     local content = CreateFrame('Frame', nil, scroll); content:SetSize(1, 1); scroll:SetScrollChild(content)
     if options.smoothScroll ~= false then enableSmoothScrolling(scroll) end

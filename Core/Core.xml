@@ -4,6 +4,7 @@
     <Include file = 'Utils.lua' />
     <Include file = 'Animations.lua' />
     <Include file = 'Layout.lua' />
+    <Include file = 'EditMode.lua' />
     <Include file = 'Components/ItemRow.lua' />
     <Include file = 'Components/CatalogView.lua' />
     <Include file = 'Components/Metal.lua' />

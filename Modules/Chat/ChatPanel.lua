@@ -12,7 +12,7 @@ local addonName, addon = ...
 local chat = addon.Chat
 local Sources = addon.ChatSources
 local Input = addon.ChatInput
-local LibEditMode = LibStub('LibEditMode')
+local EditMode = addon.EditMode
 
 --#region ── Constants ────────────────────────────────────────────────────────
 
@@ -206,19 +206,17 @@ function chat:BuildPanel()
         end)
     end
 
-    LibEditMode:AddFrame(frame, function(_, layoutName, point, x, y)
-        -- LibEditMode can dispatch a frame-position callback before it has
-        -- resolved the active layout name. There is nowhere valid to persist
-        -- that position yet, so wait for a layout-scoped callback instead.
+    EditMode:RegisterFrame(frame, function(_, layoutName, point, x, y)
+        -- Position callbacks cannot be persisted until the active layout is known.
         if not layoutName then return end
         local settings = db()
         settings.positions = settings.positions or {}
         settings.positions[layoutName] = { point = point, x = x, y = y }
     end, { point = 'BOTTOMLEFT', x = 10, y = 120 }, 'CouchMode Chat')
 
-    LibEditMode:AddFrameSettings(frame, {
+    EditMode:RegisterFrameSettings(frame, {
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Width', desc = 'Panel width in pixels.',
             default = chat.DEFAULT_WIDTH, minValue = 240, maxValue = 1200, valueStep = 10,
             get = function() return db().width end,
@@ -228,7 +226,7 @@ function chat:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Scale', desc = 'Overall panel scale.',
             default = 1, minValue = 0.5, maxValue = 2, valueStep = 0.05,
             get = function() return db().scale end,
@@ -238,7 +236,7 @@ function chat:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Active Opacity', desc = 'Panel opacity while at least one message is visible.',
             default = 1, minValue = 0.1, maxValue = 1, valueStep = 0.05,
             get = function() return db().activeOpacity end,
@@ -248,7 +246,7 @@ function chat:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Background Opacity', desc = 'Panel opacity after all visible messages fade.',
             default = 0, minValue = 0, maxValue = 1, valueStep = 0.05,
             get = function() return db().backgroundOpacity end,
@@ -259,7 +257,7 @@ function chat:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Slider,
+            kind = EditMode.SettingType.Slider,
             name = 'Fade Delay', desc = 'Seconds each message remains visible before fading.',
             default = 15, minValue = 0, maxValue = 60, valueStep = 1,
             get = function() return db().fadeDelay end,
@@ -269,7 +267,7 @@ function chat:BuildPanel()
             end,
         },
         {
-            kind = LibEditMode.SettingType.Dropdown,
+            kind = EditMode.SettingType.Dropdown,
             name = 'Message Font', desc = 'Font used for message text.',
             default = 'Arial Narrow',
             values = (function()
@@ -288,7 +286,7 @@ function chat:BuildPanel()
         },
     })
 
-    LibEditMode:RegisterCallback('layout', function(layoutName)
+    EditMode:RegisterCallback('layout', function(layoutName)
         local pos = db().positions[layoutName]
         frame:ClearAllPoints()
         if pos then
