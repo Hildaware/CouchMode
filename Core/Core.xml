@@ -9,6 +9,7 @@
     <Include file = 'Components/CatalogView.lua' />
     <Include file = 'Components/Metal.lua' />
     <Include file = 'Components/GamepadLegend.lua' />
+    <Include file = 'Components/UnitFrame.lua' />
     <Include file = 'StatusBarBase.lua' />
     <Include file = 'QuestUtils.lua' />
     <Include file = 'TRPUtils.lua' />

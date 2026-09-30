@@ -12,9 +12,35 @@ local CACHE_TTL = 300
 local inspectCache = {} -- [guid] = { specName, specIcon, time }
 local lastInspect = 0
 
+local function getPlayerSpecializationIndex()
+    if C_SpecializationInfo and C_SpecializationInfo.GetSpecialization then
+        return C_SpecializationInfo.GetSpecialization()
+    end
+    if GetSpecialization then return GetSpecialization() end
+end
+
+local function getSpecializationInfo(index)
+    if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
+        return C_SpecializationInfo.GetSpecializationInfo(index)
+    end
+    if GetSpecializationInfo then return GetSpecializationInfo(index) end
+end
+
+local function getInspectSpecialization(unit)
+    if C_SpecializationInfo and C_SpecializationInfo.GetInspectSpecialization then
+        return C_SpecializationInfo.GetInspectSpecialization(unit)
+    end
+    if GetInspectSpecialization then return GetInspectSpecialization(unit) end
+end
+
+local function hasInspectSpecialization()
+    return (C_SpecializationInfo and C_SpecializationInfo.GetInspectSpecialization) or GetInspectSpecialization
+end
+
 local function cacheSpec(guid, unit)
-    local specID = GetInspectSpecialization(unit)
-    if not specID or specID <= 0 then return end
+    if not hasInspectSpecialization() or not GetSpecializationInfoByID then return end
+    local specID = getInspectSpecialization(unit)
+    if isSecretValue(specID) or not specID or specID <= 0 then return end
     local _, specName, _, specIcon = GetSpecializationInfoByID(specID)
     if not specName then return end
     inspectCache[guid] = { specName = specName, specIcon = specIcon, time = GetTime() }
@@ -35,10 +61,10 @@ end
 
 local function getSpecData(unit)
     -- Self: read directly, no inspect needed.
-    if UnitIsUnit(unit, "player") then
-        local idx = GetSpecialization()
+    if unit == "player" or (UnitIsUnit and UnitIsUnit(unit, "player")) then
+        local idx = getPlayerSpecializationIndex()
         if idx then
-            local _, name, _, icon = GetSpecializationInfo(idx)
+            local _, name, _, icon = getSpecializationInfo(idx)
             if name then return { specName = name, specIcon = icon } end
         end
         return nil
@@ -46,16 +72,17 @@ local function getSpecData(unit)
 
     -- Others: look up the GUID cache populated by INSPECT_READY.
     local guid = UnitGUID(unit)
-    if guid and isSecretValue(guid) then return nil end
-    return guid and inspectCache[guid] or nil
+    if isSecretValue(guid) or not guid then return nil end
+    return inspectCache[guid]
 end
 
 local function requestInspect(unit)
+    if not (NotifyInspect and hasInspectSpecialization() and GetSpecializationInfoByID) then return end
     if not UnitIsPlayer(unit) then return end
-    if not CanInspect(unit) then return end
+    if CanInspect and not CanInspect(unit) then return end
     local now = GetTime()
     local guid = UnitGUID(unit)
-    if not guid or isSecretValue(guid) then return end
+    if isSecretValue(guid) or not guid then return end
     local cached = inspectCache[guid]
     if cached and now - cached.time <= CACHE_TTL then return end
     if now - lastInspect < INSPECT_THROTTLE then return end
