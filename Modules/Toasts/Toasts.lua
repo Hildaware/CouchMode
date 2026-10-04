@@ -84,6 +84,10 @@ local JUNK_SYSTEM_MESSAGES = {
         fallbacks = { 'Out of range' },
     },
     {
+        globals = { 'ERR_OUT_OF_MANA', 'LE_GAME_ERR_OUT_OF_MANA', 'ERR_SPELL_FAILED_NOT_ENOUGH_MANA' },
+        fallbacks = { 'Not enough Mana' },
+    },
+    {
         globals = { 'ERR_NOT_WHILE_MOVING', 'ERR_CANT_DO_THAT_WHILE_MOVING' },
         fallbacks = { "Can't do that while moving" },
     },

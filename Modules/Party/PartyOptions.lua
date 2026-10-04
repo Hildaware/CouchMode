@@ -10,6 +10,7 @@ function party:GetDefaults()
         party = {
             enabled = true,
             showWhileSolo = false,
+            smoothBars = true,
             width = 430,
             scale = 1,
             positions = {},
@@ -51,11 +52,23 @@ function party:GetOptions()
                     party:QueueProtectedState()
                 end,
             },
+            smoothBars = {
+                name = 'Smooth health and power bars',
+                desc = 'Ease health and power changes over time instead of snapping to each new value.',
+                type = 'toggle',
+                order = 4,
+                disabled = function() return not db().enabled end,
+                get = function() return db().smoothBars end,
+                set = function(_, value)
+                    db().smoothBars = value
+                    party:RefreshAll()
+                end,
+            },
             preview = {
                 name = 'Preview',
                 desc = 'Toggle sample party frames on screen, even while solo.',
                 type = 'execute',
-                order = 4,
+                order = 5,
                 disabled = function() return not db().enabled end,
                 func = function() party:TogglePreview() end,
             },

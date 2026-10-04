@@ -6,12 +6,16 @@ local isSecret = addon.Utils.IsSecretValue
 local BAR_BACKGROUND_ATLAS = 'UI-CastingBar-Background'
 local BAR_BORDER_ATLAS = 'UI-CastingBar-Frame'
 local BAR_FILL_ATLAS = 'ui-castingbar-tier4-empower'
-local PORTRAIT_BORDER_ATLAS = 'UI-HUD-Minimap-Frame-Circle'
+local PORTRAIT_BORDER_ATLAS = 'hud-PlayerFrame-portraitring-large'
+local PORTRAIT_WHIRL_ATLAS = 'ArtifactsFX-Whirls'
 local RING_BORDER_ATLAS = 'gamepad-actionbar-circleslot-border-selected'
 local BAR_FALLBACK_TEXTURE = 'Interface\\AddOns\\CouchMode\\Resources\\Media\\basic_bar.tga'
 local WHITE_TEXTURE = 'Interface\\Buttons\\WHITE8X8'
 local CLASS_TEXTURE = 'Interface\\GLUES\\CHARACTERCREATE\\UI-CHARACTERCREATE-CLASSES'
 local PORTRAIT_SIZE = 66
+local PORTRAIT_WHIRL_SIZE = 96
+local PORTRAIT_WHIRL_ROTATION_DURATION = 12
+local PORTRAIT_WHIRL_FADE_DURATION = 0.3
 local AURA_SIZE = 19
 local AURA_GAP = 3
 local AURAS_PER_ROW = 4
@@ -28,14 +32,42 @@ if C_CurveUtil and C_CurveUtil.CreateCurve then
     percentCurve:AddPoint(1, 100)
 end
 
+local function setStatusBarValue(statusBar, value, smooth)
+    local interpolation = Enum and Enum.StatusBarInterpolation
+    if interpolation then
+        local mode = smooth and interpolation.ExponentialEaseOut or interpolation.Immediate
+        if mode ~= nil then
+            statusBar:SetValue(value, mode)
+            return
+        end
+    end
+    statusBar:SetValue(value)
+end
+
+local function smoothBarsEnabled()
+    local profile = addon.db and addon.db.profile
+    return profile and profile.party and profile.party.smoothBars == true
+end
+
 local function hasAtlas(atlas)
     return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas) ~= nil
 end
 
+local function makeAtlasTexture(parent, atlas, layer)
+    if not hasAtlas(atlas) then
+        return nil
+    end
+
+    local texture = parent:CreateTexture(nil, layer)
+    texture:SetAtlas(atlas)
+    return texture
+end
+
 local function makeAtlasBorder(parent, size, atlas)
-    if not hasAtlas(atlas) then return nil end
-    local border = parent:CreateTexture(nil, 'OVERLAY')
-    border:SetAtlas(atlas)
+    local border = makeAtlasTexture(parent, atlas, 'OVERLAY')
+    if not border then
+        return nil
+    end
     border:SetSize(size, size)
     return border
 end
@@ -61,13 +93,13 @@ local function makeBar(parent, height, color)
     bar:SetAllPoints(group)
     bar:SetStatusBarTexture(BAR_FALLBACK_TEXTURE)
     local fill = bar:GetStatusBarTexture()
-    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(BAR_FILL_ATLAS) then
+    if hasAtlas(BAR_FILL_ATLAS) then
         fill:SetAtlas(BAR_FILL_ATLAS)
     end
     bar:SetStatusBarColor(unpack(color))
     bar:SetMinMaxValues(0, 100)
     bar:SetValue(0)
-    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(BAR_BACKGROUND_ATLAS) then
+    if hasAtlas(BAR_BACKGROUND_ATLAS) then
         background:SetAtlas(BAR_BACKGROUND_ATLAS)
     else
         background:SetColorTexture(0.04, 0.05, 0.06, 0.9)
@@ -75,12 +107,10 @@ local function makeBar(parent, height, color)
     local borderFrame = CreateFrame('Frame', nil, group)
     borderFrame:SetAllPoints(group)
     borderFrame:SetFrameLevel(bar:GetFrameLevel() + 1)
-    local border = borderFrame:CreateTexture(nil, 'OVERLAY')
-    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(BAR_BORDER_ATLAS) then
-        border:SetAtlas(BAR_BORDER_ATLAS)
+    local border = makeAtlasTexture(borderFrame, BAR_BORDER_ATLAS, 'OVERLAY')
+    if border then
         border:SetAllPoints(bar)
     else
-        border:Hide()
         local edges = {}
         for i = 1, 4 do
             local edge = borderFrame:CreateTexture(nil, 'OVERLAY')
@@ -153,15 +183,22 @@ local function getAuras(unit, filter)
 end
 
 local function percentText(label, unit, current, maximum, kind, powerType)
-    if percentCurve and kind == 'health' and UnitHealthPercent then
-        label:SetFormattedText('%d%%', UnitHealthPercent(unit, true, percentCurve))
-    elseif percentCurve and kind == 'power' and UnitPowerPercent then
-        label:SetFormattedText('%d%%', UnitPowerPercent(unit, powerType, false, percentCurve))
-    elseif not isSecret(current) and not isSecret(maximum) and maximum > 0 then
-        label:SetFormattedText('%d%%', math.floor(current / maximum * 100 + 0.5))
-    else
-        label:SetText('')
+    if percentCurve then
+        if kind == 'health' and UnitHealthPercent then
+            label:SetFormattedText('%d%%', UnitHealthPercent(unit, true, percentCurve))
+            return
+        elseif kind == 'power' and UnitPowerPercent then
+            label:SetFormattedText('%d%%', UnitPowerPercent(unit, powerType, false, percentCurve))
+            return
+        end
     end
+
+    if not isSecret(current) and not isSecret(maximum) and maximum > 0 then
+        label:SetFormattedText('%d%%', math.floor(current / maximum * 100 + 0.5))
+        return
+    end
+
+    label:SetText('')
 end
 
 local function showAuraRow(frame, icons, filters)
@@ -203,6 +240,43 @@ end
 
 local UnitFrameMixin = {}
 
+function UnitFrameMixin:SetPortraitWhirlActive(active)
+    if not self.portraitWhirl or self.portraitWhirlActive == active then
+        return
+    end
+
+    self.portraitWhirlActive = active
+    local targetAlpha = active and 1 or 0
+    local currentAlpha = self.portraitWhirl:GetAlpha()
+    self.portraitWhirlFade:Stop()
+    self.portraitWhirl:SetAlpha(currentAlpha)
+
+    if active then
+        self.portraitWhirlAnimation:Play()
+    end
+
+    if currentAlpha == targetAlpha then
+        if not active then
+            self.portraitWhirlAnimation:Stop()
+        end
+        return
+    end
+
+    self.portraitWhirlFadeTarget = targetAlpha
+    self.portraitWhirlFadeAlpha:SetFromAlpha(currentAlpha)
+    self.portraitWhirlFadeAlpha:SetToAlpha(targetAlpha)
+    self.portraitWhirlFade:Play()
+end
+
+function UnitFrameMixin:UpdateCombat()
+    local inCombat = false
+    if not self.preview and self.unit and UnitExists(self.unit) and UnitAffectingCombat then
+        local affectingCombat = UnitAffectingCombat(self.unit)
+        inCombat = not isSecret(affectingCombat) and affectingCombat == true
+    end
+    self:SetPortraitWhirlActive(inCombat)
+end
+
 function UnitFrameMixin:UpdatePercentVisibility()
     local visible = self.preview or self:IsMouseOver()
     if not visible and UnitExists('target') and UnitIsUnit then
@@ -215,7 +289,9 @@ function UnitFrameMixin:UpdatePercentVisibility()
 end
 
 function UnitFrameMixin:ApplyLayout(width, height)
-    if InCombatLockdown and InCombatLockdown() then return false end
+    if InCombatLockdown and InCombatLockdown() then
+        return false
+    end
     self:SetSize(width, height)
     local barWidth = width - BAR_LEFT - BAR_RIGHT_GAP - AURA_WIDTH - 5 - BAR_WIDTH_REDUCTION
     self.name:SetWidth(width - NAME_LEFT - BAR_RIGHT_GAP - AURA_WIDTH - 5)
@@ -233,12 +309,24 @@ function UnitFrameMixin:ApplyLayout(width, height)
 end
 
 function UnitFrameMixin:UpdateIdentity()
-    if self.preview then return end
+    if self.preview then
+        return
+    end
     local unit = self.unit
     if not unit or not UnitExists(unit) then return end
     self.name:SetText(UnitName(unit))
     self.levelText:SetFormattedText('%d', UnitLevel(unit))
     SetPortraitTexture(self.portrait, unit)
+
+    local _, class = UnitClass(unit)
+    local classColor = not isSecret(class) and class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class]
+    if self.portraitWhirl then
+        if classColor then
+            self.portraitWhirl:SetVertexColor(classColor.r, classColor.g, classColor.b)
+        else
+            self.portraitWhirl:SetVertexColor(1, 1, 1)
+        end
+    end
 
     self.markerIcon:SetTexCoord(0, 1, 0, 1)
     local specIcon = self.resolveSpecIcon and self.resolveSpecIcon(unit)
@@ -248,7 +336,6 @@ function UnitFrameMixin:UpdateIdentity()
         return
     end
 
-    local _, class = UnitClass(unit)
     if not isSecret(class) and class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class] then
         self.markerIcon:SetTexture(CLASS_TEXTURE)
         self.markerIcon:SetTexCoord(unpack(CLASS_ICON_TCOORDS[class]))
@@ -269,12 +356,14 @@ function UnitFrameMixin:UpdateIdentity()
 end
 
 function UnitFrameMixin:UpdateHealth()
-    if self.preview then return end
+    if self.preview then
+        return
+    end
     local unit = self.unit
     if not unit or not UnitExists(unit) then return end
     local current, maximum = UnitHealth(unit), UnitHealthMax(unit)
     self.healthBar:SetMinMaxValues(0, maximum)
-    self.healthBar:SetValue(current)
+    setStatusBarValue(self.healthBar, current, smoothBarsEnabled())
     self.portrait:SetDesaturated(false)
 
     local connected = UnitIsConnected(unit)
@@ -293,13 +382,15 @@ function UnitFrameMixin:UpdateHealth()
 end
 
 function UnitFrameMixin:UpdatePower()
-    if self.preview then return end
+    if self.preview then
+        return
+    end
     local unit = self.unit
     if not unit or not UnitExists(unit) then return end
     local powerType, powerToken = UnitPowerType(unit)
     local current, maximum = UnitPower(unit, powerType), UnitPowerMax(unit, powerType)
     self.powerBar:SetMinMaxValues(0, maximum)
-    self.powerBar:SetValue(current)
+    setStatusBarValue(self.powerBar, current, smoothBarsEnabled())
     if not isSecret(maximum) and maximum == 0 then
         self.powerText:SetText('')
     else
@@ -315,7 +406,9 @@ function UnitFrameMixin:UpdatePower()
 end
 
 function UnitFrameMixin:UpdateAuras()
-    if self.preview then return end
+    if self.preview then
+        return
+    end
     local unit = self.unit
     if not unit or not UnitExists(unit) then return end
     local filter = AuraUtil and AuraUtil.AuraFilters
@@ -331,11 +424,14 @@ function UnitFrameMixin:UpdateAuras()
 end
 
 function UnitFrameMixin:Refresh()
-    if self.preview then return end
+    if self.preview then
+        return
+    end
     self:UpdateIdentity()
     self:UpdateHealth()
     self:UpdatePower()
     self:UpdateAuras()
+    self:UpdateCombat()
     self:UpdatePercentVisibility()
 end
 
@@ -346,6 +442,7 @@ function UnitFrameMixin:SetPreview(enabled, label)
         self:Refresh()
         return
     end
+    self:UpdateCombat()
     self.name:SetText(label or self.unit or 'Party member')
     self.levelText:SetText('80')
     self.portrait:SetTexture('Interface\\Icons\\INV_Misc_QuestionMark')
@@ -412,6 +509,37 @@ function addon.UnitFrame.Create(parent, unit, opts)
     frame.portraitGroup = portraitGroup
     local portraitBorder = makeAtlasBorder(portraitGroup, 88, PORTRAIT_BORDER_ATLAS)
     if portraitBorder then portraitBorder:SetPoint('CENTER', portraitGroup, 'CENTER') end
+    frame.portraitWhirl = makeAtlasTexture(portraitGroup, PORTRAIT_WHIRL_ATLAS, 'OVERLAY')
+    if frame.portraitWhirl then
+        frame.portraitWhirl:SetDrawLayer('OVERLAY', 1)
+        frame.portraitWhirl:SetSize(PORTRAIT_WHIRL_SIZE, PORTRAIT_WHIRL_SIZE)
+        frame.portraitWhirl:SetPoint('CENTER', portraitGroup, 'CENTER')
+        frame.portraitWhirl:SetDesaturated(true)
+        frame.portraitWhirl:SetBlendMode('ADD')
+        frame.portraitWhirl:SetAlpha(0)
+
+        local animation = frame.portraitWhirl:CreateAnimationGroup()
+        animation:SetLooping('REPEAT')
+        local rotation = animation:CreateAnimation('Rotation')
+        rotation:SetDegrees(-360)
+        rotation:SetDuration(PORTRAIT_WHIRL_ROTATION_DURATION)
+        rotation:SetSmoothing('NONE')
+        frame.portraitWhirlAnimation = animation
+
+        local fade = frame.portraitWhirl:CreateAnimationGroup()
+        fade:SetToFinalAlpha(true)
+        local fadeAlpha = fade:CreateAnimation('Alpha')
+        fadeAlpha:SetDuration(PORTRAIT_WHIRL_FADE_DURATION)
+        fadeAlpha:SetSmoothing('IN_OUT')
+        fade:SetScript('OnFinished', function()
+            frame.portraitWhirl:SetAlpha(frame.portraitWhirlFadeTarget or 0)
+            if not frame.portraitWhirlActive then
+                frame.portraitWhirlAnimation:Stop()
+            end
+        end)
+        frame.portraitWhirlFade = fade
+        frame.portraitWhirlFadeAlpha = fadeAlpha
+    end
     local portraitOuter
     if not portraitBorder then
         portraitOuter = makeCircle(portraitGroup, 84, { 0.62, 0.49, 0.30, 1 })

@@ -6,6 +6,8 @@ For current Blizzard UI implementation details, use the extracted client source 
 
 Consult it when developing or debugging CouchMode's WoW UI and gamepad integrations.
 
+`Texture:SetDrawLayer` sublevels must be between `-8` and `7`, inclusive. Values outside this range throw an error.
+
 # Testing
 
 We do not write tests for this project.

@@ -297,6 +297,7 @@ function party:OnUnitEvent(event, unit)
     if not frame then return end
     if event == 'UNIT_HEALTH' or event == 'UNIT_MAXHEALTH' or event == 'UNIT_CONNECTION' or event == 'UNIT_FLAGS' then
         frame:UpdateHealth()
+        if event == 'UNIT_FLAGS' then frame:UpdateCombat() end
     elseif event == 'UNIT_POWER_UPDATE' or event == 'UNIT_MAXPOWER' or event == 'UNIT_DISPLAYPOWER' then
         frame:UpdatePower()
     elseif event == 'UNIT_AURA' then
