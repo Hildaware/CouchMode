@@ -5,4 +5,8 @@
     <Include file='Feed.lua'/>
     <Include file='Mock.lua'/>
     <Include file='Toasts.lua'/>
+    <Include file='ToastsEvents.lua'/>
+    <Include file='ToastsPanel.lua'/>
+    <Include file='ToastsOptions.lua'/>
+    <Include file='ToastsCommands.lua'/>
 </UI>
