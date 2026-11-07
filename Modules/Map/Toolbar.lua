@@ -44,19 +44,24 @@ local function wrap_blizz_btn(btn, blizz, on_click)
     btn:SetScript("OnClick", on_click)
 end
 
-local function useNativeCompartmentButton(btn, blizz)
-    -- Keep the Blizzard dropdown's intrinsic mouse handler on Forever. Forwarding
-    -- the click from our addon button taints the gamepad menu focus transition.
+local function useNativeToolbarButton(btn, blizz, clickTarget)
+    -- Keep Blizzard's mouse handlers and menu anchors on Forever. Forwarding a
+    -- click through addon code taints menu state read by gamepad focus cleanup.
+    -- Tracking's DropdownButton is a child of its decorative container.
+    clickTarget = clickTarget or blizz
     blizz:ClearAllPoints()
     blizz:SetSize(btn:GetSize())
     blizz:SetPoint("CENTER", btn, "CENTER")
     blizz:SetFrameStrata(btn:GetFrameStrata())
     blizz:SetFrameLevel(btn:GetFrameLevel() + 1)
     blizz:SetAlpha(0)
-    blizz:EnableMouse(true)
+    blizz:EnableMouse(clickTarget == blizz)
+    clickTarget:SetSize(btn:GetSize())
+    clickTarget:EnableMouse(true)
     blizz:SetShown(btn:IsVisible())
 
     btn:SetScript("OnClick", nil)
+    btn:EnableMouse(false)
     btn:HookScript("OnShow", function() blizz:Show() end)
     btn:HookScript("OnHide", function() blizz:Hide() end)
 end
@@ -70,6 +75,10 @@ local function minimap_defs()
             tooltip = "Tracking",
             blizz = map.blizzTracking,
             setup = function(btn, blizz)
+                if addon.Utils.IsFlavor('forever') then
+                    useNativeToolbarButton(btn, blizz, blizz.Button)
+                    return
+                end
                 blizz.Button:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
                 blizz.Button:EnableMouse(false)
                 local is_open = false
@@ -88,7 +97,7 @@ local function minimap_defs()
             blizz = map.blizzCompartment,
             setup = function(btn, blizz)
                 if addon.Utils.IsFlavor('forever') then
-                    useNativeCompartmentButton(btn, blizz)
+                    useNativeToolbarButton(btn, blizz)
                 else
                     blizz:SetMenuAnchor(AnchorUtil.CreateAnchor("BOTTOMLEFT", btn, "TOPLEFT", 0, 2)) ---@diagnostic disable-line: undefined-global
                     local is_open = false
@@ -107,7 +116,11 @@ local function minimap_defs()
             tooltip = "Calendar",
             blizz = map.blizzCalendar,
             setup = function(btn, blizz)
-                wrap_blizz_btn(btn, blizz, function() _G.GameTimeFrame_OnClick(blizz) end) ---@diagnostic disable-line: undefined-global
+                if addon.Utils.IsFlavor('forever') then
+                    useNativeToolbarButton(btn, blizz)
+                else
+                    wrap_blizz_btn(btn, blizz, function() _G.GameTimeFrame_OnClick(blizz) end) ---@diagnostic disable-line: undefined-global
+                end
             end
         },
     }

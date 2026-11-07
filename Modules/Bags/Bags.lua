@@ -42,6 +42,12 @@ bags.status      = {}
 ---@field FocusedNode Enums.InventoryType?
 bags.bags        = {}
 
+local function nativeGamepadEnabled()
+    return addon.Utils.IsFlavor('forever')
+        and _G.InputUtil and InputUtil.IsGamepadUIEnabled
+        and InputUtil.IsGamepadUIEnabled()
+end
+
 function bags:OnInitialize()
     bags.status = {
         backpackShouldOpen = false,
@@ -78,6 +84,7 @@ function bags:OnInitialize()
 end
 
 function bags:OnDisable()
+    self.nativeBagTogglePending = nil
     if bags.bags.Inventory then
         bags.bags.Inventory:Hide()
         bags.bags.Inventory = nil
@@ -101,8 +108,11 @@ function bags:OnEnable()
     table.insert(UISpecialFrames, bags.bags.Inventory:GetName())
     table.insert(UISpecialFrames, bags.bags.Bank:GetName())
 
-    self:SecureHook('ToggleAllBags')
-    self:SecureHook('ToggleBackpack')
+    self:SecureHook('ToggleAllBags', 'OnNativeBagToggle')
+    self:SecureHook('ToggleBackpack', 'OnNativeBagToggle')
+    if addon.Utils.IsFlavor('forever') and type(_G.ToggleBackpack_Combined) == 'function' then
+        self:SecureHook('ToggleBackpack_Combined', 'OnNativeCombinedBagToggle')
+    end
     self:SecureHook('CloseSpecialWindows')
     self:SecureHook('OpenAllBags')
     self:SecureHook('CloseAllBags')
@@ -124,6 +134,29 @@ function bags:OnEnable()
 
     events:Register('ConsoleBagsBankToggle', bags.OnBankUpdate)
     events:Register('ConsoleBagsToggle', bags.OnUpdate)
+end
+
+function bags:OnNativeCombinedBagToggle()
+    if nativeGamepadEnabled() then self:OnNativeBagToggle() end
+end
+
+function bags:OnNativeBagToggle()
+    if not nativeGamepadEnabled() then
+        self:ToggleAllBags()
+        return
+    end
+
+    -- The radial calls ToggleBackpack_Combined directly; the regular toggle
+    -- functions also call it. Coalesce their post-hooks and let the radial
+    -- finish removing its bindings before opening our panel.
+    if self.nativeBagTogglePending then return end
+    local request = {}
+    self.nativeBagTogglePending = request
+    C_Timer.After(0, function()
+        if self.nativeBagTogglePending ~= request then return end
+        self.nativeBagTogglePending = nil
+        if self:IsEnabled() and self.bags.Inventory then self:ToggleAllBags() end
+    end)
 end
 
 function bags.OnBankUpdate()

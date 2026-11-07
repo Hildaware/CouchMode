@@ -111,16 +111,25 @@ end
 function view.proto:SetupNativeGamepadFooter()
     if self.gamepadFooter or not _G.GamepadSharedUtility then return end
 
-    local select = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_BOTTOM, GenerateFlatClosure(SmartNavigation.Click, SmartNavigation), ACTION_LABEL_SELECT)
+    -- Forever's binding stack reads addon-created binding sets without a secure
+    -- boundary when restoring native controls. Keep this footer visual-only and
+    -- put custom actions on our own override owner instead of UIParent's stack.
+    local isolated = addon.Utils.IsFlavor('forever')
+    local selectAction, useAction
+    if not isolated then
+        selectAction = GenerateFlatClosure(SmartNavigation.Click, SmartNavigation)
+        useAction = GenerateFlatClosure(SmartNavigation.RightClick, SmartNavigation)
+    end
+    local select = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_BOTTOM, selectAction, ACTION_LABEL_SELECT)
     select:AddButtonContext(ITEM_BUTTON_CONTEXT)
     select:AddCondition(CurrentItemButton)
 
-    local use = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_LEFT, GenerateFlatClosure(SmartNavigation.RightClick, SmartNavigation), CONTEXT_ACTION_LABEL_USE)
+    local use = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_LEFT, useAction, CONTEXT_ACTION_LABEL_USE)
     use:SetVisibilityType(PromptedBindingMixin.VISIBILITY_TYPE.ONLY_IF_USABLE)
     use:AddButtonContext(ITEM_BUTTON_CONTEXT)
     use:AddCondition(IsUseItemActionValid)
 
-    local equip = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_LEFT, GenerateFlatClosure(SmartNavigation.RightClick, SmartNavigation), CONTEXT_ACTION_LABEL_EQUIP)
+    local equip = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_LEFT, useAction, CONTEXT_ACTION_LABEL_EQUIP)
     equip:SetVisibilityType(PromptedBindingMixin.VISIBILITY_TYPE.ONLY_IF_USABLE)
     equip:AddButtonContext(ITEM_BUTTON_CONTEXT)
     equip:AddCondition(IsEquipItemActionValid)
@@ -148,20 +157,82 @@ function view.proto:SetupNativeGamepadFooter()
         if item then C_Item.ConfirmDeleteItem(item:GetItemGUID()) end
     end)
 
-    local close = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_RIGHT, function()
-        SmartNavigation:AttemptClose()
-        self.gamepadFooter:Refresh()
-    end, FRAME_ACTION_CLOSE)
-
     local footer = GamepadSharedUtility.CreatePromptedBindingFooter(self.widget, 'CouchModeBagsFooter')
     footer:AddPromptedBinding(select)
     footer:AddPromptedBinding(use)
     footer:AddPromptedBinding(equip)
-    footer:AddPromptedBinding(more)
-    footer:AddStandardFrameControlManagerBindings(self.widget)
-    footer:AddPromptedBinding(close)
+    if isolated then
+        self.nativeMoreActions = more
+        local morePrompt = GamepadSharedUtility.CreatePromptedBinding(GAMEPAD_FACE_TOP, nil, CONTEXT_ACTION_LABEL_MORE_ACTIONS)
+        morePrompt:SetVisibilityType(PromptedBindingMixin.VISIBILITY_TYPE.ONLY_IF_USABLE)
+        morePrompt:AddButtonContext(ITEM_BUTTON_CONTEXT)
+        morePrompt:AddCondition(CurrentItemButton)
+        footer:AddPromptedBinding(morePrompt)
+    else
+        footer:AddPromptedBinding(more)
+    end
+    -- Some Forever builds omit this prompt-only helper; the manager still
+    -- handles frame navigation without these trigger-button hints.
+    if footer.AddStandardFrameControlManagerBindings then
+        footer:AddStandardFrameControlManagerBindings(self.widget)
+    end
+    -- SmartNavigation already owns B and dispatches our close handler.
+    -- Display the prompt without overriding its binding or refreshing a footer
+    -- after the close handler has hidden it.
+    footer:AddStandardBackPrompt(FRAME_ACTION_CLOSE)
     footer:Finalize()
     self.gamepadFooter = footer
+end
+
+function view.proto:SetupNativeActionBindings()
+    if self.nativeActionOwner or InCombatLockdown() then return end
+    local name = self.widget:GetName() .. 'ActionBindings'
+    -- Keep the protected owner outside the bag hierarchy so it does not make
+    -- the bag frame protected. Combat clears overrides through a secure driver.
+    local owner = CreateFrame('Frame', name, UIParent, 'SecureHandlerStateTemplate')
+    owner:SetAttribute('_onstate-combat', [[
+        if newstate == 'combat' then self:ClearBindings() end
+    ]])
+    RegisterStateDriver(owner, 'combat', '[combat] combat; peace')
+    owner:RegisterEvent('PLAYER_REGEN_ENABLED')
+    owner:SetScript('OnEvent', function() self:RefreshNativeActionBindings() end)
+
+    local use = CreateFrame('Button', name .. 'Use', owner)
+    use:RegisterForClicks('AnyDown')
+    use:SetScript('OnClick', function()
+        if not self:IsNativeGamepadFocused() or InCombatLockdown() then return end
+        if CurrentItemButton() and (IsUseItemActionValid() or IsEquipItemActionValid()) then
+            securecallfunction(SmartNavigation.RightClick, SmartNavigation)
+        end
+    end)
+    local more = CreateFrame('Button', name .. 'More', owner)
+    more:RegisterForClicks('AnyDown', 'AnyUp')
+    more:SetScript('OnClick', function(_, _, down)
+        if not self:IsNativeGamepadFocused() or InCombatLockdown() then return end
+        if CurrentItemButton() then self.nativeMoreActions:TriggerBinding(1, down) end
+    end)
+    self.nativeActionOwner = owner
+    self.nativeUseButton = use
+    self.nativeMoreButton = more
+end
+
+function view.proto:IsNativeGamepadFocused()
+    if not HasNativeGamepadNavigation() or not self.widget:IsShown() then return false end
+    local manager = GamepadMode.FrameControlsManager
+    return manager.isUIFocused and manager:GetActiveFrame() == self.widget
+end
+
+function view.proto:RefreshNativeActionBindings()
+    if not addon.Utils.IsFlavor('forever') or InCombatLockdown() then return end
+    local focused = self:IsNativeGamepadFocused()
+    if focused and self.nativeMoreActions then self:SetupNativeActionBindings() end
+    local owner = self.nativeActionOwner
+    if not owner then return end
+    ClearOverrideBindings(owner)
+    if focused then
+        SetOverrideBindingClick(owner, true, GAMEPAD_FACE_LEFT, self.nativeUseButton:GetName(), 'LeftButton')
+        SetOverrideBindingClick(owner, true, GAMEPAD_FACE_TOP, self.nativeMoreButton:GetName(), 'LeftButton')
+    end
 end
 
 function view.proto:SetupGamepadNavigation()
@@ -193,6 +264,7 @@ function view.proto:SetupGamepadNavigation()
         if self.gamepadFooter then
             securecallfunction(self.gamepadFooter.HideAndDeactivateBindings, self.gamepadFooter)
         end
+        self:RefreshNativeActionBindings()
     end)
     f.SmartNavigationCloseHandler = function()
         if CursorHasItem() then
@@ -219,6 +291,7 @@ function view.proto:RefreshNativeGamepadFocus()
     elseif self.gamepadFooter then
         securecallfunction(self.gamepadFooter.HideAndDeactivateBindings, self.gamepadFooter)
     end
+    self:RefreshNativeActionBindings()
 end
 
 function view.proto:SmartNavPanelInfoAdded(_)

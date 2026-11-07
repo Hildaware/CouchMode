@@ -101,6 +101,27 @@ Methods on `addon.Chat` called from outside its source files:
 - `ChatBubbles` / `Core/Options.lua`: `Toggle`, `GetDefaults`, `GetOptions`,
   `RebuildOptions`, `HandleCommand`.
 
-# Current Issues (Can't be fixed as of WoW: Forever beta start 9/15/2026)
+# Current Issues (WoW: Forever native Gamepad UI)
 
-Internal Gamepad Mode doesn't properly work. It throws a (deep down) protected function call. This is only with gamepad mode enabled. Assume this is a BETA problem, so we can attempt to fix it as they patch the client.
+Native Gamepad UI can still reach protected Blizzard functions such as
+`SetPreferredGamepadInteractTarget()` from tainted menu, chat, or panel flows
+after launch. The final protected call is not necessarily where taint began.
+Some triggers can be avoided within CouchMode; a general client fix is not
+confirmed.
+
+On Forever, the minimap toolbar keeps Blizzard's native Tracking, Addons, and
+Calendar buttons as the actual click targets. Preserve their native mouse
+handlers and dropdown menu anchors rather than forwarding clicks through addon
+Lua. Validate changes in the client with Gamepad UI enabled, including opening
+menus, selecting entries, dismissing them by clicking outside, and switching
+between minimap and world-map toolbars. Lua syntax checks cannot establish that
+a protected-action error is fixed.
+
+The native bag footer on Forever must remain display-only. A detailed taint log
+showed addon-created footer binding groups writing to Blizzard's shared
+`InputBindingManager.activeBindings` during opening; restoring native controls
+on close then read those tainted entries. Keep A/B on SmartNavigation and X/Y
+on the bag view's separate override-binding owner. Clear those overrides on
+focus loss and through the secure combat state driver. Wrapping footer
+activation/deactivation in `securecallfunction` does not isolate tainted binding
+records stored in the shared stack.

@@ -645,7 +645,10 @@ function merchant:CreateNativeGamepadFooter()
     local footer = GamepadSharedUtility.CreatePromptedBindingFooter(self.catalog.frame, 'CouchModeMerchantFooter')
     footer:AddPromptedBinding(buy)
     footer:AddPromptedBinding(multiple)
-    footer:AddStandardFrameControlManagerBindings(self.catalog.frame)
+    -- Frame navigation works on builds without the optional prompt helper.
+    if footer.AddStandardFrameControlManagerBindings then
+        footer:AddStandardFrameControlManagerBindings(self.catalog.frame)
+    end
     footer:AddPromptedBinding(close)
     footer:Finalize()
     self.gamepadFooter = footer
