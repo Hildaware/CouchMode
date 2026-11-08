@@ -261,11 +261,15 @@ function map.createFrame()
     map.blizzCalendar = _G.GameTimeFrame ---@diagnostic disable-line: undefined-global
     map.blizzCalendar:SetParent(UIParent)
 
-    -- Rescue instance difficulty badge before hiding MinimapCluster
+    -- Rescue instance difficulty badge before hiding MinimapCluster.
+    -- Blizzard now creates this frame lazily (MinimapClusterMixin:CreateInstanceDifficultyFrame)
+    -- and omits it entirely on WoW: Forever, so it can legitimately be missing.
     map.blizzInstanceDifficulty = MinimapCluster.InstanceDifficulty ---@diagnostic disable-line: undefined-field
-    map.blizzInstanceDifficulty:SetParent(map.container)
-    map.blizzInstanceDifficulty:ClearAllPoints()
-    map.blizzInstanceDifficulty:SetPoint("TOPLEFT", map.container, "TOPLEFT", 4, -4)
+    if map.blizzInstanceDifficulty then
+        map.blizzInstanceDifficulty:SetParent(map.container)
+        map.blizzInstanceDifficulty:ClearAllPoints()
+        map.blizzInstanceDifficulty:SetPoint("TOPLEFT", map.container, "TOPLEFT", 4, -4)
+    end
 
     -- Rescue zone text button before hiding MinimapCluster
     map.blizzZoneText = MinimapCluster.ZoneTextButton ---@diagnostic disable-line: undefined-field
