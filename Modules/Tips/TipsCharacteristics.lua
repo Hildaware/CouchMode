@@ -104,7 +104,13 @@ function tips.buildCharacteristics()
                 self.classIconBorder:Show()
                 if specInfo then
                     self.classIcon:SetTexture(specInfo.specIcon)
-                    self.info:SetText(specInfo.specName .. " " .. (className or ""))
+                    -- Unspecialized players can report their class as the spec name.
+                    local specName = specInfo.specName
+                    if className and specName and specName ~= "" and specName ~= className then
+                        self.info:SetText(specName .. " " .. className)
+                    else
+                        self.info:SetText(className or specName or "")
+                    end
                 else
                     self.classIcon:SetAtlas("BfAMission-Icon-Normal")
                     self.info:SetText(className or "")
