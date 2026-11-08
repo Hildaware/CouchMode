@@ -1,8 +1,60 @@
 # Lib: EditMode
 
-## [15](https://github.com/p3lim-wow/LibEditMode/tree/15) (2026-02-10)
-[Full Changelog](https://github.com/p3lim-wow/LibEditMode/commits/15) [Previous Releases](https://github.com/p3lim-wow/LibEditMode/releases)
+## [19](https://github.com/p3lim-wow/LibEditMode/tree/19) (2026-11-03)
+[Full Changelog](https://github.com/p3lim-wow/LibEditMode/commits/19) [Previous Releases](https://github.com/p3lim-wow/LibEditMode/releases)
 
+- Bump version  
+- Update Interface version (#88)  
+    Co-authored-by: p3lim <26496+p3lim@users.noreply.github.com>  
+- Add position dialog (#89)  
+- Bump version  
+- Further fixes for extra base layouts  
+    Made it a little easier to extend should that be necessary in the future  
+- Bump version  
+- Damnit  
+- Bump version  
+- Gotta fix it anyways..  
+- Don't break my script  
+- Limit where it can load when unembedded  
+- Account for gamepad stock layout on Forever  
+- Update Interface version (#87)  
+    Co-authored-by: p3lim <26496+p3lim@users.noreply.github.com>  
+- Update TOC for all flavors that has edit mode  
+- Bump actions/checkout from 6 to 7 (#84)  
+    Bumps [actions/checkout](https://github.com/actions/checkout) from 6 to 7.  
+    - [Release notes](https://github.com/actions/checkout/releases)  
+    - [Changelog](https://github.com/actions/checkout/blob/main/CHANGELOG.md)  
+    - [Commits](https://github.com/actions/checkout/compare/v6...v7)  
+    ---  
+    updated-dependencies:  
+    - dependency-name: actions/checkout  
+      dependency-version: '7'  
+      dependency-type: direct:production  
+      update-type: version-update:semver-major  
+    ...  
+    Signed-off-by: dependabot[bot] <support@github.com>  
+    Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>  
+- Update Interface version (#85)  
+    Co-authored-by: p3lim <26496+p3lim@users.noreply.github.com>  
+- Refresh selection  
+    Fixes #86  
+- Update Interface version (#83)  
+    Co-authored-by: p3lim <26496+p3lim@users.noreply.github.com>  
+- Bump actions/upload-artifact from 6 to 7 (#82)  
+    Bumps [actions/upload-artifact](https://github.com/actions/upload-artifact) from 6 to 7.  
+    - [Release notes](https://github.com/actions/upload-artifact/releases)  
+    - [Commits](https://github.com/actions/upload-artifact/compare/v6...v7)  
+    ---  
+    updated-dependencies:  
+    - dependency-name: actions/upload-artifact  
+      dependency-version: '7'  
+      dependency-type: direct:production  
+      update-type: version-update:semver-major  
+    ...  
+    Signed-off-by: dependabot[bot] <support@github.com>  
+    Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>  
+- Update Interface version (#81)  
+    Co-authored-by: p3lim <26496+p3lim@users.noreply.github.com>  
 - Bump version  
 - Make LibStub optional  
 - Only call :Layout() when frames are shown (#79)  
@@ -166,35 +218,3 @@
 - Don't waste minutes  
 - :lipstick:  
 - :lipstick:  
-- :lipstick:  
-- :lipstick:  
-- :lipstick:  
-- Rearrange for docs cohesiveness  
-- Re-add docs for the deprecated method but mark it  
-- Make extension settings divider dynamic  
-- Add method to add multiple buttons at once  
-- Overlap system dialogs so they look unified  
-- Fix system dialog width  
-- Add test case for system settings  
-- Oops  
-- It bothers me so much...  
-- Move DropdownOption after Dropdown  
-- Reset position belongs in .Buttons  
-- Add extension to blizz settings (#37)  
-- Add divider widget (#36)  
-- Bump actions/upload-artifact from 4 to 5 (#35)  
-    Bumps [actions/upload-artifact](https://github.com/actions/upload-artifact) from 4 to 5.  
-    - [Release notes](https://github.com/actions/upload-artifact/releases)  
-    - [Commits](https://github.com/actions/upload-artifact/compare/v4...v5)  
-    ---  
-    updated-dependencies:  
-    - dependency-name: actions/upload-artifact  
-      dependency-version: '5'  
-      dependency-type: direct:production  
-      update-type: version-update:semver-major  
-    ...  
-    Signed-off-by: dependabot[bot] <support@github.com>  
-    Co-authored-by: dependabot[bot] <49699333+dependabot[bot]@users.noreply.github.com>  
-- Prevent combat errors from protected API  
-- Prevent OnDragStop from erroring  
-- Stop dragging if the player enters combat  
