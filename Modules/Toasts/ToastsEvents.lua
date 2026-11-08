@@ -32,12 +32,28 @@ local WEAPON_SKILL_ICONS = {
 -- messages whose global-string name differs between client flavors.
 local JUNK_SYSTEM_MESSAGES = {
     {
+        globals = { 'ERR_ABILITY_COOLDOWN' },
+        fallbacks = { 'Ability is not ready yet' },
+    },
+    {
+        globals = { 'ERR_SPELL_COOLDOWN' },
+        fallbacks = { 'Spell is not ready yet.' },
+    },
+    {
         globals = { 'ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS', 'LE_GAME_ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS' },
         fallbacks = { 'Another action is in progress' },
     },
     {
         globals = { 'ERR_GENERIC_NO_TARGET', 'LE_GAME_ERR_GENERIC_NO_TARGET' },
         fallbacks = { 'You have no target' },
+    },
+    {
+        globals = { 'ERR_NO_ATTACK_TARGET' },
+        fallbacks = { 'There is nothing to attack' },
+    },
+    {
+        globals = { 'ERR_INVALID_ATTACK_TARGET' },
+        fallbacks = { 'You cannot attack that target' },
     },
     {
         globals = { 'ERR_INVALID_TARGET', 'ERR_GENERIC_INVALID_TARGET', 'LE_GAME_ERR_GENERIC_NO_VALID_TARGETS' },
