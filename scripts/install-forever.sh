@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-# Install this checkout into the WoW Forever beta client. Pass the WoW install
+# Install this checkout into the WoW Forever client. Pass the WoW install
 # directory as the first argument to use a non-default installation location.
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 wow_dir="${1:-/Applications/World of Warcraft}"
-addon_dir="${wow_dir}/_classic_beta_/Interface/AddOns/CouchMode"
+addon_dir="${wow_dir}/_forever_/Interface/AddOns/CouchMode"
 
-if [[ ! -d "${wow_dir}/_classic_beta_" ]]; then
-    printf 'WoW Forever beta client was not found at: %s\n' "${wow_dir}/_classic_beta_" >&2
+if [[ ! -d "${wow_dir}/_forever_" ]]; then
+    printf 'WoW Forever client was not found at: %s\n' "${wow_dir}/_forever_" >&2
     printf 'Usage: %s [path-to-World-of-Warcraft]\n' "$0" >&2
     exit 1
 fi
