@@ -40,6 +40,10 @@ local JUNK_SYSTEM_MESSAGES = {
         fallbacks = { 'Spell is not ready yet.' },
     },
     {
+        globals = { 'ERR_ITEM_COOLDOWN' },
+        fallbacks = { 'Item is not ready yet' },
+    },
+    {
         globals = { 'ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS', 'LE_GAME_ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS' },
         fallbacks = { 'Another action is in progress' },
     },
@@ -56,16 +60,43 @@ local JUNK_SYSTEM_MESSAGES = {
         fallbacks = { 'You cannot attack that target' },
     },
     {
-        globals = { 'ERR_INVALID_TARGET', 'ERR_GENERIC_INVALID_TARGET', 'LE_GAME_ERR_GENERIC_NO_VALID_TARGETS' },
-        fallbacks = { 'Invalid Target' },
+        globals = {
+            'ERR_INVALID_TARGET', 'ERR_GENERIC_INVALID_TARGET',
+            'ERR_GENERIC_NO_VALID_TARGETS', 'LE_GAME_ERR_GENERIC_NO_VALID_TARGETS',
+        },
+        fallbacks = { 'Invalid Target', 'No valid targets' },
     },
     {
-        globals = { 'ERR_OUT_OF_RANGE', 'LE_GAME_ERR_OUT_OF_RANGE' },
+        globals = { 'ERR_OUT_OF_RANGE', 'LE_GAME_ERR_OUT_OF_RANGE', 'ERR_SPELL_OUT_OF_RANGE' },
         fallbacks = { 'Out of range' },
+    },
+    {
+        globals = { 'ERR_TOO_FAR_TO_INTERACT' },
+        fallbacks = { 'You need to be closer to interact with that target' },
     },
     {
         globals = { 'ERR_OUT_OF_MANA', 'LE_GAME_ERR_OUT_OF_MANA', 'ERR_SPELL_FAILED_NOT_ENOUGH_MANA' },
         fallbacks = { 'Not enough Mana' },
+    },
+    -- Resource shortages are repetitive action feedback, like the mana warning.
+    -- Match localized strings individually rather than hiding arbitrary failures.
+    {
+        globals = {
+            'ERR_OUT_OF_HOLY_POWER', 'ERR_OUT_OF_SOUL_SHARDS', 'ERR_OUT_OF_FOCUS',
+            'ERR_OUT_OF_COMBO_POINTS', 'ERR_OUT_OF_CHI', 'ERR_OUT_OF_PAIN',
+            'ERR_OUT_OF_HEALTH', 'ERR_OUT_OF_RAGE', 'ERR_OUT_OF_ARCANE_CHARGES',
+            'ERR_OUT_OF_ENERGY', 'ERR_OUT_OF_LUNAR_POWER', 'ERR_OUT_OF_RUNIC_POWER',
+            'ERR_OUT_OF_INSANITY', 'ERR_OUT_OF_RUNES', 'ERR_OUT_OF_FURY',
+            'ERR_OUT_OF_MAELSTROM', 'ERR_OUT_OF_ESSENCE',
+        },
+    },
+    {
+        globals = { 'ERR_SPELL_FAILED_ALREADY_AT_FULL_HEALTH' },
+        fallbacks = { 'You are already at full health' },
+    },
+    {
+        globals = { 'ERR_SPELL_FAILED_ALREADY_AT_FULL_MANA' },
+        fallbacks = { 'You are already at full mana' },
     },
     {
         globals = { 'ERR_NOT_WHILE_MOVING', 'ERR_CANT_DO_THAT_WHILE_MOVING' },
