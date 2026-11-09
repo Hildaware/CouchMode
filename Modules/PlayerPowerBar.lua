@@ -19,8 +19,9 @@ local MEDIA = {
     BG_ATLAS = 'plunderstorm-stormbar-background',
 }
 
--- Fill-type primary resources: build from empty, opposite of mana.
-local FILL_POWER_TYPES = {
+-- Supported non-mana primary resources, including regenerating Energy.
+local TRACKED_POWER_TYPES = {
+    [Enum.PowerType.Energy] = true,     -- Rogue, Cat Form, energy-using Monk specs
     [Enum.PowerType.Rage] = true,       -- Warrior
     [Enum.PowerType.RunicPower] = true, -- Death Knight
     [Enum.PowerType.Fury] = true,       -- Demon Hunter (Havoc)
@@ -37,9 +38,9 @@ local function cfg()
     return addon.db.profile.playerPowerBar
 end
 
---- Returns true when the player's current primary power is a fill-type resource.
-local function playerUsesFillPower()
-    return FILL_POWER_TYPES[UnitPowerType('player')] == true
+--- Returns true when the player's current primary power is supported by this bar.
+local function playerUsesTrackedPower()
+    return TRACKED_POWER_TYPES[UnitPowerType('player')] == true
 end
 
 --#region ── Refresh ───────────────────────────────────────────────────────────
@@ -54,8 +55,8 @@ end
 --#region ── Value update ──────────────────────────────────────────────────────
 
 function powerBar:UpdateValue()
-    -- Hide entirely when the player's primary power is not a fill-type resource.
-    if not self.preview and not playerUsesFillPower() then
+    -- Hide entirely when the player's primary power is not supported by this bar.
+    if not self.preview and not playerUsesTrackedPower() then
         gui.frame:SetAlpha(0)
         -- Reset smooth state so the bar snaps when the resource becomes active again.
         self.targetValue = nil
@@ -66,8 +67,10 @@ function powerBar:UpdateValue()
     local powerType = UnitPowerType('player')
     local current = UnitPower('player', powerType)
     local maxVal = UnitPowerMax('player', powerType)
-    local pct = (maxVal > 0 and not isSecretValue(current) and not isSecretValue(maxVal))
-        and (current / maxVal) or 0.0
+    local pct
+    if not isSecretValue(current) and not isSecretValue(maxVal) and maxVal > 0 then
+        pct = current / maxVal
+    end
     local c = cfg()
 
     gui.bar:SetMinMaxValues(0, maxVal)
@@ -98,7 +101,7 @@ function powerBar:UpdateValue()
     end
 
     -- Visibility
-    -- pct is pre-guarded (secret values default to 0.0), so Lua comparisons are safe.
+    -- Evaluate restricted power through the C API; never treat unknown power as empty.
     local inCombat = UnitAffectingCombat('player')
     if self.preview then
         gui.frame:SetAlpha(1)
@@ -106,13 +109,21 @@ function powerBar:UpdateValue()
         -- In combat always show; otherwise show only when not full.
         if c.showOnlyInCombat and inCombat then
             gui.frame:SetAlpha(1)
+        elseif self.notFullCurve then
+            gui.frame:SetAlpha(UnitPowerPercent('player', powerType, false, self.notFullCurve))
         else
-            gui.frame:SetAlpha(pct < 1.0 and 1 or 0)
+            -- Older clients without curve evaluation can still compare public
+            -- values. Keep the resource visible if its fullness is unknown.
+            gui.frame:SetAlpha((pct == nil or pct < 1.0) and 1 or 0)
         end
     elseif c.showOnlyInCombat and not inCombat then
         gui.frame:SetAlpha(0)
     elseif c.autoHide then
-        gui.frame:SetAlpha((pct <= c.showThreshold / 100) and 1 or 0)
+        if self.visibilityCurve then
+            gui.frame:SetAlpha(UnitPowerPercent('player', powerType, false, self.visibilityCurve))
+        else
+            gui.frame:SetAlpha((pct == nil or pct <= c.showThreshold / 100) and 1 or 0)
+        end
     else
         gui.frame:SetAlpha(1)
     end
@@ -172,8 +183,18 @@ end
 --#region ── Module lifecycle ──────────────────────────────────────────────────
 
 function powerBar:BuildVisibilityCurve()
-    -- Intentional no-op: visibility is computed from cfg().showThreshold directly
-    -- (see UpdateValue) because C_CurveUtil curve objects don't expose :GetValue() in Lua.
+    if type(UnitPowerPercent) ~= 'function' or not C_CurveUtil or not C_CurveUtil.CreateCurve then
+        self.visibilityCurve = nil
+        self.notFullCurve = nil
+        return
+    end
+    self.visibilityCurve = addon.StatusBarBase.BuildVisibilityCurve(cfg().showThreshold)
+    if not self.notFullCurve then
+        self.notFullCurve = C_CurveUtil.CreateCurve()
+        self.notFullCurve:SetType(Enum.LuaCurveType.Step)
+        self.notFullCurve:AddPoint(0.0, 1)
+        self.notFullCurve:AddPoint(1.0, 0)
+    end
 end
 
 function powerBar:OnEnable()
@@ -234,7 +255,7 @@ end
 function powerBar:GetOptions()
     local args = addon.StatusBarBase.GetBaseOptionArgs('playerPowerBar', self, {
         description =
-        'A horizontal bar that tracks fill-type primary resources: Rage (Warrior), Runic Power (Death Knight), Fury/Pain (Demon Hunter), and Maelstrom (Enhancement Shaman). Hidden for all other specs.',
+        'A horizontal bar that tracks Energy, Rage, Runic Power, Fury, Pain, Maelstrom, Astral Power, and Insanity when active as your primary resource. Mana is handled by the separate Mana bar.',
         extraDisplayArgs = {
             showText = {
                 name = 'Show Power Text',
