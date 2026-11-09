@@ -319,10 +319,11 @@ end
 --- Displays system messages and system-style chat events in the system category.
 ---@param event string
 ---@param text any
-function toasts:OnSystemMessage(event, text)
+---@param sender any
+function toasts:OnSystemMessage(event, text, sender)
     if db().filterJunk and isJunkSystemMessage(text) then return end
     if not db().system then return end
-    local entry = Sources.NormalizeSystem(event, text, now())
+    local entry = Sources.NormalizeSystem(event, text, now(), sender)
     if not entry then return end
 
     if isQuestProgressMessage(event, entry.originalText) then
@@ -347,6 +348,9 @@ function toasts:ShouldSuppressSystemMessageFromChat(event, text)
     if db().filterJunk and isSystemMessageEvent(event) and isJunkSystemMessage(text) then
         return true
     end
+    -- Inline alerts carry status codes; missing/unsupported formatting must
+    -- never leak those codes into the Chat feed as if they were messages.
+    if db().system == true and event == 'CHAT_MSG_BN_INLINE_TOAST_ALERT' then return true end
     return db().system == true and Sources.NormalizeSystem(event, text, 0) ~= nil
 end
 

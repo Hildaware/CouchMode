@@ -413,11 +413,32 @@ end
 ---@param event string
 ---@param text any
 ---@param timestamp number
+---@param sender any Friend display name for Battle.net inline alerts
 ---@return ToastEntry?
-function M.NormalizeSystem(event, text, timestamp)
+function M.NormalizeSystem(event, text, timestamp, sender)
     if not M.SYSTEM_EVENT_SET[event] and not M.UI_SYSTEM_EVENT_SET[event] then return nil end
     text = M.SafeString(text)
     if not text then return nil end
+    if event == 'CHAT_MSG_BN_INLINE_TOAST_ALERT' then
+        -- arg1 is a status code, not display text. Mirror Blizzard's inline
+        -- alert formatting, using a plain name instead of its chat hyperlink.
+        local template = M.SafeString(_G['BN_INLINE_TOAST_' .. text])
+        if not template then return nil end
+        local value
+        if text == 'FRIEND_REQUEST' then
+            text = template
+        else
+            if text == 'FRIEND_PENDING' then
+                value = BNGetNumFriendInvites and M.SafeNumber(BNGetNumFriendInvites())
+            else
+                value = M.SafeString(sender)
+            end
+            if value == nil then return nil end
+            local ok, formatted = pcall(string.format, template, value)
+            if not ok then return nil end
+            text = formatted
+        end
+    end
     return { kind = 'system', timestamp = timestamp, event = event, originalText = text }
 end
 
