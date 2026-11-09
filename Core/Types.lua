@@ -266,7 +266,12 @@
 ---@field id             number
 ---@field data           ChatMessage
 ---@field minimumHeight  number
----@field expiryTime     number?
+---@field nativeFrame    Frame?
+---@field nativeState    table?
+---@field finish         fun(result: string)?
+---@field resultTimer    table?
+---@field expiryTimer    table?
+---@field fadeTimer      table?
 ---@field pinned         boolean?
 ---@field noPortrait     boolean?
 ---@field widget         ChatBubblesWidget

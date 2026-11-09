@@ -8,7 +8,9 @@
     <Include file='Migration.lua'/>
     <Include file='Mock.lua'/>
     <Include file='ChatBubbles.lua'/>
+    <Include file='ChatBubblesMatching.lua'/>
     <Include file='ChatBubblesContainer.lua'/>
+    <Include file='ChatBubblesOptions.lua'/>
     <Include file='ChatFeedLayout.lua'/>
     <Include file='ChatFeedWidgets.lua'/>
     <Include file='ChatFeed.lua'/>

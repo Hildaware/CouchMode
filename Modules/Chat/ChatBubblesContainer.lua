@@ -17,6 +17,31 @@ local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widg
 
 local function db() return addon.db.profile.chatBubbles end
 
+-- Apply every style property on reuse so pooled FontStrings cannot keep old styling.
+function bubbles:ApplyBubbleFont(fs, prefix, size)
+    local d = db()
+    local outline = d[prefix .. 'FontOutline']
+    fs:SetFont(addon.Media.ResolveFont(d[prefix .. 'FontFace']), size or d[prefix .. 'FontSize'],
+        outline == 'NONE' and '' or outline)
+    local shadow = d[prefix .. 'FontShadow']
+    fs:SetShadowColor(0, 0, 0, shadow and 1 or 0)
+    fs:SetShadowOffset(shadow and 2 or 0, shadow and -2 or 0)
+end
+
+local function speechColor(event)
+    local key = addon.ChatSources and addon.ChatSources.ChatTypeKey(event)
+    return key and ChatTypeInfo and ChatTypeInfo[key]
+end
+
+function bubbles:StyleBubbleHeader(bubble)
+    local d, sw, data = db(), bubble.widget.subWidgets, bubble.data
+    self:ApplyBubbleFont(sw.name, 'name')
+    sw.name:SetText(data.sender or '')
+    local c = d.nameFontColor
+    sw.name:SetTextColor(c.r, c.g, c.b, c.a)
+
+end
+
 --#endregion
 
 --#region ── Message widget ───────────────────────────────────────────────────
@@ -24,11 +49,13 @@ local function db() return addon.db.profile.chatBubbles end
 ---@class ChatBubblesMessage
 ---@field widget        Frame
 ---@field message       FontString
----@field expiryTime    number?
 ---@field revealTicker  table?   C_Timer ticker; non-nil while reveal is in progress
 ---@field heightAnimation table? height-expansion tween while formatting
 ---@field topPad        number?  vertical offset used to center text; set by Format, read by _ApplyVisibility
----@field Format        fun(self: ChatBubblesMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?)
+---@field text          string?
+---@field event         string?
+---@field formatToken   table?
+---@field Format        fun(self: ChatBubblesMessage, text: string, type: string, noPortrait: boolean?, noAnim: boolean?, preserveReveal: boolean?)
 
 local messageProto = {}
 messageProto.__index = messageProto
@@ -36,44 +63,50 @@ messageProto.__index = messageProto
 ---@param text string
 ---@param type string  CHAT_MSG_* event name
 ---@param noPortrait boolean?
-function messageProto:Format(text, type, noPortrait, noAnim)
+function messageProto:Format(text, type, noPortrait, noAnim, preserveReveal)
+    local visibleText = preserveReveal and self.message:GetText()
+    if self.heightAnimation then
+        self.heightAnimation:Cancel()
+        self.heightAnimation = nil
+    end
+    local formatToken = {}
+    self.formatToken = formatToken
+    self.text, self.event = text, type
     local d = db()
     local r, g, b, a = d.msgFontColor.r, d.msgFontColor.g, d.msgFontColor.b, d.msgFontColor.a
     local messageSize = d.msgFontSize
 
     -- NPC messages may be colored by their canonical chat type. Player colors
     -- are never reached here: overhead replacement is NPC-only.
-    local chatKey = addon.ChatSources and addon.ChatSources.ChatTypeKey(type)
-    local ci = chatKey and ChatTypeInfo and ChatTypeInfo[chatKey]
+    local ci = speechColor(type)
     if d.styleByType and ci then
         r, g, b, a = ci.r, ci.g, ci.b, 1
-        if type == 'CHAT_MSG_MONSTER_YELL' then
-            messageSize = math.floor(d.msgFontSize * 1.25)
-        end
+    end
+    if d.enlargeYells and type == 'CHAT_MSG_MONSTER_YELL' then
+        messageSize = math.floor(d.msgFontSize * 1.25)
     end
 
     local leftPad = noPortrait and 8 or 48
     local rightPad = noPortrait and 8 or 24
     local availableWidth = d.itemWidth - leftPad - rightPad
 
-    local fontPath = addon.Media.ResolveFont(d.msgFontFace)
     self.message:SetWidth(availableWidth)
     self.message:SetText(text)
 
     local contentHeight, topPad
     if addon.Utils.IsSecretValue(text) then
         -- Can't measure a secret-aspected FontString; use safe defaults
-        self.message:SetFont(fontPath, messageSize, 'OUTLINE')
+        bubbles:ApplyBubbleFont(self.message, 'msg', messageSize)
         contentHeight = MIN_MESSAGE_HEIGHT
         topPad = math.max(math.floor((contentHeight - messageSize) / 2), 0)
     else
         -- Scale up single-line messages
-        local bumpedSize = math.floor(messageSize * 1.3)
-        self.message:SetFont(fontPath, bumpedSize, 'OUTLINE')
+        local bumpedSize = d.enlargeSingleLine and math.floor(messageSize * 1.3) or messageSize
+        bubbles:ApplyBubbleFont(self.message, 'msg', bumpedSize)
         if self.message:GetUnboundedStringWidth() <= availableWidth then
             messageSize = bumpedSize
         else
-            self.message:SetFont(fontPath, messageSize, 'OUTLINE')
+            bubbles:ApplyBubbleFont(self.message, 'msg', messageSize)
         end
 
         local textHeight = self.message:GetHeight()
@@ -95,7 +128,14 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     self.message:SetPoint('TOPLEFT', self.widget, 'TOPLEFT', leftPad, -topPad)
     self.message:SetPoint('TOPRIGHT', self.widget, 'TOPRIGHT', -rightPad, -topPad)
 
-    if d.revealText and not addon.Utils.IsSecretValue(text) then
+    if preserveReveal then
+        if not d.revealText and self.revealTicker then
+            self.revealTicker:Cancel()
+            self.revealTicker = nil
+        else
+            self.message:SetText(visibleText)
+        end
+    elseif d.revealText and not addon.Utils.IsSecretValue(text) then
         self.message:SetText('')
         local total = #text
         local shown = 0
@@ -112,7 +152,7 @@ function messageProto:Format(text, type, noPortrait, noAnim)
     if not noAnim then
         local fullHeight = contentHeight
         C_Timer.After(0, function()
-            if not self.widget:IsShown() then return end
+            if self.formatToken ~= formatToken or not self.widget:IsShown() then return end
             if self.heightAnimation then self.heightAnimation:Cancel() end
             self.widget:SetHeight(0)
             local animation
@@ -141,9 +181,7 @@ local function _MessageCreate()
     local message = content:FontString({ justifyH = 'LEFT', justifyV = 'TOP' })
     message:SetPoint('TOPLEFT', content, 'TOPLEFT', 48, 0)
     message:SetPoint('TOPRIGHT', content, 'TOPRIGHT', -24, 0)
-    message.fs:SetFont(addon.Media.ResolveFont(d.msgFontFace), d.msgFontSize, 'OUTLINE')
-    message.fs:SetShadowColor(0, 0, 0, 1)
-    message.fs:SetShadowOffset(2, -2)
+    bubbles:ApplyBubbleFont(message.fs, 'msg')
 
     i.widget = content.frame
     i.message = message.fs
@@ -169,6 +207,7 @@ local function _MessageReset(pool, msg)
     msg.message:SetText('')
     msg.message:ClearAllPoints()
     msg.topPad = nil
+    msg.text, msg.event, msg.formatToken = nil, nil, nil
 end
 
 --#endregion
@@ -322,21 +361,7 @@ function controllerProto:FormatMessage(msg, text, type)
     local duration = bubbles.CalculateDisplayDuration(text)
     msg:Format(text, type, self.parent.noPortrait, self.parent.pinned)
 
-    local expiryTime = GetTime() + duration
-    msg.expiryTime = expiryTime
-    self.parent.expiryTime = expiryTime
-
-    local function onExpire()
-        if self.parent.pinned then return end
-        local remaining = msg.expiryTime - GetTime()
-        if remaining > 0.05 then
-            C_Timer.After(remaining, onExpire)
-        else
-            self:RemoveMessage(msg)
-        end
-    end
-    C_Timer.After(duration, onExpire)
-
+    -- The owning bubble starts its timers only after attachment to a native frame.
     return duration
 end
 
@@ -356,7 +381,6 @@ end
 ---@field portraitFrame Frame
 ---@field portrait3D    PlayerModel
 ---@field name          FontString
----@field channelLabel  FontString
 ---@field messages      ChatBubblesMessage[]
 ---@field textureBottom Frame
 ---@field textureTop    Frame
@@ -368,7 +392,13 @@ end
 ---@field id             number
 ---@field data           ChatMessage
 ---@field minimumHeight  number
----@field expiryTime     number?
+---@field nativeFrame    Frame?
+---@field nativeState    table?
+---@field finish         fun(result: string)?
+---@field resultTimer    table?
+---@field expiryTimer    table?
+---@field fadeTimer      table?
+---@field position       table?
 ---@field pinned         boolean?
 ---@field noPortrait     boolean?
 ---@field _bubbleToken   table?
@@ -454,27 +484,14 @@ local function _BubbleCreate()
     local nameOverlay = L:Container(container, { frameLevel = container.frame:GetFrameLevel() + 20 })
     nameOverlay:SetAllPoints(container)
     local name = L:FontString(nameOverlay, { justifyH = 'LEFT', maxLines = 1 })
-    name.fs:SetFont(addon.Media.ResolveFont(d.nameFontFace), d.nameFontSize, 'OUTLINE')
-    local c = FACTION_BAR_COLORS[4]
-    name:SetTextColor(c.r, c.g, c.b)
-    name:SetPoint('BOTTOMLEFT', bTex, 'TOPLEFT', -2, -8)
-    name.fs:SetShadowColor(0, 0, 0, 1)
-    name.fs:SetShadowOffset(2, -2)
-
-    -- Channel label (NPCs use it for the speech type, e.g. YELL)
-    local channelLabel = L:FontString(nameOverlay, { justifyH = 'RIGHT', maxLines = 1 })
-    channelLabel.fs:SetFont(addon.Media.ResolveFont(d.nameFontFace), math.floor(d.nameFontSize * 0.65), 'OUTLINE')
-    channelLabel.fs:SetTextColor(1, 1, 1, 0.75)
-    channelLabel:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 44, -16)
-    channelLabel.fs:SetShadowColor(0, 0, 0, 1)
-    channelLabel.fs:SetShadowOffset(2, -2)
+    bubbles:ApplyBubbleFont(name.fs, 'name')
+    name:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 44, -16)
 
     local widget = container.frame --[[@as ChatBubblesWidget]]
     widget.subWidgets = {
         portraitFrame = portraitContainer.frame,
         portrait3D = portrait3D,
         name = name.fs,
-        channelLabel = channelLabel.fs,
         messages = {},
         textureBottom = bottomContainer.frame,
         textureTop = topContainer.frame,
@@ -505,9 +522,10 @@ local function _BubbleReset(pool, bubble)
     sw.textureTop:SetPoint('BOTTOMLEFT', sw.textureBottom, 'TOPLEFT', 0, 0)
 
     bubble._bubbleToken = nil
+    bubble.finish = nil
+    bubble.position = nil
     bubble.shownAt = nil
     bubble.bubbleDuration = nil
-    bubble.expiryTime = nil
     bubble.widget:SetHeight(bubble.minimumHeight)
     bubble.widget:SetScale(1)
     bubble.widget:Hide()
@@ -519,7 +537,6 @@ local function _BubbleReset(pool, bubble)
     bubble.pinned = nil
     bubble.widget.subWidgets.name:SetText('')
     bubble.widget.subWidgets.name:Show()
-    bubble.widget.subWidgets.channelLabel:SetText('')
     bubble.widget.subWidgets.portrait3D:ClearModel()
     bubble.widget.subWidgets.portraitFrame:Show()
 end
@@ -535,7 +552,41 @@ end
 
 ---@param bubble ChatBubblesInstance
 function bubbles:ReleaseBubble(bubble)
+    if not self._pool:IsActive(bubble) then return end
+    bubble._bubbleToken = nil
+    for _, key in ipairs({ 'resultTimer', 'expiryTimer', 'fadeTimer' }) do
+        if bubble[key] then bubble[key]:Cancel(); bubble[key] = nil end
+    end
+    if bubble.animationGroup then
+        bubble.animationGroup:Stop()
+        bubble.animationGroup = nil
+    end
+    UIFrameFadeRemoveFrame(bubble.widget)
+    bubble.widget:Hide()
+    self:ReleaseNativeBubble(bubble)
+    for i = #self.active, 1, -1 do
+        if self.active[i] == bubble then table.remove(self.active, i) end
+    end
     self._pool:Release(bubble)
+end
+
+-- Re-measure existing messages without restarting their reveal or expiry timers.
+function bubbles:RefreshVisibleBubbles()
+    if not self._pool then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    for bubble in self._pool:EnumerateActive() do
+        if bubble.data and not bubble.released then
+            self:StyleBubbleHeader(bubble)
+            local height = bubble.minimumHeight
+            for _, msg in ipairs(bubble.widget.subWidgets.messages) do
+                msg:Format(msg.text, msg.event, bubble.noPortrait, true, true)
+                height = height + msg.widget:GetHeight()
+            end
+            bubble.widget:SetHeight(height)
+            bubble.controller:RepositionMessages()
+            self:ApplyBubblePosition(bubble)
+        end
+    end
 end
 
 function bubbles:InitPools()

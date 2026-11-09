@@ -17,7 +17,7 @@ addon = addon or (LibStub and LibStub('AceAddon-3.0'):GetAddon(addonName))
 
 local M = {}
 
-M.CURRENT_VERSION = 6
+M.CURRENT_VERSION = 7
 local DEFAULT_CHAT_HEIGHT = 260
 local DEFAULT_HISTORY_HEIGHT = 400
 
@@ -114,6 +114,15 @@ local function resetChatLayout(profile)
     chat.historyHeight = DEFAULT_HISTORY_HEIGHT
 end
 
+-- v6 -> v7: keep independent yell sizing consistent with the former color toggle.
+local function splitBubbleSizing(profile)
+    local bubbles = profile.chatBubbles
+    if not bubbles then return end
+    -- AceDB has already copied the new default into this profile; seed this
+    -- setting from its legacy toggle explicitly.
+    bubbles.enlargeYells = bubbles.styleByType ~= false
+end
+
 --- Runs the migration against an AceDB instance. Safe to call repeatedly.
 ---@param db table  AceDB instance (must expose `.profile`)
 ---@return boolean migrated  whether any change was applied
@@ -156,6 +165,10 @@ function M.Run(db)
 
     if version < 6 then
         resetChatLayout(profile)
+    end
+
+    if version < 7 then
+        splitBubbleSizing(profile)
     end
 
     profile.schemaVersion = M.CURRENT_VERSION
