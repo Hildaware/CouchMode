@@ -72,6 +72,22 @@ function castBar:GetDefaults()
     }
 end
 
+function castBar:GetPlayerBarGeneralOptions()
+    return {
+        hideBlizzardCastBar = {
+            name = 'Cast Bar',
+            desc = 'Hide the default Blizzard casting bar. Changes take effect after reloading the UI.',
+            type = 'toggle',
+            order = 2,
+            get = function() return addon.db.profile.castRing.hideBlizzardCastBar end,
+            set = function(_, value)
+                addon:GetModule('Options'):SetReloadRequiredOption(
+                    addon.db.profile.castRing, 'hideBlizzardCastBar', value, 'Cast Bar')
+            end,
+        },
+    }
+end
+
 function castBar:GetOptions()
     return 'castBars', {
         name        = 'Cast',
@@ -253,25 +269,6 @@ function castBar:GetOptions()
                             addon.db.profile.castRing.enabled = value
                             if value then ring():Enable() else ring():Disable() end
                         end,
-                    },
-                    general = {
-                        name   = 'General',
-                        type   = 'group',
-                        order  = 3,
-                        inline = true,
-                        args   = {
-                            hideBlizzardCastBar = {
-                                name  = 'Hide Blizzard Cast Bar',
-                                desc  = 'Hide the default Blizzard casting bar.',
-                                type  = 'toggle',
-                                order = 1,
-                                get   = function() return addon.db.profile.castRing.hideBlizzardCastBar end,
-                                set   = function(_, value)
-                                    addon.db.profile.castRing.hideBlizzardCastBar = value
-                                    ring():ApplyCastBarHide()
-                                end,
-                            },
-                        },
                     },
                     nameplate = {
                         name   = 'Nameplate',

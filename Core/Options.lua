@@ -9,6 +9,7 @@ local options = addon:NewModule('Options')
 ---@class OptionsModule: AceModule
 ---@field GetDefaults  fun(self: OptionsModule): table<string, any>
 ---@field GetOptions   fun(self: OptionsModule): string, table
+---@field GetPlayerBarGeneralOptions fun(self: OptionsModule): table<string, table>
 ---@field RebuildOptions fun(self: OptionsModule)
 
 -- Ordered list of modules that contribute defaults and settings panels.
@@ -18,6 +19,28 @@ local MODULES = { 'Bags', 'Merchant', 'CastBar', 'Nameplates', 'Minimap', 'Tips'
 
 -- Modules whose options are nested together under a single "Player Bars" group.
 local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerPowerBar = true, PlayerManaBar = true }
+
+StaticPopupDialogs['COUCHMODE_RELOAD_REQUIRED'] = {
+    text = 'Changing "%s" requires reloading the UI. Apply the change and reload now?',
+    button1 = RELOADUI,
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        data.settings[data.key] = data.value
+        ReloadUI()
+    end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+    exclusive = 1,
+}
+
+-- Keep saved and active settings in sync: cancelling leaves the current value intact.
+function options:SetReloadRequiredOption(settings, key, value, label)
+    if settings[key] == value then return end
+    StaticPopup_Show('COUCHMODE_RELOAD_REQUIRED', label, nil, {
+        settings = settings, key = key, value = value,
+    })
+end
 
 function options:OnInitialize()
     -- Collect defaults from each module.
@@ -43,10 +66,37 @@ function options:OnInitialize()
         type = 'group',
         order = 2,
         childGroups = 'tab',
-        args = {},
+        args = {
+            general = {
+                name = 'General',
+                type = 'group',
+                order = 0,
+                args = {
+                    blizzardVisibility = {
+                        name = 'Blizzard Frame Visibility',
+                        type = 'group',
+                        inline = true,
+                        order = 1,
+                        args = {
+                            description = {
+                                name = 'Check a box to hide that Blizzard frame. Changes require a UI reload.',
+                                type = 'description',
+                                order = 0,
+                                width = 'full',
+                            },
+                        },
+                    },
+                },
+            },
+        },
     }
     for _, modName in ipairs(MODULES) do
         local mod = addon:GetModule(modName) --[[@as OptionsModule]]
+        if PLAYER_BAR_MODULES[modName] and mod.GetPlayerBarGeneralOptions then
+            for key, arg in pairs(mod:GetPlayerBarGeneralOptions()) do
+                playerBarsGroup.args.general.args.blizzardVisibility.args[key] = arg
+            end
+        end
         if mod.GetOptions then
             local key, group = mod:GetOptions()
             if PLAYER_BAR_MODULES[modName] then

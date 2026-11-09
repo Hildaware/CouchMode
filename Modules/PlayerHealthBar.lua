@@ -244,6 +244,31 @@ end
 
 --#region ── Module lifecycle ──────────────────────────────────────────────────
 
+-- A separate hidden parent keeps target suppression independent of the custom
+-- health bar's visibility. Native target events and unit-watch behavior stay intact.
+local hiddenTargetParent
+local targetFrameHidden = false
+
+function healthBar:HandleBlizzTargetFrame()
+    if targetFrameHidden or not cfg().hideBlizzardTargetFrame or not TargetFrame then return end
+    if not hiddenTargetParent then
+        hiddenTargetParent = CreateFrame('Frame', nil, UIParent)
+        hiddenTargetParent:Hide()
+    end
+    -- TargetFrame is a secure unit button. A reload during combat must defer reparenting.
+    if InCombatLockdown() then
+        addon.Utils.RegisterEventIfValid(hiddenTargetParent, 'PLAYER_REGEN_ENABLED')
+        hiddenTargetParent:SetScript('OnEvent', function(frame)
+            frame:UnregisterAllEvents()
+            frame:SetScript('OnEvent', nil)
+            self:HandleBlizzTargetFrame()
+        end)
+        return
+    end
+    TargetFrame:SetParent(hiddenTargetParent)
+    targetFrameHidden = true
+end
+
 function healthBar:HandleBlizzPlayerFrame()
     UnregisterUnitWatch(PlayerFrame)
     PlayerFrame:SetAlpha(0)
@@ -274,13 +299,14 @@ function healthBar:BuildVisibilityCurve()
 end
 
 function healthBar:OnEnable()
+    self:HandleBlizzTargetFrame()
     if not cfg().enabled then
         self:Disable(); return
     end
 
     if not gui.frame then
         self:CreateUI()
-        self:HandleBlizzPlayerFrame()
+        if cfg().hideBlizzardPlayerFrame then self:HandleBlizzPlayerFrame() end
 
         local db  = cfg()
         local frame = gui.frame
@@ -331,9 +357,38 @@ function healthBar:GetDefaults()
             yPos = -150,
             barColor = { r = 0.2, g = 0.8, b = 0.2, a = 1.0 },
             -- health-specific extras
+            hideBlizzardPlayerFrame = true,
+            hideBlizzardTargetFrame = false,
             useClassColor = false,
             colorByPct = false,
         }),
+    }
+end
+
+function healthBar:GetPlayerBarGeneralOptions()
+    return {
+        hideBlizzardPlayerFrame = {
+            name = 'Player Frame',
+            desc = 'Hide the default Blizzard player frame while the CouchMode health bar is enabled. '
+                .. 'Changes take effect after reloading the UI.',
+            type = 'toggle',
+            order = 1,
+            get = function() return cfg().hideBlizzardPlayerFrame end,
+            set = function(_, value)
+                addon:GetModule('Options'):SetReloadRequiredOption(cfg(), 'hideBlizzardPlayerFrame', value, 'Player Frame')
+            end,
+        },
+        hideBlizzardTargetFrame = {
+            name = 'Target Frame',
+            desc = 'Hide the default Blizzard target frame, including when the CouchMode health bar is disabled. '
+                .. 'Changes take effect after reloading the UI.',
+            type = 'toggle',
+            order = 3,
+            get = function() return cfg().hideBlizzardTargetFrame end,
+            set = function(_, value)
+                addon:GetModule('Options'):SetReloadRequiredOption(cfg(), 'hideBlizzardTargetFrame', value, 'Target Frame')
+            end,
+        },
     }
 end
 
