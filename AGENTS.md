@@ -86,9 +86,12 @@ order. It is **one** AceModule (`addon.Chat`) whose methods are spread across
 | `ChatInput.lua` | Embeds Blizzard's `ChatFrame1EditBox` into the panel and restores it on disable. |
 | `ChatFeed.lua` | Pooled, variable-height scrolling feed engine (`ChatFeedProto.New`). |
 | `ChatFeedWidgets.lua` | Anatomy of one group; calls back into `addon.Chat` for styling and reveal. |
+| `ChatFeedBackground.lua` | Content-sized, feathered background shared by the live and history feeds. |
 | `ChatFeedLayout.lua` | Pure layout policy for measured groups. |
 | `ChatBubbles.lua` | Separate `ChatBubbles` AceModule: overhead NPC bubble replacement; registers as the router's bubble handler. |
-| `ChatBubblesContainer.lua` | Visual bubble widgets for the ChatBubbles module. |
+| `ChatBubblesMatching.lua` | Shared native bubble scan, unique text matching, frame ownership, and native visual restoration. |
+| `ChatBubblesContainer.lua` | Visual bubble widgets, font styling, and live style refresh for the ChatBubbles module. |
+| `ChatBubblesOptions.lua` | Defaults and the AceConfig panel for the ChatBubbles module. |
 
 ## Cross-file interfaces (keep stable)
 

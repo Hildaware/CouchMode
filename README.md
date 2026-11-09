@@ -36,7 +36,14 @@ so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 
 ## TODO
 
-### Chat
+### ALL
+- Re-visit settings within edit mode / options panel
+
+### Chat Bubbles
+- Test Bubble configs
 
 ### Map
 - There's a new gamepad map scroll thing added to Forever. Once it's out of alpha we should adopt it for the gamepad map scroll.
+
+### Frames (Party)
+- The blizzard castbar has dope 'fill' and spark. We should replicate it.
