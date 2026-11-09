@@ -10,6 +10,7 @@ local Animations = addon.Animations
 --#region ── Constants ────────────────────────────────────────────────────────
 
 local MIN_MESSAGE_HEIGHT = 24 -- minimum pixel height for a message content widget
+local MESSAGE_BOTTOM_PAD = 4
 
 --#endregion
 
@@ -111,14 +112,13 @@ function messageProto:Format(text, type, noPortrait, noAnim, preserveReveal)
 
         local textHeight = self.message:GetHeight()
         local vPad = math.max(math.ceil(d.msgFontSize * 0.5), 8)
-        contentHeight = math.max(textHeight + vPad * 2, MIN_MESSAGE_HEIGHT)
-
         local numLines = math.max(1, math.ceil(textHeight / (d.msgFontSize * 1.2)))
         local correction = math.min(
             math.floor(d.msgFontSize / 8 * (numLines + 1)),
             math.floor(d.msgFontSize / 2)
         )
-        topPad = math.floor((contentHeight - textHeight) / 2) - correction
+        topPad = math.max(vPad - correction, 0)
+        contentHeight = math.max(textHeight + topPad + MESSAGE_BOTTOM_PAD, MIN_MESSAGE_HEIGHT)
     end
 
     self.message:SetTextColor(r, g, b, a)
@@ -485,7 +485,8 @@ local function _BubbleCreate()
     nameOverlay:SetAllPoints(container)
     local name = L:FontString(nameOverlay, { justifyH = 'LEFT', maxLines = 1 })
     bubbles:ApplyBubbleFont(name.fs, 'name')
-    name:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 44, -16)
+    name:SetPoint('BOTTOMLEFT', tTex, 'TOPLEFT', 8, -16)
+    name:SetPoint('BOTTOMRIGHT', tTex, 'TOPRIGHT', -8, -16)
 
     local widget = container.frame --[[@as ChatBubblesWidget]]
     widget.subWidgets = {

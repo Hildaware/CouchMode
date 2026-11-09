@@ -72,7 +72,7 @@ function bubbles:GetDefaults()
             -- Blizzard UI suppression
             disableTalkingHead = true,
             -- Sizing
-            itemWidth = 240,
+            itemWidth = 340,
             offsetX = 0,
             offsetY = -24,
             scale = 1,
