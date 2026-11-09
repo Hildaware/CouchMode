@@ -18,18 +18,17 @@ local M = {}
 
 --#region ── Geometry ──────────────────────────────────────────────────────────
 
-local PADDING      = 8
+local PADDING      = 24 -- includes the feather around portraits at the viewport edges
 local ICON_SIZE    = 40
 local ICON_GAP     = 8
 local ICON_TOP_PAD = 8
 local NAME_GAP     = 2
 local MSG_TOP_GAP  = 6
 local LINE_GAP     = 2
+local RIGHT_FADE_SPACE = 32 -- leave room inside the viewport for the longer right fade
 
 -- Portrait decoration borrowed from the overhead Chat Bubbles widget.
 local ICON_BORDER_ATLAS = 'spellbook-item-iconframe'
-
-local MESSAGE_BACKGROUND_ATLAS = 'playerchoice-text-gradient-tall'
 
 M.PADDING       = PADDING
 
@@ -109,11 +108,7 @@ function M.CreateGroup(parent)
     -- also opt into hyperlink handling before its scripts receive them.
     if g.SetHyperlinksEnabled then pcall(g.SetHyperlinksEnabled, g, true) end
 
-    local background = g:CreateTexture(nil, 'BACKGROUND')
-    background:SetAtlas(MESSAGE_BACKGROUND_ATLAS)
-    background:SetAllPoints(g)
-    background:SetAlpha(0.5)
-    g.background = background
+    g.background = addon.ChatFeedBackground.Create(g)
 
     g.lines = {}
 
@@ -231,10 +226,11 @@ function M.ResetGroup(g)
     g._displayed = nil
     g._lineAlphas = nil
     g._lineHeights = nil
+    g._lineWidths = nil
     g._metrics = nil
     g._firstDisplayedMessage = nil
     g.groupData = nil
-    -- g.background:SetAlpha(1)
+    g.background:SetAlpha(1)
     local parent = g:GetParent()
     g:SetPoint('TOPLEFT', parent, 'TOPLEFT')
     g:SetPoint('TOPRIGHT', parent, 'TOPRIGHT')
@@ -327,6 +323,15 @@ local function applyLineWidth(fs, width)
     end
 end
 
+-- Measure the complete text before reveal starts; restricted text uses its
+-- available column width rather than inspecting secret measurements.
+local function textWidth(fs, limit)
+    if addon.Utils.IsSecretValue(fs:GetText()) then return limit end
+    local width = fs:GetStringWidth()
+    if addon.Utils.IsSecretValue(width) or type(width) ~= 'number' then return limit end
+    return math.min(math.max(width, 0), limit)
+end
+
 --- Renders one group widget and returns its height.
 ---@param feed table  the owning ChatFeed (supplies width, fonts and history mode)
 ---@param g Frame
@@ -349,6 +354,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     local hasIcon = false
     local channelH = feed.fonts.channel.size
     local nameH = feed.fonts.name.size
+    local headerRight, headerBottom
     if showsIdentity then
         -- Release any prior pooled row's explicit widths before styling the
         -- next identity so GetStringWidth measures the new speaker's name.
@@ -374,7 +380,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         -- RebuildGroup can run before a pooled frame's anchors resolve, so its
         -- GetWidth() may still be zero. The feed width is established before
         -- groups are rendered and is stable for both new and pooled widgets.
-        local headerWidth = math.max(feed.width - headerX - 4, 1)
+        local headerWidth = math.max(feed.width - PADDING * 2 - RIGHT_FADE_SPACE - headerX - 4, 1)
         if compactMode then
             local measuredNameWidth = g.name:GetStringWidth() or 0
             local nameWidth = measuredNameWidth > 0
@@ -404,6 +410,14 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         end
         local iconBottom = top + (hasIcon and (iconTopPad + iconSize) or 0)
         local messageTop = math.max(textBottom, iconBottom) + MSG_TOP_GAP
+        headerBottom = messageTop - MSG_TOP_GAP
+        if compactMode then
+            headerRight = headerX + math.max(textWidth(g.name, g.name:GetWidth()),
+                g.name:GetWidth() + NAME_GAP + textWidth(g.channel, g.channel:GetWidth()))
+        else
+            headerRight = headerX + math.max(textWidth(g.name, headerWidth), textWidth(g.channel, headerWidth))
+        end
+        if hasIcon then headerRight = math.max(headerRight, iconSize + 8) end
 
         g.identityMenu:ClearAllPoints()
         g.identityMenu:SetPoint('TOPLEFT', g, 'TOPLEFT', 0, -top)
@@ -443,11 +457,12 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     -- Measure every line against its complete text so the scroll geometry stays
     -- stable while the visible text is being revealed.
     local messageLeft = compactMode and hasIcon and (iconSize + iconGap) or 0
-    local available = math.max(feed.width - PADDING * 2 - messageLeft, 40)
+    local available = math.max(feed.width - PADDING * 2 - RIGHT_FADE_SPACE - messageLeft, 40)
     local msgFace, msgSize = feed.fonts.msg.face, feed.fonts.msg.size
     local messages = group.messages
     local messageCount = #messages
     g._lineHeights = g._lineHeights or {}
+    g._lineWidths = g._lineWidths or {}
     for i = 1, messageCount do
         local msg = messages[i]
         local fs = acquireLine(g, i)
@@ -456,6 +471,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         applyLineWidth(fs, available)
         chat:SetTextPlain(fs, msg.text)
         g._lineHeights[i] = fs:GetHeight() or msgSize
+        g._lineWidths[i] = textWidth(fs, available)
     end
 
     local heights = {}
@@ -474,10 +490,13 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     g._firstDisplayedMessage = firstMessage
     local historyVisible = feed:IsHistoryVisible()
     local lineAlphas = g._lineAlphas
-    local y = messageTopFor(top)
+    local bodyTop = messageTopFor(top)
+    local y = bodyTop
+    local bodyRight = messageLeft
     for i = firstMessage, messageCount do
         local msg = messages[i]
         local fs = g.lines[i]
+        bodyRight = math.max(bodyRight, messageLeft + g._lineWidths[i])
         local alpha = msg._chatFadeAlpha or ((lineAlphas and lineAlphas[i]) or 1)
         if lineAlphas then lineAlphas[i] = alpha end
         if historyVisible then alpha = 1 end
@@ -500,9 +519,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     end
     local height = heights[firstMessage]
     g:SetHeight(height)
-    g.background:ClearAllPoints()
-    g.background:SetSize(g:GetWidth() + 32, height + 12)
-    g.background:SetPoint('TOPLEFT', g, 'TOPLEFT', -24, -8)
+    g.background:SetShape(headerRight, headerBottom, bodyTop, bodyRight, height, hasIcon)
     return height
 end
 

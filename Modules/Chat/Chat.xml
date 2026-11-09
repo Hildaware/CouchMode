@@ -12,6 +12,7 @@
     <Include file='ChatBubblesContainer.lua'/>
     <Include file='ChatBubblesOptions.lua'/>
     <Include file='ChatFeedLayout.lua'/>
+    <Include file='ChatFeedBackground.lua'/>
     <Include file='ChatFeedWidgets.lua'/>
     <Include file='ChatFeed.lua'/>
     <Include file='ChatInput.lua'/>

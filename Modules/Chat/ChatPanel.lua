@@ -17,7 +17,8 @@ local EditMode = addon.EditMode
 --#region ── Constants ────────────────────────────────────────────────────────
 
 local PAD = 8
-local FEED_SIDE_PAD = 32
+local FEED_LEFT_PAD = 12
+local FEED_RIGHT_PAD = 32
 local FILTER_BAR_H = 32
 local INPUT_STRIP_H = 28
 local EDGE_PAD = 12
@@ -82,6 +83,13 @@ end
 ---@param interactive boolean?
 function chat:ApplyBorderOpacity(interactive)
     if not self.borderFrame then return end
+
+    -- Focusing the input keeps the panel active even when the feed is empty.
+    -- Its strip has its own chrome; only frame the panel when it has chat to show.
+    if not self.feed or not self.feed:HasDisplayableMessages(nil, db().maxLiveMessages) then
+        self.borderFrame:SetAlpha(0)
+        return
+    end
 
     if interactive == nil then
         local hovered = self.panel and self.panel.IsMouseOver and self.panel:IsMouseOver()
@@ -329,7 +337,7 @@ function chat:ApplyLayout(rebuild)
 
     local direction = db().growthDirection == 'top' and 'top' or 'bottom'
     self:SetPanelScale(db().scale or 1, direction)
-    self.feed:SetWidth(db().width - FEED_SIDE_PAD * 2)
+    self.feed:SetWidth(db().width - FEED_LEFT_PAD - FEED_RIGHT_PAD)
     local historyMode = self.feed:IsBrowsingHistory()
     local controlHeight = (self.filterReserved and FILTER_BAR_H or 0)
         + (self.inputReserved and INPUT_STRIP_H or 0)
@@ -384,9 +392,9 @@ function chat:ApplyLayout(rebuild)
             self.filterBar:ClearAllPoints()
         end
         self.scrollArea:ClearAllPoints()
-        self.scrollArea:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', FEED_SIDE_PAD,
+        self.scrollArea:SetPoint('BOTTOMLEFT', frame, 'BOTTOMLEFT', FEED_LEFT_PAD,
             bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
-        self.scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -FEED_SIDE_PAD,
+        self.scrollArea:SetPoint('BOTTOMRIGHT', frame, 'BOTTOMRIGHT', -FEED_RIGHT_PAD,
             bottomOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0))
     else
         if self.filterReserved then
@@ -406,9 +414,9 @@ function chat:ApplyLayout(rebuild)
             topOffset = topOffset + INPUT_STRIP_H
         end
         self.scrollArea:ClearAllPoints()
-        self.scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', FEED_SIDE_PAD,
+        self.scrollArea:SetPoint('TOPLEFT', frame, 'TOPLEFT', FEED_LEFT_PAD,
             -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
-        self.scrollArea:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -FEED_SIDE_PAD,
+        self.scrollArea:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -FEED_RIGHT_PAD,
             -(topOffset + ((hasMessages and controlHeight > 0) and FEED_CONTROL_GAP or 0)))
     end
     Input:SetMouseEnabled(self.inputReserved)

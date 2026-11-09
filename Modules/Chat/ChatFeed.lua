@@ -23,7 +23,7 @@ Feed.__index = Feed
 local PADDING = Widgets.PADDING
 Feed.PADDING = PADDING
 
-local GROUP_GAP = 6
+local GROUP_GAP = 12
 local MESSAGE_FADE_TIME = 0.35
 local LAYOUT_ANIMATION_TIME = 0.3
 
@@ -565,7 +565,7 @@ function Feed:Layout(animate, snapshot, followBottom, fromOffset)
             end
             if g:GetHeight() ~= displayedHeight then
                 g:SetHeight(displayedHeight)
-                g.background:SetHeight(displayedHeight + 12)
+                g.background:SetHeight(displayedHeight)
             end
             local origin = snapshot[g]
             local startY = origin and origin.group == self.groups[i] and origin.y or nil
