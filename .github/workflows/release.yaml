@@ -30,17 +30,9 @@ jobs:
           # Create a staging directory
           mkdir -p staging/$ADDON_NAME
           
-          # --- SELECT FILES AND DIRECTORIES HERE ---
-          # Copy the main file
-          cp CouchMode.lua staging/$ADDON_NAME/
-          cp CouchMode.toc staging/$ADDON_NAME/
-          cp Bindings.xml staging/$ADDON_NAME/
-          if [ -d "Core" ]; then cp -r Core staging/$ADDON_NAME/; fi
-          if [ -d "Modules" ]; then cp -r Modules staging/$ADDON_NAME/; fi
-          if [ -d "Media" ]; then cp -r Media staging/$ADDON_NAME/; fi
-          if [ -d "Libs" ]; then cp -r Libs staging/$ADDON_NAME/; fi
-          
-          # --- END SELECTION ---
+          # Copy every required addon directory and entry point.
+          cp -r Core Libs Modules Resources \
+            Bindings.xml CouchMode.toc CouchMode.lua "staging/$ADDON_NAME/"
 
           mkdir -p staging/ConsoleBags
           cp external-repo/ConsoleBags.lua staging/ConsoleBags/
