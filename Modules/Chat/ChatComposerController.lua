@@ -3,6 +3,9 @@ local _, addon = ...
 local chat = addon.Chat
 local Input = addon.ChatInput
 local DELAY, INTERVAL = 0.35, 0.08
+local KEYBOARD_DEADZONE = 0.16
+local KEYBOARD_SMOOTH_TIME = 0.075
+local KEYBOARD_POINTER_SPEED = 630 -- Keyboard-local pixels per second, on either axis.
 local directions = {
     PADDLEFT = { -1, 0 }, PADDRIGHT = { 1, 0 },
     PADDUP = { 0, -1 }, PADDDOWN = { 0, 1 },
@@ -17,7 +20,16 @@ function chat:ResetComposerHeldInput(keepButtons)
     frame.leftReady, frame.rightReady = false, false
     frame.shift = false
     frame.emoteStickActive = false
-    if frame.keyboardRows then self:RefreshComposerKeyboard() end
+    frame.keyboardStickActive = false
+    frame.keyboardMoveX, frame.keyboardMoveY = 0, 0
+    frame.keyboardVelocityX, frame.keyboardVelocityY = 0, 0
+    self:ResetComposerEmotePointer()
+    if frame.keyboardRows then
+        if frame.keyboardPointerActive == nil then frame.keyboardPointerActive = true end
+        frame.keyboardPointerX = frame.keyboardPointerX or 0
+        frame.keyboardPointerY = frame.keyboardPointerY or 0
+        self:RefreshComposerKeyboard()
+    end
 end
 
 local function mappedState()
@@ -102,12 +114,7 @@ function chat:MoveComposerSelection(dx, dy)
         self:RefreshComposerChannels()
     elseif self.composerTab == 1 then self:MoveComposerKey(dx, dy)
     elseif self.composerTab == 2 then self:MoveComposerReply(dx, dy)
-    else
-        frame.emoteStickActive = false
-        frame.emoteIndex = frame.emoteIndex
-            and (((frame.emoteIndex - 1 + (dx ~= 0 and dx or dy)) % #frame.emoteButtons) + 1) or 1
-        self:RefreshComposerEmotes()
-    end
+    else self:MoveComposerEmote(dx, dy) end
 end
 
 function chat:RepeatComposerAction(action)
@@ -146,6 +153,9 @@ function chat:ComposerGamepadButton(key, down)
     elseif key == 'PADLSHOULDER' then self:SetComposerTab(self.composerTab - 1)
     elseif key == 'PADRSHOULDER' then self:SetComposerTab(self.composerTab + 1)
     elseif key == 'PADLSTICK' then self:ToggleComposerChannels()
+    elseif key == 'PADRSTICK' and self.composerTab == 1 and not frame.channels:IsShown() then
+        frame.symbols = not frame.symbols
+        self:RefreshComposerKeyboard()
     elseif not frame.channels:IsShown() and self.composerTab ~= 3 then
         if key == 'PAD3' then self:StartComposerRepeat('delete')
         elseif key == 'PAD4' then Input:InsertSpace()
@@ -164,27 +174,41 @@ function chat:ComposerGamepadStick(stick, x, y)
     local readyKey = stick == 'Left' and 'leftReady' or 'rightReady'
     local directionKey = stick == 'Left' and 'leftDirection' or 'rightDirection'
     local prior = frame[directionKey]
+    if stick == 'Left' and self.composerTab == 1 and not frame.channels:IsShown() then
+        if length < KEYBOARD_DEADZONE then
+            frame.leftReady = true
+            -- Brake immediately on release: smoothing must not cause drift.
+            frame.keyboardMoveX, frame.keyboardMoveY = 0, 0
+            frame.keyboardVelocityX, frame.keyboardVelocityY = 0, 0
+            frame.keyboardStickActive = false
+            return
+        end
+        if not frame.leftReady then return end
+        -- Deflection controls speed, not position. Squaring the magnitude gives
+        -- shallow holds fine control while keeping full-speed travel available.
+        local magnitude = math.min(1, math.max(0,
+            (length - KEYBOARD_DEADZONE) / (1 - KEYBOARD_DEADZONE)))
+        local scale = magnitude * magnitude / length
+        if not frame.keyboardPointerActive then
+            self:PositionComposerPointerOnSelection()
+            frame.keyboardVelocityX, frame.keyboardVelocityY = 0, 0
+        end
+        frame.keyboardStickActive = true
+        frame.keyboardPointerActive = true
+        frame.keyboardMoveX, frame.keyboardMoveY = x * scale, y * scale
+        return
+    end
+    if stick == 'Left' and self.composerTab == 3 and not frame.channels:IsShown() then
+        self:ComposerEmoteStick(x, y)
+        return
+    end
     if length < 0.3 then
         frame[readyKey] = true
         frame[directionKey] = nil
         if prior and frame.repeatAction == prior then frame.repeatAction = nil end
-        if stick == 'Left' and frame.emoteStickActive and self.composerTab == 3
-            and not frame.channels:IsShown() then
-            frame.emoteStickActive = false
-            frame.emoteIndex = nil
-            self:RefreshComposerEmotes()
-        end
         return
     end
     if not frame[readyKey] or length < 0.5 then return end
-    if stick == 'Left' and self.composerTab == 3 and not frame.channels:IsShown() then
-        frame.emoteStickActive = true
-        local angle = math.atan2(x, y)
-        local count = #frame.emoteButtons
-        frame.emoteIndex = (math.floor(angle / (math.pi * 2 / count) + 0.5) % count) + 1
-        self:RefreshComposerEmotes()
-        return
-    end
     local action
     if stick == 'Left' then
         if math.abs(x) > math.abs(y) then action = x < 0 and 'PADDLEFT' or 'PADDRIGHT'
@@ -198,8 +222,31 @@ function chat:ComposerGamepadStick(stick, x, y)
     end
 end
 
+function chat:MoveComposerKeyboardPointer(elapsed)
+    local frame = self.composer
+    if self.composerTab ~= 1 or frame.channels:IsShown()
+        or not frame.keyboardPointerActive or not frame.keyboardStickActive then return end
+    -- Smooth velocity instead of chasing an absolute stick position. Integrate
+    -- the exponential exactly so travel is independent of the frame rate.
+    -- Cap hitch time so a stalled frame cannot throw the cursor across keys.
+    local dt = math.max(0, math.min(elapsed, 0.05))
+    local blend = 1 - math.exp(-dt / KEYBOARD_SMOOTH_TIME)
+    local vx, vy = frame.keyboardVelocityX, frame.keyboardVelocityY
+    local tx, ty = frame.keyboardMoveX, frame.keyboardMoveY
+    local dx = tx * dt + (vx - tx) * KEYBOARD_SMOOTH_TIME * blend
+    local dy = ty * dt + (vy - ty) * KEYBOARD_SMOOTH_TIME * blend
+    frame.keyboardVelocityX = vx + (tx - vx) * blend
+    frame.keyboardVelocityY = vy + (ty - vy) * blend
+    local width, height = self:GetComposerKeyboardPointerSpan()
+    local x = math.max(-1, math.min(1, frame.keyboardPointerX + dx * KEYBOARD_POINTER_SPEED * 2 / width))
+    local y = math.max(-1, math.min(1, frame.keyboardPointerY + dy * KEYBOARD_POINTER_SPEED * 2 / height))
+    self:SetComposerKeyboardPointer(x, y)
+end
+
 function chat:UpdateComposerHeldInput(elapsed)
     local frame = self.composer
+    self:UpdateComposerEmotePointer(elapsed)
+    self:MoveComposerKeyboardPointer(elapsed)
     if not frame.repeatAction then return end
     frame.repeatRemaining = frame.repeatRemaining - elapsed
     if frame.repeatRemaining > 0 then return end

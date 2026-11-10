@@ -1,4 +1,4 @@
--- Profile-backed phrases, a curated emote wheel, and destination selection.
+-- Profile-backed shortcut phrases and destination selection.
 local _, addon = ...
 local chat = addon.Chat
 local Input = addon.ChatInput
@@ -9,15 +9,59 @@ local defaults = {
     'One moment, please.', 'Ready!', 'Be right back.', 'No problem.', 'Goodbye!',
     'Good Job!', "I'm using a controller, so typing is slow.",
 }
-local emotes = {
-    { 'WAVE', 'Wave' }, { 'THANK', 'Thanks' }, { 'CHEER', 'Cheer' }, { 'LAUGH', 'Laugh' },
-    { 'NOD', 'Nod' }, { 'NO', 'No' }, { 'APOLOGIZE', 'Apologize' }, { 'BYE', 'Goodbye' },
-    { 'SALUTE', 'Salute' }, { 'FLIRT', 'Flirt' }, { 'DANCE', 'Dance' },
-    -- Blizzard's joke action is exposed through /silly; keep both requested names.
-    { 'JOKE', 'Silly', label = 'Silly' }, { 'JOKE', 'Joke', label = 'Joke' },
-    { 'FACEPALM', 'Facepalm' },
-}
 local validatedReplies
+local REPLY_COLUMNS, REPLIES_PER_PAGE = 3, 9
+
+local function styleShortcut(button)
+    local enabled = button:IsEnabled()
+    local selected = enabled and button.composerSelected
+    if selected then
+        button:SetBackdropColor(0.20, 0.16, 0.08, 0.96)
+        button:SetBackdropBorderColor(0.75, 0.59, 0.28, 0.9)
+    elseif enabled and button.shortcutHovered then
+        button:SetBackdropColor(0.13, 0.14, 0.17, 0.96)
+        button:SetBackdropBorderColor(0.48, 0.46, 0.39, 0.8)
+    else
+        button:SetBackdropColor(0.065, 0.075, 0.095, 0.92)
+        button:SetBackdropBorderColor(0.28, 0.29, 0.31, 0.65)
+    end
+    button.selectionMark:SetShown(selected)
+    if not enabled then button.label:SetTextColor(DISABLED_FONT_COLOR:GetRGB())
+    elseif selected then button.label:SetTextColor(HIGHLIGHT_FONT_COLOR:GetRGB())
+    else button.label:SetTextColor(0.87, 0.84, 0.76) end
+end
+
+local function shortcutButton(parent, width, height, action, compact)
+    local button = CreateFrame('Button', nil, parent, 'BackdropTemplate')
+    button:SetSize(width, height)
+    button:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8',
+        edgeFile = 'Interface\\Buttons\\WHITE8X8', edgeSize = 1 })
+    button.selectionMark = button:CreateTexture(nil, 'OVERLAY')
+    button.selectionMark:SetColorTexture(1, 0.78, 0.3, 1)
+    button.selectionMark:SetPoint('TOPLEFT', 2, -3)
+    button.selectionMark:SetPoint('BOTTOMLEFT', 2, 3)
+    button.selectionMark:SetWidth(2)
+    button.label = button:CreateFontString(nil, 'ARTWORK')
+    button.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), compact and 14 or 17, '')
+    button.label:SetPoint('TOPLEFT', compact and 4 or 10, compact and -1 or -3)
+    button.label:SetPoint('BOTTOMRIGHT', compact and -4 or -8, compact and 1 or 3)
+    button.label:SetJustifyH(compact and 'CENTER' or 'LEFT')
+    button.label:SetJustifyV('MIDDLE')
+    if button.label.SetMaxLines then button.label:SetMaxLines(compact and 1 or 2) end
+    button:RegisterForClicks('LeftButtonUp')
+    button:SetScript('OnClick', function()
+        if not chat.composerActive then chat:ResumeComposer() end
+        action()
+    end)
+    button:SetScript('OnEnter', function(self) self.shortcutHovered = true; styleShortcut(self) end)
+    button:SetScript('OnLeave', function(self) self.shortcutHovered = false; styleShortcut(self) end)
+    button:SetScript('OnHide', function(self) self.shortcutHovered = false end)
+    button:SetScript('OnShow', styleShortcut)
+    button:SetScript('OnEnable', styleShortcut)
+    button:SetScript('OnDisable', styleShortcut)
+    styleShortcut(button)
+    return button
+end
 
 function chat:DefaultQuickReplies()
     local result = {}
@@ -44,28 +88,39 @@ function chat:BuildComposerReplies(page)
     local frame = self.composer
     frame.replyIndex, frame.replyFirst = 1, 1
     frame.replyButtons = {}
-    for slot = 1, 12 do
+    local columnGap = 6
+    local rowGap, footerHeight, footerGap = 4, 18, 4
+    local buttonWidth = (page:GetWidth() - (REPLY_COLUMNS - 1) * columnGap) / REPLY_COLUMNS
+    local buttonHeight = (page:GetHeight() - footerHeight - footerGap - 2 * rowGap) / 3
+    for slot = 1, REPLIES_PER_PAGE do
         local index = slot
-        local button = self:ComposerButton(page, '', 272, 44, function()
+        local button = shortcutButton(page, buttonWidth, buttonHeight, function()
             chat.composer.replyIndex = chat.composer.replyFirst + index - 1
             chat:InsertComposerReply()
         end)
-        button.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), 17, '')
-        if button.label.SetMaxLines then button.label:SetMaxLines(2) end
-        button:SetPoint('TOPLEFT', ((slot - 1) % 3) * 278, -math.floor((slot - 1) / 3) * 50)
+        button:SetPoint('TOPLEFT', ((slot - 1) % REPLY_COLUMNS) * (buttonWidth + columnGap),
+            -math.floor((slot - 1) / REPLY_COLUMNS) * (buttonHeight + rowGap))
         frame.replyButtons[slot] = button
     end
     frame.replyEmpty = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
     frame.replyEmpty:SetPoint('CENTER')
-    frame.replyEmpty:SetText('No quick replies. Add phrases in Chat settings.')
-    local previous = self:ComposerButton(page, PREVIOUS or 'Previous', 120, 25,
-        function() chat:MoveComposerReply(0, -4) end)
+    frame.replyEmpty:SetText('No shortcuts. Add phrases in Chat settings.')
+    local previous = shortcutButton(page, 90, footerHeight,
+        function() chat:PageComposerReplies(-1) end, true)
+    previous.label:SetText('‹ ' .. (PREVIOUS or 'Previous'))
     previous:SetPoint('BOTTOMLEFT')
-    local nextButton = self:ComposerButton(page, NEXT or 'Next', 120, 25,
-        function() chat:MoveComposerReply(0, 4) end)
+    frame.replyPrevious = previous
+    local nextButton = shortcutButton(page, 90, footerHeight,
+        function() chat:PageComposerReplies(1) end, true)
+    nextButton.label:SetText((NEXT or 'Next') .. ' ›')
     nextButton:SetPoint('BOTTOMRIGHT')
-    frame.replyCount = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-    frame.replyCount:SetPoint('BOTTOM', 0, 5)
+    frame.replyNext = nextButton
+    frame.replyCount = page:CreateFontString(nil, 'OVERLAY')
+    frame.replyCount:SetFont(addon.Media.ResolveFont(db().msgFontFace), 14, '')
+    frame.replyCount:SetTextColor(0.75, 0.72, 0.65)
+    frame.replyCount:SetPoint('BOTTOM', 0, 2)
+    page:EnableMouseWheel(true)
+    page:SetScript('OnMouseWheel', function(_, delta) chat:PageComposerReplies(delta > 0 and -1 or 1) end)
     self:RefreshComposerReplies()
 end
 
@@ -74,28 +129,46 @@ function chat:RefreshComposerReplies()
     if not frame or not frame.replyButtons then return end
     local replies = self:GetQuickReplies()
     frame.replyIndex = math.max(1, math.min(#replies, frame.replyIndex))
-    local row = math.floor((frame.replyIndex - 1) / 3)
-    local firstRow = math.floor((frame.replyFirst - 1) / 3)
-    if row < firstRow then firstRow = row
-    elseif row >= firstRow + 4 then firstRow = row - 3 end
-    frame.replyFirst = firstRow * 3 + 1
+    local pageIndex = math.floor((frame.replyIndex - 1) / REPLIES_PER_PAGE)
+    local pageCount = math.ceil(#replies / REPLIES_PER_PAGE)
+    frame.replyFirst = pageIndex * REPLIES_PER_PAGE + 1
     for slot, button in ipairs(frame.replyButtons) do
         local index = frame.replyFirst + slot - 1
         button:SetShown(replies[index] ~= nil)
         button.label:SetText(replies[index] or '')
-        self:HighlightComposerButton(button, index == frame.replyIndex)
+        button.composerSelected = index == frame.replyIndex
+        styleShortcut(button)
     end
     frame.replyEmpty:SetShown(#replies == 0)
-    frame.replyCount:SetText(#replies > 0 and (frame.replyIndex .. ' / ' .. #replies) or '')
+    frame.replyCount:SetText(pageCount > 1 and (pageIndex + 1 .. ' / ' .. pageCount) or '')
+    frame.replyPrevious:SetShown(pageCount > 1)
+    frame.replyNext:SetShown(pageCount > 1)
+    frame.replyPrevious:SetEnabled(pageCount > 1)
+    frame.replyNext:SetEnabled(pageCount > 1)
+end
+
+function chat:PageComposerReplies(direction)
+    local frame, replies = self.composer, self:GetQuickReplies()
+    if #replies == 0 then return end
+    local pageIndex = math.floor((frame.replyIndex - 1) / REPLIES_PER_PAGE)
+    local target = (pageIndex + direction) % math.ceil(#replies / REPLIES_PER_PAGE)
+    local slot = (frame.replyIndex - 1) % REPLIES_PER_PAGE
+    frame.replyIndex = math.min(#replies, target * REPLIES_PER_PAGE + slot + 1)
+    self:RefreshComposerReplies()
 end
 
 function chat:MoveComposerReply(dx, dy)
     local frame, replies = self.composer, self:GetQuickReplies()
+    if #replies == 0 then return end
     local index = frame.replyIndex
-    if dy ~= 0 then index = math.max(1, math.min(#replies, index + dy * 3))
+    if dy ~= 0 then
+        local rowCount = math.ceil(#replies / REPLY_COLUMNS)
+        local row = (math.floor((index - 1) / REPLY_COLUMNS) + dy) % rowCount
+        local column = (index - 1) % REPLY_COLUMNS
+        index = math.min(#replies, row * REPLY_COLUMNS + column + 1)
     else
-        local first = math.floor((index - 1) / 3) * 3 + 1
-        local count = math.min(3, #replies - first + 1)
+        local first = math.floor((index - 1) / REPLY_COLUMNS) * REPLY_COLUMNS + 1
+        local count = math.min(REPLY_COLUMNS, #replies - first + 1)
         if count > 0 then index = first + ((index - first + dx) % count) end
     end
     frame.replyIndex = index
@@ -109,88 +182,11 @@ function chat:InsertComposerReply()
     self:SetComposerTab(1)
 end
 
-local function emoteLabel(token, fallback)
-    for i = 1, (MAXEMOTEINDEX or 0) do
-        if _G['EMOTE' .. i .. '_TOKEN'] == token then
-            return (_G['EMOTE' .. i .. '_CMD1'] or fallback):gsub('^/', '')
-        end
-    end
-    return fallback
-end
-
-function chat:BuildComposerEmotes(page)
-    local frame = self.composer
-    -- PieMenu is ConsolePort's intrinsic visual template, not its secure ring
-    -- header. We supply our own input and keep the same standalone behavior.
-    if CPPieMenuMixin and CPFocusPoolMixin then
-        local pie = CreateFrame('PieMenu', nil, page)
-        pie:SetSize(220, 220)
-        pie:SetPoint('CENTER')
-        pie:EnableMouse(false)
-        pie:Show()
-        if pie.BG then pie.BG:SetVertexColor(0.35, 0.30, 0.20, 0.75) end
-        frame.emotePie = pie
-    end
-    frame.emoteButtons = {}
-    local step = math.pi * 2 / #emotes
-    for i, spec in ipairs(emotes) do
-        local index = i
-        local label = spec.label or emoteLabel(spec[1], spec[2])
-        local button = self:ComposerButton(page, label, 104, 28, function()
-            chat.composer.emoteIndex = index
-            chat:PerformComposerEmote()
-        end)
-        button.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), 18, '')
-        button.label:SetWordWrap(false)
-        local angle = (i - 1) * step
-        -- A wider wheel leaves room for all fourteen labels within the existing panel.
-        button:SetPoint('CENTER', page, 'CENTER', math.sin(angle) * 330, math.cos(angle) * 98)
-        frame.emoteButtons[i] = button
-    end
-    frame.emoteLabel = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-    frame.emoteLabel:SetPoint('CENTER')
-    frame.emoteLabel:SetWidth(190)
-    frame.emoteLabel:SetText('Choose an emote\nA / Cross to perform')
-end
-
-function chat:RefreshComposerEmotes()
-    local frame = self.composer
-    if not frame or not frame.emoteButtons then return end
-    for i, button in ipairs(frame.emoteButtons) do
-        self:HighlightComposerButton(button, i == frame.emoteIndex)
-    end
-    local selected = frame.emoteIndex and frame.emoteButtons[frame.emoteIndex]
-    frame.emoteLabel:SetText(selected and selected.label:GetText() or 'Choose an emote')
-    if frame.emotePie and frame.emotePie.Arrow then
-        if frame.emotePie.BG then
-            frame.emotePie.BG:SetAlpha(1)
-            frame.emotePie.BG:SetVertexColor(0.35, 0.30, 0.20, 0.75)
-        end
-        frame.emotePie.Arrow:SetAlpha(selected and 1 or 0)
-        if selected then
-            frame.emotePie.Arrow:SetRotation(-(frame.emoteIndex - 1) * math.pi * 2 / #frame.emoteButtons)
-        end
-    end
-end
-
-function chat:PerformComposerEmote()
-    local spec = emotes[self.composer.emoteIndex or 0]
-    if not spec then return end
-    local perform = C_ChatInfo and C_ChatInfo.PerformEmote or DoEmote
-    if not perform then self:SetComposerStatus('Emotes are unavailable on this client.'); return end
-    local ok, success = pcall(perform, spec[1])
-    if not ok then
-        self:SetComposerStatus('Unable to perform this emote.')
-        geterrorhandler()(success)
-    elseif success == false then self:SetComposerStatus('This emote cannot be performed right now.')
-    else self:CloseComposer() end
-end
-
 function chat:BuildComposerChannels()
     local frame = self.composer
     local panel = CreateFrame('Frame', nil, frame, 'BackdropTemplate')
     panel:SetPoint('TOPLEFT', 16, -64)
-    panel:SetSize(828, 272)
+    panel:SetSize(frame.pages[1]:GetWidth(), 272)
     panel:SetFrameLevel(frame:GetFrameLevel() + 5)
     panel:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8',
         edgeFile = 'Interface\\Buttons\\WHITE8X8', edgeSize = 1 })
@@ -203,7 +199,7 @@ function chat:BuildComposerChannels()
     frame.channelIndex, frame.channelFirst = 1, 1
     for slot = 1, 6 do
         local index = slot
-        local button = self:ComposerButton(panel, '', 796, 36, function()
+        local button = self:ComposerButton(panel, '', panel:GetWidth() - 32, 36, function()
             chat.composer.channelIndex = chat.composer.channelFirst + index - 1
             chat:ChooseComposerChannel()
         end)

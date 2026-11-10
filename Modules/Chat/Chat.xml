@@ -29,6 +29,7 @@
     <Include file='ChatKeyboard.lua'/>
     <Include file='ChatComposerController.lua'/>
     <Include file='ChatQuickActions.lua'/>
+    <Include file='ChatEmotes.lua'/>
     <Include file='ChatModeration.lua'/>
     <Include file='ChatQuickRepliesOptions.lua'/>
     <Include file='ChatOptions.lua'/>

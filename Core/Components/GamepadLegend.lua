@@ -160,18 +160,32 @@ function legendProto:RefreshFallback()
     local maxWidth = math.max(44, self.maxWidth or self.parent:GetWidth() - 8)
     local x, y = EDGE, -EDGE
     local rows, usedWidth, visible = 1, 0, 0
+    local fullWidth = EDGE * 2
     for i, prompt in ipairs(self.prompts) do
         local item = self.fallbackItems[i]
         local shown = promptShown(prompt)
+        local label = promptLabel(prompt)
+        local iconWidth = #item.icons * ICON_SIZE + (#item.icons - 1) * 14
+        item.label:SetText(label)
+        local width = iconWidth + 4 + item.label:GetStringWidth()
+        if self.singleRow then
+            -- Measure every prompt, including hidden ones, so tabs with fewer
+            -- controls keep the same icon and font sizes. Dynamic labels can
+            -- supply their alternatives to reserve a stable maximum width.
+            local reservedWidth = width
+            for _, alternative in ipairs(prompt.sizingLabels or {}) do
+                item.label:SetText(alternative)
+                reservedWidth = math.max(reservedWidth, iconWidth + 4 + item.label:GetStringWidth())
+            end
+            item.label:SetText(label)
+            fullWidth = fullWidth + reservedWidth + (i > 1 and ITEM_GAP or 0)
+        end
         item:SetShown(shown)
         if shown then
             visible = visible + 1
-            item.label:SetText(promptLabel(prompt))
             for _, icon in ipairs(item.icons) do updateIcon(icon, icon.key, device) end
-            local iconWidth = #item.icons * ICON_SIZE + (#item.icons - 1) * 14
-            local width = iconWidth + 4 + item.label:GetStringWidth()
             item:SetWidth(width)
-            if x > EDGE and x + width + EDGE > maxWidth then
+            if not self.singleRow and x > EDGE and x + width + EDGE > maxWidth then
                 x, y = EDGE, y - ICON_SIZE - ROW_GAP
                 rows = rows + 1
             end
@@ -182,10 +196,16 @@ function legendProto:RefreshFallback()
         end
     end
     local height = visible > 0 and (EDGE * 2 + rows * ICON_SIZE + (rows - 1) * ROW_GAP) or 0
-    self.fallback:SetSize(math.min(maxWidth, math.max(1, usedWidth)), math.max(1, height))
+    local width = math.max(1, usedWidth)
+    local scale = self.singleRow and math.min(1, maxWidth / fullWidth) or 1
+    self.fallback:SetSize(self.singleRow and width or math.min(maxWidth, width), math.max(1, height))
+    self.fallback:SetScale(scale)
     if self.centered then
         self.fallback:ClearAllPoints()
-        self.fallback:SetPoint('TOP', self.parent, 'BOTTOM', 0, -self.gap)
+        self.fallback:SetPoint('TOP', self.parent, 'BOTTOM', 0, -self.gap / scale)
+    elseif self.singleRow then
+        self.fallback:ClearAllPoints()
+        self.fallback:SetPoint('TOPLEFT', self.parent, 'BOTTOMLEFT', self.x / scale, -self.gap / scale)
     end
     self.fallbackVisible = visible > 0
     if self.backend == 'fallback' then self.fallback:SetShown(self.active and self.fallbackVisible) end
@@ -259,7 +279,7 @@ function legendProto:GetHeight()
     if self.backend == 'native' and self.nativeFooter and self.nativeFooter.inputLegend then
         return self.nativeFooter.inputLegend:GetHeight()
     end
-    return self.fallback:GetHeight()
+    return self.fallback:GetHeight() * self.fallback:GetScale()
 end
 
 function legendProto:Show()
@@ -280,8 +300,10 @@ end
 --- Creates a visual legend; button handling stays with the caller.
 --- Prompts contain keys={gamepadKey[, gamepadKey]}, label=string|function,
 --- and optional show=function returning whether the prompt is available.
+--- Dynamic labels may provide sizingLabels={...} to keep single-row scaling stable.
 --- Set displayOnly=true to render icons without activating native binding groups.
 --- Set centered=true to center the standalone legend beneath its parent.
+--- Set singleRow=true to scale the standalone legend to its max width instead of wrapping.
 --- The legend sits below the parent frame; `gap` controls their separation.
 function legendComponent.Create(parent, options)
     local instance = setmetatable({
@@ -293,6 +315,7 @@ function legendComponent.Create(parent, options)
         active = false,
         displayOnly = options.displayOnly == true,
         centered = options.centered == true,
+        singleRow = options.singleRow == true,
         nativeShown = false,
     }, { __index = legendProto })
     instance.fallback, instance.fallbackItems = createFallback(

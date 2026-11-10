@@ -17,7 +17,7 @@ addon = addon or (LibStub and LibStub('AceAddon-3.0'):GetAddon(addonName))
 
 local M = {}
 
-M.CURRENT_VERSION = 7
+M.CURRENT_VERSION = 8
 local DEFAULT_CHAT_HEIGHT = 260
 local DEFAULT_HISTORY_HEIGHT = 400
 
@@ -123,6 +123,22 @@ local function splitBubbleSizing(profile)
     bubbles.enlargeYells = bubbles.styleByType ~= false
 end
 
+-- v7 -> v8: update phrases already copied into saved shortcut lists.
+local function updateShortcutPhrases(profile)
+    local replies = profile.chat and profile.chat.quickReplies
+    -- Preserve intentionally empty lists; unset lists use the current defaults.
+    if type(replies) ~= 'table' or #replies == 0 then return end
+    local hasNoProblem = false
+    for i, text in ipairs(replies) do
+        if type(text) == 'string' then
+            local phrase = text:lower():match('^%s*(.-)%s*$')
+            if phrase == 'good game' or phrase == 'good game!' then replies[i] = 'Good Job!' end
+            if phrase == 'no problem.' then hasNoProblem = true end
+        end
+    end
+    if not hasNoProblem then replies[#replies + 1] = 'No problem.' end
+end
+
 --- Runs the migration against an AceDB instance. Safe to call repeatedly.
 ---@param db table  AceDB instance (must expose `.profile`)
 ---@return boolean migrated  whether any change was applied
@@ -169,6 +185,10 @@ function M.Run(db)
 
     if version < 7 then
         splitBubbleSizing(profile)
+    end
+
+    if version < 8 then
+        updateShortcutPhrases(profile)
     end
 
     profile.schemaVersion = M.CURRENT_VERSION
