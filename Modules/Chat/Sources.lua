@@ -153,6 +153,11 @@ function M.IsNpc(event)
     return M.NPC_EVENTS[event] == true
 end
 
+--- Player emotes, including both custom /e text and built-in actions.
+function M.IsEmote(event)
+    return event == 'CHAT_MSG_EMOTE' or event == 'CHAT_MSG_TEXT_EMOTE'
+end
+
 --- Whether the speech is addressed to the group rather than the open world.
 ---@param event string
 ---@return boolean
@@ -276,6 +281,7 @@ end
 ---@field clock       string   Wall-clock HH:MM:SS
 ---@field lineID      number?  Blizzard line id (nil when unavailable/secret)
 ---@field text        string   Raw display text (may be a secret value)
+---@field emoteText   string?  Emote display text with resolved identity colors
 ---@field sender      string?  Sender display name
 ---@field guid        string?  Sender GUID
 ---@field channelName string?  Raw channel name (e.g. "1. General")

@@ -281,10 +281,11 @@ end
 --- rebuilds (filter change, resize) render instantly and are marked revealed so
 --- they never re-animate later.
 ---@param fs FontString
----@param text string?
+---@param msg ChatMessage
 ---@param animate boolean
-local function applyText(fs, text, animate)
+local function applyText(fs, msg, animate)
     local chat = addon.Chat
+    local text = msg.emoteText or msg.text
     chat:SetTextPlain(fs, text)
     if animate then
         chat:Reveal(fs, text)
@@ -354,6 +355,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     local hasIcon = false
     local channelH = feed.fonts.channel.size
     local nameH = feed.fonts.name.size
+    local showsChannel = true
     local headerRight, headerBottom
     if showsIdentity then
         -- Release any prior pooled row's explicit widths before styling the
@@ -361,6 +363,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         g.name:SetWidth(0)
         g.channel:SetWidth(0)
         hasIcon = chat:StyleIdentity(g, first, feed) == true
+        showsChannel = g.channel:IsShown()
         local headerX = hasIcon and (iconSize + iconGap) or 0
         local channelTop = top + (hasIcon and iconTopPad or 0)
 
@@ -387,7 +390,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
                 and math.min(measuredNameWidth, headerWidth * 0.6)
                 or (headerWidth * 0.4)
             local channelWidth = math.max(headerWidth - nameWidth - NAME_GAP, 1)
-            g.name:SetWidth(math.max(nameWidth, 1))
+            g.name:SetWidth(showsChannel and math.max(nameWidth, 1) or headerWidth)
             g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
             g.channel:SetWidth(channelWidth)
             g.channel:SetPoint('LEFT', g.name, 'RIGHT', NAME_GAP, 0)
@@ -396,7 +399,9 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         else
             g.channel:SetWidth(headerWidth)
             g.channel:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -channelTop)
-            channelH = math.max(g.channel:GetHeight() or 0, feed.fonts.channel.size)
+            if showsChannel then
+                channelH = math.max(g.channel:GetHeight() or 0, feed.fonts.channel.size)
+            end
             g.name:SetWidth(headerWidth)
             g.name:SetPoint('TOPLEFT', g, 'TOPLEFT', headerX, -(channelTop + channelH + NAME_GAP))
             nameH = math.max(g.name:GetHeight() or 0, feed.fonts.name.size)
@@ -411,7 +416,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         local iconBottom = top + (hasIcon and (iconTopPad + iconSize) or 0)
         local messageTop = math.max(textBottom, iconBottom) + MSG_TOP_GAP
         headerBottom = messageTop - MSG_TOP_GAP
-        if compactMode then
+        if compactMode and showsChannel then
             headerRight = headerX + math.max(textWidth(g.name, g.name:GetWidth()),
                 g.name:GetWidth() + NAME_GAP + textWidth(g.channel, g.channel:GetWidth()))
         else
@@ -469,7 +474,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         chat:StyleLine(fs, msg, i == 1 and showsIdentity)
         applyLineFont(fs, msgFace, msgSize)
         applyLineWidth(fs, available)
-        chat:SetTextPlain(fs, msg.text)
+        chat:SetTextPlain(fs, msg.emoteText or msg.text)
         g._lineHeights[i] = fs:GetHeight() or msgSize
         g._lineWidths[i] = textWidth(fs, available)
     end
@@ -501,7 +506,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         if lineAlphas then lineAlphas[i] = alpha end
         if historyVisible then alpha = 1 end
         if fs:GetAlpha() ~= alpha then fs:SetAlpha(alpha) end
-        applyText(fs, msg.text, animate ~= false)
+        applyText(fs, msg, animate ~= false)
         fs:ClearAllPoints()
         fs:SetPoint('TOPLEFT', g, 'TOPLEFT', messageLeft, -y)
         fs:Show()

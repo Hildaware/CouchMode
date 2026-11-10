@@ -96,6 +96,11 @@ local function nextRevealEnd(text, start)
     local prefix = text:sub(start, start + 9)
     if prefix:match('^|[cC]%x%x%x%x%x%x%x%x') then
         linkStart = start + 10
+        -- Inline name highlights must appear with their complete color markup.
+        if text:sub(linkStart, linkStart + 1) ~= '|H' then
+            local colorEnd = text:find('|r', linkStart, true)
+            if colorEnd then return colorEnd + 1 end
+        end
     end
 
     if text:sub(linkStart, linkStart + 1) ~= '|H' then

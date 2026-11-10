@@ -59,7 +59,7 @@ function chat:ResolveIdentity(msg)
     local id = self.identByGuid[msg.guid]
     if id then return id end
 
-    local localizedClass, classFile, localizedRace, raceFile, sex = GetPlayerInfoByGUID(msg.guid)
+    local localizedClass, classFile, localizedRace, raceFile, sex, name, realm = GetPlayerInfoByGUID(msg.guid)
     if isSecret(localizedClass) then return nil end
     if not classFile then return nil end
 
@@ -69,6 +69,8 @@ function chat:ResolveIdentity(msg)
         race = localizedRace,
         raceFile = raceFile,
         sex = sex,
+        name = not isSecret(name) and name or nil,
+        realm = not isSecret(realm) and realm or nil,
     }
     self.identByGuid[msg.guid] = id
     return id
@@ -130,6 +132,10 @@ function chat:Enrich(msg)
             msg.sex = id.sex
         end
         msg.unitToken = self:ResolveUnit(msg)
+    end
+    if Sources.IsEmote(msg.event) then
+        -- Capture identities on receipt, before queue pacing or target changes.
+        msg.emoteText = self:FormatEmoteText(msg)
     end
 end
 

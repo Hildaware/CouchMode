@@ -102,8 +102,10 @@ function chat:StyleIdentity(g, msg, feed)
 
     local alias = Rules.ResolveAlias(db().aliases, Sources.ChatTypeKey(msg.event), msg.channelBase)
     local r, gg, b = chatTypeColor(msg.event)
-    self:SetTextPlain(g.channel, alias or (msg.category == 'SYSTEM' and ''
-        or (msg.channelBase or Sources.DisplayType(msg.event))))
+    local isEmote = Sources.IsEmote(msg.event)
+    g.channel:SetShown(not isEmote)
+    self:SetTextPlain(g.channel, isEmote and '' or (alias or (msg.category == 'SYSTEM' and ''
+        or (msg.channelBase or Sources.DisplayType(msg.event)))))
     g.channel:SetFont(channelFont and channelFont.face or addon.Media.ResolveFont(db().channelFontFace),
         channelFont and channelFont.size or db().channelFontSize, 'OUTLINE')
     g.channel:SetTextColor(r, gg, b, 0.85)
