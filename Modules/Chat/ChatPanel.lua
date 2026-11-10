@@ -511,6 +511,7 @@ end
 function chat:OnScreenSizeChanged()
     self:ApplyLayout()
     self:ApplyHistoryLayout()
+    self:ApplyComposerLayout()
 end
 
 --#endregion
@@ -551,14 +552,15 @@ function chat:UpdateFade(dt)
         self.backgroundHovered = backgroundHovered
         self:ApplyPanelBackgroundOpacity()
     end
-    local inputFocused = Input:HasFocus()
+    local inputFocused = Input:HasFocus() and not self:IsComposerOpen()
     local gamepadFocused = false
     local gamepadMode = _G.GamepadMode
     local focusManager = gamepadMode and gamepadMode.FrameControlsManager
     if focusManager and focusManager.isUIFocused and focusManager.GetActiveFrame then
         gamepadFocused = focusManager:GetActiveFrame() == self.panel
     end
-    local engaged = historyVisible or self:IsHistoryModeOpen() or panelHovered or inputFocused or gamepadFocused
+    local engaged = historyVisible or self:IsHistoryModeOpen() or self:IsComposerOpen()
+        or panelHovered or inputFocused or gamepadFocused
     if self.feed then self.feed:SetFadePaused(engaged, now) end
     local hasVisibleMessages, displayChanged = false, false
     if self.feed then
@@ -636,6 +638,7 @@ end
 --#region ── Panel controls ─────────────────────────────────────────────────────
 
 function chat:Toggle()
+    if self:IsComposerOpen() then self:CloseComposer(); return end
     if not db().enabled then return end
     if not self.panel then return end
     if self:IsHistoryModeOpen() then self:CloseHistoryMode() end
@@ -649,11 +652,13 @@ function chat:Toggle()
 end
 
 function chat:FocusInput()
+    if self:IsComposerOpen() then self:ResumeComposer(); return end
     if self:IsHistoryModeOpen() then self:CloseHistoryMode() end
     if self.panel then Input:Focus(); self:Touch() end
 end
 
 function chat:ClosePanel()
+    if self:IsComposerOpen() then self:CloseComposer(); return end
     if self:IsHistoryModeOpen() then self:CloseHistoryMode(); return end
     Input:Deactivate()
     self.fadeAlpha = db().backgroundOpacity

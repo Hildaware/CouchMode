@@ -34,6 +34,53 @@ Utilities that make World of Warcraft feel more like a console experience.
 Chat and Chat Bubbles share a single message router (`Modules/Chat/Router.lua`)
 so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 
+## Chat composer
+
+Assign **CouchMode → Chat Composer** in Key Bindings, or open it from
+**Chat → Quick Replies** in CouchMode settings. **Chat History** remains a
+separate binding. The composer offers QWERTY typing, editable quick replies,
+an emote wheel, and a channel/whisper picker. ConsolePort is optional.
+
+| Controller input | Action |
+|---|---|
+| Left stick / D-pad | Select keys or phrases; choose emotes |
+| A / Cross | Type or confirm; perform selected emote |
+| B / Circle | Back / close and keep draft |
+| X / Square | Backspace (hold to repeat) |
+| Y / Triangle | Space |
+| LB / RB | Switch tabs |
+| Left trigger | Hold Shift |
+| Right trigger | Send from Keyboard or Quick Replies |
+| Right stick left/right | Move caret |
+| Left-stick click | Choose channel / whisper destination |
+
+Quick replies insert text for review before sending. Edit and reorder phrases
+in Chat settings. Emotes perform once and close the composer; unfinished drafts
+are kept for the current session. Physical typing and clickable keys also work.
+Closing returns controller input after held buttons and sticks are released.
+
+The input frames are configured outside combat and reused during combat. After
+logging in or reloading during combat, initial setup waits for combat to end.
+Combat behavior and native Gamepad UI taint still require validation in WoW.
+
+### In-client verification
+
+- Check Retail with ConsolePort and Forever with native Gamepad UI, both with
+  and without ConsolePort. Confirm only one virtual keyboard appears, and that
+  ConsolePort still handles unrelated text fields.
+- Type, edit, send, cancel, and reopen drafts. Check physical typing, UTF-8 text,
+  item links, autocomplete, slash commands, group channels, and whispers.
+- Add, edit, reorder, and delete replies; verify an empty list stays empty after
+  reload and that profile changes close the composer and discard its old draft.
+- Perform each emote with and without a target. Check D-pad and stick selection,
+  one action per press, and preservation of an unfinished message.
+- Open, type, send, and close during combat; enter and leave combat while open.
+  Hold controls across dismissal, move focus elsewhere, and disconnect the
+  controller. Check for input leaks, stuck controls, and protected-action errors.
+- After closing, exercise native menus, bags, minimap/world-map toolbars, and
+  outside-click dismissal. Check composer fit and readability at 720p/1080p and
+  different UI scales; time short messages to tune navigation comfort.
+
 ## TODO
 
 ### ALL

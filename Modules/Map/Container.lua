@@ -374,15 +374,6 @@ function CouchMode_MinimapGrowToggle() ---@diagnostic disable-line: lowercase-gl
     end
 end
 
-function CouchMode_MinimapToggle() ---@diagnostic disable-line: lowercase-global
-    if not map.container then return end
-    local db = addon.db.profile.minimap ---@type MinimapDB
-    local target = map.container:GetAlpha() == db.alpha and 0 or db.alpha
-    if target > 0 then map.container:Show() end
-    map.startFrameFade(map.container, map.containerFade, target, target == 0, FADE_DURATION)
-end
-
 -- Blizzard Key Bindings panel display strings
 BINDING_HEADER_COUCHMODE = "CouchMode" ---@diagnostic disable-line: lowercase-global
-BINDING_NAME_COUCHMODE_MINIMAP_GROWTOGGLE = "Toggle Expand Minimap" ---@diagnostic disable-line: lowercase-global
-BINDING_NAME_COUCHMODE_MINIMAP_TOGGLE = "Toggle Minimap" ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_COUCHMODE_MINIMAP_GROWTOGGLE = "Toggle Mimimap Expanded" ---@diagnostic disable-line: lowercase-global

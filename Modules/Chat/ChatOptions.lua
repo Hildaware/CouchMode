@@ -61,6 +61,8 @@ function chat:GetDefaults()
             -- Moderation / cosmetics
             blocks = { names = {}, guilds = {} },
             aliases = {},
+            -- Seed lazily; an explicitly empty list must remain empty.
+            quickReplies = false,
         },
         -- Bumped by ChatMigration; a value below CURRENT_VERSION runs migration.
         schemaVersion = 1,
@@ -413,6 +415,7 @@ function chat:BuildArgs()
             },
         },
     }
+    args.quickReplies = self:BuildQuickRepliesOptions()
     return args
 end
 

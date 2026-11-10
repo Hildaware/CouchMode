@@ -825,6 +825,7 @@ end
 
 function chat:OpenHistoryMode()
     if not db().enabled or not self.panel then return end
+    self:CloseComposer()
     if self:IsHistoryModeOpen() then
         if self.historyClosing then
             self.historyClosing = false

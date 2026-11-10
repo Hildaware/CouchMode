@@ -96,13 +96,3 @@ function toasts:HandleCommand(sub, arg)
 end
 
 --#endregion
-
---#region ── Bindings ──────────────────────────────────────────────────────────
-
-function CouchMode_ToastsToggle() addon.Toasts:Toggle() end
-function CouchMode_ToastsClose() addon.Toasts:ClosePanel() end
-
-BINDING_NAME_COUCHMODE_TOASTS_TOGGLE = 'Toggle Toasts'
-BINDING_NAME_COUCHMODE_TOASTS_CLOSE = 'Close Toasts'
-
---#endregion

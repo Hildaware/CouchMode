@@ -54,6 +54,13 @@ function chat:OnEnable()
 
     self:BuildPanel()
     self:BuildHistoryMode()
+    self:BuildComposer()
+    if not self.composerProfileCallbacks then
+        for _, event in ipairs({ 'OnProfileChanged', 'OnProfileCopied', 'OnProfileReset' }) do
+            addon.db.RegisterCallback(self, event, 'OnComposerProfileChanged')
+        end
+        self.composerProfileCallbacks = true
+    end
     addon.ChatRouter:Subscribe(self)
     if self:HasQueuedMessages() then self:ScheduleMessageQueue(0) end
 
@@ -61,8 +68,16 @@ function chat:OnEnable()
     self:RegisterValidEvent('PLAYER_ENTERING_WORLD', 'OnPlayerEnteringWorld')
     self:RegisterValidEvent('GUILD_ROSTER_UPDATE', function() self.guildRosterBuilt = false end)
     self:RegisterValidEvent('INSPECT_READY', 'OnInspectReady')
-    self:RegisterValidEvent('PLAYER_REGEN_ENABLED', 'ProcessInspectQueue')
+    -- Build fixed-propagation input frames after a login/reload in combat.
+    self:RegisterValidEvent('PLAYER_REGEN_ENABLED', function()
+        chat:ProcessInspectQueue()
+        chat:BuildComposer()
+    end)
     self:RegisterValidEvent('PLAYER_LOGOUT', 'OnLogout')
+    self:RegisterValidEvent('GAME_PAD_DISCONNECTED', function()
+        if chat:IsComposerOpen() then chat:SuspendComposer(true) end
+        if chat.composer then chat.composer.drain:Hide() end
+    end)
     self.screenEvents = {}
     for _, event in ipairs({ 'UI_SCALE_CHANGED', 'DISPLAY_SIZE_CHANGED' }) do
         if self:RegisterValidEvent(event, 'OnScreenSizeChanged') then
@@ -84,12 +99,15 @@ end
 
 --- Restores Blizzard's UI when the addon is unloaded (logout/reload).
 function chat:OnLogout()
+    self:CloseComposer()
     self:CloseHistoryMode()
     Input:Detach()
     self:RestoreBlizzard()
 end
 
 function chat:OnDisable()
+    self:CloseComposer()
+    self.composerDraft = nil
     self:CloseHistoryMode()
     self:StopMessageQueue()
     addon.ChatRouter:Unsubscribe(self)
@@ -99,6 +117,7 @@ function chat:OnDisable()
     self:UnregisterEvent('INSPECT_READY')
     self:UnregisterEvent('PLAYER_REGEN_ENABLED')
     self:UnregisterEvent('PLAYER_LOGOUT')
+    self:UnregisterEvent('GAME_PAD_DISCONNECTED')
     for event in pairs(self.screenEvents or {}) do self:UnregisterEvent(event) end
     self.screenEvents = nil
 
@@ -113,6 +132,7 @@ function chat:OnDisable()
 end
 
 function chat:OnPlayerEnteringWorld()
+    self:CloseComposer()
     self:ClearSession()
     if db().enabled then self:SuppressBlizzard() end
 end

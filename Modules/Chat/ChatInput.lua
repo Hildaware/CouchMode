@@ -18,6 +18,9 @@ local saved = nil
 local headerHooked = false
 local focusBorderHooked = false
 local aliasProvider = nil
+local composerSaved = nil
+local composerSendHooked = false
+local composerSubmitted = false
 
 --#region ── Helpers ───────────────────────────────────────────────────────────
 
@@ -119,6 +122,20 @@ function Input:Attach(parent, anchor)
 
     installHeaderHook(frame)
     installFocusBorderHook(frame)
+    if not composerSendHooked then
+        local function submitted()
+            if composerSaved then composerSubmitted = true end
+        end
+        if type(frame.SendText) == 'function' then
+            hooksecurefunc(frame, 'SendText', submitted)
+            composerSendHooked = true
+        elseif type(ChatEdit_SendText) == 'function' then
+            hooksecurefunc('ChatEdit_SendText', function(target)
+                if target == editBox then submitted() end
+            end)
+            composerSendHooked = true
+        end
+    end
 
     frame:SetParent(anchor or parent)
     frame:ClearAllPoints()
@@ -133,6 +150,7 @@ end
 
 --- Restores the edit box to its original parent, anchors, strata and state.
 function Input:Detach()
+    self:EndComposer()
     local frame = editBox or resolveEditBox()
     if not frame then return end
     setBordersShown(frame, true)
@@ -154,9 +172,25 @@ function Input:Focus()
     if not frame then return end
     if ChatFrameUtil and ChatFrameUtil.ActivateChat then
         ChatFrameUtil.ActivateChat(frame)
+    elseif ChatEdit_ActivateChat then
+        ChatEdit_ActivateChat(frame)
     else
         frame:Show()
         frame:SetFocus()
+    end
+    self:KeepComposerLayer()
+end
+
+function Input:KeepComposerLayer()
+    if not composerSaved or not editBox then return end
+    -- ActivateChat always assigns DIALOG and raises the edit box, including
+    -- when focus is obtained by clicking instead of through Input:Focus.
+    local parent = editBox:GetParent()
+    if editBox:GetFrameStrata() ~= parent:GetFrameStrata() then
+        editBox:SetFrameStrata(parent:GetFrameStrata())
+    end
+    if editBox:GetFrameLevel() ~= parent:GetFrameLevel() + 1 then
+        editBox:SetFrameLevel(parent:GetFrameLevel() + 1)
     end
 end
 
@@ -166,6 +200,8 @@ function Input:Deactivate()
     if not frame then return end
     if ChatFrameUtil and ChatFrameUtil.DeactivateChat then
         ChatFrameUtil.DeactivateChat(frame)
+    elseif ChatEdit_DeactivateChat then
+        ChatEdit_DeactivateChat(frame)
     else
         frame:ClearFocus()
     end
@@ -179,11 +215,61 @@ end
 
 --- Keeps the inactive embedded edit box from intercepting the live feed.
 function Input:SetMouseEnabled(enabled)
+    if composerSaved then return end
     local frame = editBox
     if frame and frame.EnableMouse and frame.IsMouseEnabled
         and frame:IsMouseEnabled() ~= (enabled == true) then
         frame:EnableMouse(enabled == true)
     end
+end
+
+-- Preserve the embedded input independently of its original Blizzard placement.
+function Input:BeginComposer(anchor, onEnter, onEscape)
+    if composerSaved or not editBox then return false end
+    local frame = editBox
+    composerSaved = captureState(frame)
+    composerSaved.hidekeyboard = frame:GetAttribute('hidekeyboard')
+    composerSaved.enter = frame:GetScript('OnEnterPressed')
+    composerSaved.escape = frame:GetScript('OnEscapePressed')
+    frame:SetAttribute('hidekeyboard', true)
+    -- Its observer only reacts when the focused frame changes. Explicitly
+    -- dismiss a keyboard that already owns this same edit box.
+    if ConsolePortKeyboard and ConsolePortKeyboard.focusFrame == frame
+        and ConsolePortKeyboard.OnFocusChanged then
+        ConsolePortKeyboard:OnFocusChanged(nil)
+    end
+    frame:SetParent(anchor)
+    frame:ClearAllPoints()
+    frame:SetPoint('TOPLEFT', anchor, 'TOPLEFT', 8, -4)
+    frame:SetPoint('BOTTOMRIGHT', anchor, 'BOTTOMRIGHT', -8, 4)
+    frame:SetFrameStrata(anchor:GetFrameStrata())
+    frame:SetFrameLevel(anchor:GetFrameLevel() + 1)
+    frame:EnableMouse(true)
+    frame:SetScript('OnEnterPressed', onEnter)
+    frame:SetScript('OnEscapePressed', onEscape)
+    return true
+end
+
+function Input:GetNativeEnterHandler()
+    return composerSaved and composerSaved.enter
+end
+
+function Input:ResetSubmission()
+    composerSubmitted = false
+end
+
+function Input:DidSubmit()
+    return composerSubmitted, composerSendHooked
+end
+
+function Input:EndComposer()
+    if not composerSaved or not editBox then return end
+    local frame, state = editBox, composerSaved
+    composerSaved = nil
+    frame:SetScript('OnEnterPressed', state.enter)
+    frame:SetScript('OnEscapePressed', state.escape)
+    frame:SetAttribute('hidekeyboard', state.hidekeyboard)
+    restoreState(frame, state)
 end
 
 if addon then addon.ChatInput = Input end

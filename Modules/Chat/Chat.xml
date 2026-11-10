@@ -16,6 +16,7 @@
     <Include file='ChatFeedWidgets.lua'/>
     <Include file='ChatFeed.lua'/>
     <Include file='ChatInput.lua'/>
+    <Include file='ChatInputEditing.lua'/>
     <Include file='Chat.lua'/>
     <Include file='ChatSuppression.lua'/>
     <Include file='ChatReveal.lua'/>
@@ -24,7 +25,12 @@
     <Include file='ChatSession.lua'/>
     <Include file='ChatPanel.lua'/>
     <Include file='ChatHistory.lua'/>
+    <Include file='ChatComposer.lua'/>
+    <Include file='ChatKeyboard.lua'/>
+    <Include file='ChatComposerController.lua'/>
+    <Include file='ChatQuickActions.lua'/>
     <Include file='ChatModeration.lua'/>
+    <Include file='ChatQuickRepliesOptions.lua'/>
     <Include file='ChatOptions.lua'/>
     <Include file='ChatCommands.lua'/>
 </UI>

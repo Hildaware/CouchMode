@@ -52,12 +52,19 @@ local GLYPHS = {
     PAD1 = 'A', PAD2 = 'B', PAD3 = 'X', PAD4 = 'Y',
     PADDUP = '↑', PADDDOWN = '↓', PADDLEFT = '←', PADDRIGHT = '→',
     PADLSHOULDER = 'L', PADRSHOULDER = 'R',
+    PADLTRIGGER = 'LT', PADRTRIGGER = 'RT', PADLSTICK = 'LS', PADRSTICK = 'RS',
 }
 
 local function updateIcon(icon, key, device)
     local path, useAtlas
     if device and device.GetIconForButton then
         path, useAtlas = device:GetIconForButton(key, 32)
+    end
+    if not path and _G.InputIconTextureSetUtility and _G.InputIconTextureState
+        and InputIconTextureSetUtility.GetActiveInputIconButtonTextures then
+        local textures = InputIconTextureSetUtility.GetActiveInputIconButtonTextures(key)
+        path = textures and textures[InputIconTextureState.Normal]
+        useAtlas = path ~= nil
     end
     if path then
         icon.glyph:Hide()
@@ -176,6 +183,10 @@ function legendProto:RefreshFallback()
     end
     local height = visible > 0 and (EDGE * 2 + rows * ICON_SIZE + (rows - 1) * ROW_GAP) or 0
     self.fallback:SetSize(math.min(maxWidth, math.max(1, usedWidth)), math.max(1, height))
+    if self.centered then
+        self.fallback:ClearAllPoints()
+        self.fallback:SetPoint('TOP', self.parent, 'BOTTOM', 0, -self.gap)
+    end
     self.fallbackVisible = visible > 0
     if self.backend == 'fallback' then self.fallback:SetShown(self.active and self.fallbackVisible) end
 end
@@ -212,7 +223,7 @@ end
 
 function legendProto:Refresh()
     self:RefreshFallback()
-    if self.active and nativeAvailable() then
+    if self.active and not self.displayOnly and nativeAvailable() then
         self:CreateNative()
         self.fallback:Hide()
         local footer = self.nativeFooter
@@ -269,6 +280,8 @@ end
 --- Creates a visual legend; button handling stays with the caller.
 --- Prompts contain keys={gamepadKey[, gamepadKey]}, label=string|function,
 --- and optional show=function returning whether the prompt is available.
+--- Set displayOnly=true to render icons without activating native binding groups.
+--- Set centered=true to center the standalone legend beneath its parent.
 --- The legend sits below the parent frame; `gap` controls their separation.
 function legendComponent.Create(parent, options)
     local instance = setmetatable({
@@ -278,6 +291,8 @@ function legendComponent.Create(parent, options)
         x = options.x or 0,
         gap = options.gap or 12,
         active = false,
+        displayOnly = options.displayOnly == true,
+        centered = options.centered == true,
         nativeShown = false,
     }, { __index = legendProto })
     instance.fallback, instance.fallbackItems = createFallback(

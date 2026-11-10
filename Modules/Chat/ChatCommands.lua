@@ -69,15 +69,9 @@ end
 
 --#region ── Bindings ──────────────────────────────────────────────────────────
 
-function CouchMode_ChatToggle() addon.Chat:Toggle() end
 function CouchMode_ChatHistoryToggle() addon.Chat:ToggleHistoryMode() end
-function CouchMode_ChatFocus() addon.Chat:FocusInput() end
-function CouchMode_ChatFilterNext() addon.Chat:CycleFilter(1) end
-function CouchMode_ChatFilterPrev() addon.Chat:CycleFilter(-1) end
-function CouchMode_ChatScrollUp() addon.Chat:ScrollUp() end
-function CouchMode_ChatScrollDown() addon.Chat:ScrollDown() end
-function CouchMode_ChatBottom() addon.Chat:ScrollToBottom() end
-function CouchMode_ChatClose() addon.Chat:ClosePanel() end
-BINDING_NAME_COUCHMODE_CHAT_HISTORY_TOGGLE = 'Toggle Chat History Mode' ---@diagnostic disable-line: lowercase-global
+function CouchMode_ChatComposer() addon.Chat:ToggleComposer() end
+BINDING_NAME_COUCHMODE_CHAT_HISTORY_TOGGLE = 'Chat History' ---@diagnostic disable-line: lowercase-global
+BINDING_NAME_COUCHMODE_CHAT_COMPOSER = 'Chat Composer' ---@diagnostic disable-line: lowercase-global
 
 --#endregion
