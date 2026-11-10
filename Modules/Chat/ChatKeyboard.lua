@@ -1,6 +1,7 @@
 -- QWERTY layout and free pointer navigation. All buttons are allocated before combat.
 local _, addon = ...
 local chat = addon.Chat
+local TAB = chat.COMPOSER_TABS
 local Input = addon.ChatInput
 local KEY_WIDTH, KEY_HEIGHT, COLUMN_GAP, ROW_GAP = 60, 36, 2, 0
 
@@ -71,7 +72,7 @@ function chat:RefreshComposerKeyboard()
     if not frame then return end
     local layout = frame.symbols and symbols or letters
     for row, entries in ipairs(frame.keyboardRows) do
-        local x = (frame.pages[1]:GetWidth() - (#layout[row] * (KEY_WIDTH + COLUMN_GAP) - COLUMN_GAP)) / 2
+        local x = (frame.pages[TAB.KEYBOARD]:GetWidth() - (#layout[row] * (KEY_WIDTH + COLUMN_GAP) - COLUMN_GAP)) / 2
         for column, button in ipairs(entries) do
             local text = layout[row][column]
             button:SetShown(text ~= nil)
@@ -146,7 +147,7 @@ function chat:UpdateComposerKeyboardPointer()
     local pointer = frame.keyboardPointer
     if not pointer then return end
     local shown = self.composerActive and frame.keyboardPointerActive
-        and self.composerTab == 1 and not frame.channels:IsShown()
+        and self.composerTab == TAB.KEYBOARD and not frame.channels:IsShown()
     pointer:SetShown(shown)
     if not shown then return end
     local top = frame.keyboardRows[1]
@@ -156,7 +157,7 @@ function chat:UpdateComposerKeyboardPointer()
     local y = KEY_HEIGHT / 2 + (1 - (frame.keyboardPointerY or 0)) * height / 2
     if pointer.positionX ~= x or pointer.positionY ~= y then
         pointer:ClearAllPoints()
-        pointer:SetPoint('CENTER', frame.pages[1], 'TOPLEFT', x, -y)
+        pointer:SetPoint('CENTER', frame.pages[TAB.KEYBOARD], 'TOPLEFT', x, -y)
         pointer.positionX, pointer.positionY = x, y
     end
 end

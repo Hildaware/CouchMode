@@ -652,7 +652,11 @@ function chat:Toggle()
 end
 
 function chat:FocusInput()
-    if self:IsComposerOpen() then self:ResumeComposer(); return end
+    if self:IsComposerOpen() then
+        self:SetComposerTab(self.COMPOSER_TABS.KEYBOARD)
+        self:ResumeComposer()
+        return
+    end
     if self:IsHistoryModeOpen() then self:CloseHistoryMode() end
     if self.panel then Input:Focus(); self:Touch() end
 end

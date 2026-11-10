@@ -21,6 +21,7 @@ local aliasProvider = nil
 local composerSaved = nil
 local composerSendHooked = false
 local composerSubmitted = false
+local composerInputShown = nil
 
 --#region ── Helpers ───────────────────────────────────────────────────────────
 
@@ -228,6 +229,7 @@ function Input:BeginComposer(anchor, onEnter, onEscape)
     if composerSaved or not editBox then return false end
     local frame = editBox
     composerSaved = captureState(frame)
+    composerInputShown = nil
     composerSaved.hidekeyboard = frame:GetAttribute('hidekeyboard')
     composerSaved.enter = frame:GetScript('OnEnterPressed')
     composerSaved.escape = frame:GetScript('OnEscapePressed')
@@ -250,6 +252,17 @@ function Input:BeginComposer(anchor, onEnter, onEscape)
     return true
 end
 
+-- Non-keyboard composer pages keep the draft but release native text focus.
+function Input:SetComposerInputShown(shown)
+    if not composerSaved or not editBox or composerInputShown == shown then return end
+    composerInputShown = shown
+    local draft = self:CaptureDraft()
+    if not shown then self:Deactivate() end
+    editBox:GetParent():SetShown(shown)
+    -- Native deactivation and OnShow can change text and the sticky channel.
+    self:RestoreDraft(draft)
+end
+
 function Input:GetNativeEnterHandler()
     return composerSaved and composerSaved.enter
 end
@@ -266,6 +279,7 @@ function Input:EndComposer()
     if not composerSaved or not editBox then return end
     local frame, state = editBox, composerSaved
     composerSaved = nil
+    composerInputShown = nil
     frame:SetScript('OnEnterPressed', state.enter)
     frame:SetScript('OnEscapePressed', state.escape)
     frame:SetAttribute('hidekeyboard', state.hidekeyboard)

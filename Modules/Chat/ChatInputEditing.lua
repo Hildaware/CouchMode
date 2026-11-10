@@ -164,6 +164,19 @@ function Input:GetDestinationLabel(compact)
     return label
 end
 
+function Input:GetDestinationColor()
+    local frame = self:GetEditBox()
+    local kind = frame and get(frame, 'GetChatType', 'chatType') or 'SAY'
+    local info = ChatTypeInfo and ChatTypeInfo[kind]
+    if kind == 'CHANNEL' and ChatTypeInfo then
+        -- Match Blizzard's edit-box header, including customized numbered-channel colors.
+        local id = GetChannelName(get(frame, 'GetChannelTarget', 'channelTarget') or 0)
+        if id and id > 0 then info = ChatTypeInfo['CHANNEL' .. id] or info end
+    end
+    if info and info.r and info.g and info.b then return info.r, info.g, info.b end
+    return 0.87, 0.84, 0.76
+end
+
 function Input:GetDestinations()
     local result = {}
     local function add(chatType, available, target, channel, label)

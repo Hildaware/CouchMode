@@ -4,15 +4,19 @@ local chat = addon.Chat
 local Input = addon.ChatInput
 local Metal = addon.Components.Metal
 local function db() return addon.db.profile.chat end
-local PAGE_TOP, PAGE_BOTTOM = 114, 16
+local TAB_TOP, TAB_HEIGHT, HEADER_TOP, HEADER_HEIGHT = 16, 40, 66, 30
+local PAGE_TOP, PAGE_TOP_WITHOUT_HEADER, PAGE_BOTTOM = 106, 66, 16
+local FOOTER_HEIGHT, FOOTER_GAP = 18, 8
 local LEGEND_GAP = 16
+local TAB = { SHORTCUTS = 1, KEYBOARD = 2, EMOTES = 3 }
+chat.COMPOSER_TABS = TAB
 local tabs = {
-    { label = 'Keyboard', icon = 'gamepad-radial-icon-macros-down',
-        pressedIcon = 'gamepad-radial-icon-macros-up',
-        background = 'dragonflight-landingpage-renownbutton-niffen-hover' },
     { label = 'Shortcuts', icon = 'gamepad-radial-icon-viewbuffs-down',
         pressedIcon = 'gamepad-radial-icon-viewbuffs',
         background = 'dragonflight-landingpage-renownbutton-valdrakken-hover' },
+    { label = 'Keyboard', icon = 'gamepad-radial-icon-macros-down',
+        pressedIcon = 'gamepad-radial-icon-macros-up',
+        background = 'dragonflight-landingpage-renownbutton-niffen-hover' },
     { label = 'Emotes', icon = 'gamepad-radial-icon-emotes-down',
         pressedIcon = 'gamepad-radial-icon-emotes-up',
         background = 'dragonflight-landingpage-renownbutton-valdrakken' },
@@ -33,7 +37,7 @@ end
 
 chat.composer = nil
 chat.composerDraft = nil
-chat.composerTab = 1
+chat.composerTab = TAB.SHORTCUTS
 chat.composerActive = false
 chat.composerClosing = false
 chat.composerSubmitting = false
@@ -123,9 +127,24 @@ function chat:ApplyComposerLayout()
     if not frame then return end
     local resuming = frame.resume and frame.resume:IsShown()
     local status = frame.status and frame.status:GetText()
+    local hasFooter = self.composerTab ~= TAB.EMOTES
+    local pageTop = self.composerTab == TAB.KEYBOARD and PAGE_TOP or PAGE_TOP_WITHOUT_HEADER
+    local extraHeight = (resuming or (status and status ~= '')) and 32 or 0
+    frame.footer:SetShown(hasFooter)
+    frame.footer:ClearAllPoints()
+    frame.footer:SetPoint('BOTTOMLEFT', 16, PAGE_BOTTOM + extraHeight)
+    frame.footer:SetPoint('BOTTOMRIGHT', -16, PAGE_BOTTOM + extraHeight)
+    frame.destination:ClearAllPoints()
+    frame.destination:SetPoint('TOPLEFT')
+    frame.destination:SetPoint('BOTTOMRIGHT', frame.footer, 'BOTTOMRIGHT', self.composerTab == TAB.SHORTCUTS and -110 or 0, 0)
+    frame.replyCount:SetShown(self.composerTab == TAB.SHORTCUTS and #self:GetQuickReplies() > 0)
+    for _, page in ipairs(frame.pages) do
+        page:ClearAllPoints()
+        page:SetPoint('TOPLEFT', 16, -pageTop)
+    end
     local pageHeight = frame.pages[self.composerTab]:GetHeight()
-    local height = PAGE_TOP + pageHeight + PAGE_BOTTOM
-        + ((resuming or (status and status ~= '')) and 32 or 0)
+    local height = pageTop + pageHeight + PAGE_BOTTOM
+        + (hasFooter and FOOTER_HEIGHT + FOOTER_GAP or 0) + extraHeight
     local legendHeight = frame.legend and frame.legend:GetHeight() or 44
     local totalHeight = height + LEGEND_GAP + legendHeight + Metal.BORDER_OUTSET
     local scale = math.min(1, UIParent:GetWidth() * 0.94 / frame:GetWidth(),
@@ -154,9 +173,17 @@ function chat:BuildComposer()
     frame:SetFrameStrata('FULLSCREEN_DIALOG')
     frame:SetClampedToScreen(true)
     frame:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8' })
-    frame:SetBackdropColor(0.025, 0.035, 0.055, 0.50)
+    frame:SetBackdropColor(0.025, 0.035, 0.055, 0.75)
     frame:EnableMouse(true)
     frame:Hide()
+    -- Escape support makes this frame discoverable through UISpecialFrames.
+    -- The composer owns controller navigation; exclude its entire subtree
+    -- from ConsolePort's node scanner, including unlimited UI scanning.
+    frame:SetAttribute('nodeignore', true)
+    if _G.ConsolePort and ConsolePort.RemoveInterfaceCursorFrame then
+        ConsolePort:RemoveInterfaceCursorFrame(frame)
+    end
+    table.insert(UISpecialFrames, frame:GetName())
     self.composer = frame
 
     local border = CreateFrame('Frame', nil, frame)
@@ -166,43 +193,41 @@ function chat:BuildComposer()
     frame.borders = Metal.CreateBorderTextures(border, border)
     Metal.ApplyBorderTextures(frame.borders, true, 1, 1, 1, 1, Metal.BORDER_SIZE)
 
-    local destination = self:ComposerButton(frame, '', 120, 38, function() chat:ToggleComposerChannels() end)
-    destination:SetPoint('TOPLEFT', 16, -16)
-    destination.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), 18, '')
-    destination.label:SetWordWrap(false)
-    destination:SetScript('OnEnter', function(self)
-        GameTooltip:SetOwner(self, 'ANCHOR_TOP')
-        GameTooltip:SetText(Input:GetDestinationLabel())
-        GameTooltip:Show()
-    end)
-    destination:SetScript('OnLeave', function() GameTooltip:Hide() end)
-    frame.destination = destination
-    local close = self:ComposerButton(frame, '×', 32, 38, function() chat:CloseComposer() end)
-    close:SetPoint('TOPRIGHT', -16, -16)
-    close:SetFrameLevel(frame:GetFrameLevel() + 4)
-    close:SetScript('OnEnter', function(self)
-        GameTooltip:SetOwner(self, 'ANCHOR_TOP')
-        GameTooltip:SetText(CLOSE or 'Close')
-        GameTooltip:Show()
-    end)
-    close:SetScript('OnLeave', function() GameTooltip:Hide() end)
-
     frame.inputAnchor = CreateFrame('Frame', nil, frame)
-    frame.inputAnchor:SetPoint('TOPLEFT', destination, 'TOPRIGHT', 12, 0)
-    frame.inputAnchor:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -60, -16)
-    frame.inputAnchor:SetHeight(38)
+    frame.inputAnchor:SetPoint('TOPLEFT', frame, 'TOPLEFT', 16, -HEADER_TOP)
+    frame.inputAnchor:SetPoint('TOPRIGHT', frame, 'TOPRIGHT', -16, -HEADER_TOP)
+    frame.inputAnchor:SetHeight(HEADER_HEIGHT)
     local inputBG = frame.inputAnchor:CreateTexture(nil, 'BACKGROUND')
     inputBG:SetAllPoints()
     inputBG:SetColorTexture(0.12, 0.13, 0.16, 1)
+
+    frame.footer = CreateFrame('Frame', nil, frame)
+    frame.footer:SetPoint('BOTTOMLEFT', 16, PAGE_BOTTOM)
+    frame.footer:SetPoint('BOTTOMRIGHT', -16, PAGE_BOTTOM)
+    frame.footer:SetHeight(FOOTER_HEIGHT)
+    frame.footer:EnableMouse(false)
+    local divider = frame.footer:CreateTexture(nil, 'BORDER')
+    divider:SetPoint('BOTTOMLEFT', frame.footer, 'TOPLEFT', 0, 4)
+    divider:SetPoint('BOTTOMRIGHT', frame.footer, 'TOPRIGHT', 0, 4)
+    divider:SetHeight(1)
+    divider:SetColorTexture(0.5, 0.42, 0.27, 0.35)
+    frame.destination = frame.footer:CreateFontString(nil, 'ARTWORK')
+    frame.destination:SetFont(addon.Media.ResolveFont(db().msgFontFace), 16, '')
+    frame.destination:SetTextColor(0.87, 0.84, 0.76)
+    -- Thicken the configured face without requiring a separate bold font asset.
+    frame.destination:SetShadowColor(0.87, 0.84, 0.76, 1)
+    frame.destination:SetShadowOffset(0.65, 0)
+    frame.destination:SetJustifyH('LEFT')
+    frame.destination:SetWordWrap(false)
 
     frame.tabs, frame.pages = {}, {}
     local tabGap = 8
     local tabWidth = (contentWidth - 2 * tabGap) / 3
     for index, style in ipairs(tabs) do
         local tabIndex = index
-        local tab = self:ComposerButton(frame, style.label, tabWidth, 40,
+        local tab = self:ComposerButton(frame, style.label, tabWidth, TAB_HEIGHT,
             function() chat:SetComposerTab(tabIndex) end, style)
-        tab:SetPoint('TOPLEFT', 16 + (index - 1) * (tabWidth + tabGap), -64)
+        tab:SetPoint('TOPLEFT', 16 + (index - 1) * (tabWidth + tabGap), -TAB_TOP)
         frame.tabs[index] = tab
         local page = CreateFrame('Frame', nil, frame)
         page:SetPoint('TOPLEFT', 16, -PAGE_TOP)
@@ -210,9 +235,9 @@ function chat:BuildComposer()
         page:Hide()
         frame.pages[index] = page
     end
-    self:BuildComposerKeyboard(frame.pages[1])
-    self:BuildComposerReplies(frame.pages[2])
-    self:BuildComposerEmotes(frame.pages[3])
+    self:BuildComposerKeyboard(frame.pages[TAB.KEYBOARD])
+    self:BuildComposerReplies(frame.pages[TAB.SHORTCUTS])
+    self:BuildComposerEmotes(frame.pages[TAB.EMOTES])
     self:BuildComposerChannels()
 
     frame.status = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
@@ -227,16 +252,16 @@ function chat:BuildComposer()
     frame.legend = addon.Components.GamepadLegend.Create(frame, {
         name = 'CouchModeComposerLegend', displayOnly = true, centered = true, singleRow = true, gap = LEGEND_GAP,
         prompts = {
-            { keys = { 'PAD1' }, label = function() return chat.composerTab == 3 and 'Perform' or 'Select' end,
+            { keys = { 'PAD1' }, label = function() return chat.composerTab == TAB.EMOTES and 'Perform' or 'Select' end,
                 sizingLabels = { 'Select', 'Perform' } },
             { keys = { 'PAD2' }, label = CLOSE or 'Close' },
-            { keys = { 'PAD3' }, label = 'Delete', show = function() return chat.composerTab ~= 3 end },
-            { keys = { 'PAD4' }, label = 'Space', show = function() return chat.composerTab ~= 3 end },
+            { keys = { 'PAD3' }, label = 'Delete', show = function() return chat.composerTab == TAB.KEYBOARD end },
+            { keys = { 'PAD4' }, label = 'Space', show = function() return chat.composerTab == TAB.KEYBOARD end },
             { keys = { 'PADLSHOULDER', 'PADRSHOULDER' }, label = 'Tabs' },
-            { keys = { 'PADLTRIGGER' }, label = 'Shift', show = function() return chat.composerTab == 1 end },
-            { keys = { 'PADRTRIGGER' }, label = 'Send', show = function() return chat.composerTab ~= 3 end },
-            { keys = { 'PADLSTICK' }, label = 'Channel' },
-            { keys = { 'PADRSTICK' }, label = 'Symbols', show = function() return chat.composerTab == 1 end },
+            { keys = { 'PADLTRIGGER' }, label = 'Shift', show = function() return chat.composerTab == TAB.KEYBOARD end },
+            { keys = { 'PADRTRIGGER' }, label = 'Send', show = function() return chat.composerTab ~= TAB.EMOTES end },
+            { keys = { 'PADLSTICK' }, label = 'Channel', show = function() return chat.composerTab ~= TAB.EMOTES end },
+            { keys = { 'PADRSTICK' }, label = 'Symbols', show = function() return chat.composerTab == TAB.KEYBOARD end },
         },
     })
     frame.legend:SetMaxWidth(contentWidth)
@@ -250,7 +275,7 @@ function chat:BuildComposer()
 end
 
 function chat:SetComposerTab(index)
-    self.composerTab = ((index - 1) % 3) + 1
+    self.composerTab = ((index - 1) % #tabs) + 1
     self:ResetComposerHeldInput(true)
     self.composer.channels:Hide()
     for i, page in ipairs(self.composer.pages) do
@@ -258,7 +283,9 @@ function chat:SetComposerTab(index)
         self:HighlightComposerButton(self.composer.tabs[i], i == self.composerTab)
     end
     self.composer.emoteIndex = nil
-    if self.composerTab == 2 then self:RefreshComposerReplies() end
+    Input:SetComposerInputShown(self.composerTab == TAB.KEYBOARD)
+    if self.composerTab == TAB.KEYBOARD and self.composerActive then Input:Focus() end
+    if self.composerTab == TAB.SHORTCUTS then self:RefreshComposerReplies() end
     self:RefreshComposerEmotes()
     self.composer.legend:Refresh()
     self:SetComposerStatus('')
@@ -284,8 +311,7 @@ function chat:OpenComposer()
     self.composer.keyRow, self.composer.keyColumn = 3, 5
     self.composer.keyboardPointerActive = true
     self.composer.keyboardPointerX, self.composer.keyboardPointerY = 0, 0
-    self:SetComposerTab(1)
-    Input:Focus()
+    self:SetComposerTab(TAB.SHORTCUTS)
     Input:RestoreDraft(draft)
     self:ResumeComposer()
     self.composer.legend:Show()
@@ -294,7 +320,8 @@ end
 
 function chat:ResumeComposer()
     if not self:IsComposerOpen() then return end
-    Input:Focus()
+    Input:SetComposerInputShown(self.composerTab == TAB.KEYBOARD)
+    if self.composerTab == TAB.KEYBOARD then Input:Focus() end
     self.composerActive = true
     self.composer.resumeRequired = false
     self.composer.resume:Hide()
@@ -381,13 +408,24 @@ end
 function chat:UpdateComposer(elapsed)
     if self.composerSubmitting or self.composerClosing then return end
     Input:KeepComposerLayer()
-    if self.composerActive and not Input:HasFocus() then self:SuspendComposer() end
-    if not self.composerActive and not self.composer.resumeRequired and Input:HasFocus() then
+    local ownsInput
+    if self.composerTab == TAB.KEYBOARD then ownsInput = Input:HasFocus()
+    else
+        local focus = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+        ownsInput = focus == nil
+    end
+    if self.composerActive and not ownsInput then self:SuspendComposer() end
+    if not self.composerActive and not self.composer.resumeRequired and ownsInput then
         self:ResumeComposer()
     end
     if self.composerActive then self:UpdateComposerHeldInput(elapsed) end
     self:UpdateComposerKeyboardPointer()
-    self.composer.destination.label:SetText(Input:GetDestinationLabel(true))
+    if self.composerTab ~= TAB.EMOTES then
+        self.composer.destination:SetText('Channel: ' .. Input:GetDestinationLabel())
+        local r, g, b = Input:GetDestinationColor()
+        self.composer.destination:SetTextColor(r, g, b)
+        self.composer.destination:SetShadowColor(r, g, b, 1)
+    end
 end
 
 function chat:OnComposerProfileChanged()

@@ -1,6 +1,7 @@
 -- Fixed input capture: no native binding-stack records or combat-time rebinding.
 local _, addon = ...
 local chat = addon.Chat
+local TAB = chat.COMPOSER_TABS
 local Input = addon.ChatInput
 local DELAY, INTERVAL = 0.35, 0.08
 local KEYBOARD_DEADZONE = 0.16
@@ -112,8 +113,8 @@ function chat:MoveComposerSelection(dx, dy)
         local count = #frame.destinations
         if count > 0 then frame.channelIndex = ((frame.channelIndex - 1 + (dy ~= 0 and dy or dx)) % count) + 1 end
         self:RefreshComposerChannels()
-    elseif self.composerTab == 1 then self:MoveComposerKey(dx, dy)
-    elseif self.composerTab == 2 then self:MoveComposerReply(dx, dy)
+    elseif self.composerTab == TAB.KEYBOARD then self:MoveComposerKey(dx, dy)
+    elseif self.composerTab == TAB.SHORTCUTS then self:MoveComposerReply(dx, dy)
     else self:MoveComposerEmote(dx, dy) end
 end
 
@@ -147,20 +148,22 @@ function chat:ComposerGamepadButton(key, down)
     elseif key == 'PAD2' then self:ComposerBack()
     elseif key == 'PAD1' then
         if frame.channels:IsShown() then self:ChooseComposerChannel()
-        elseif self.composerTab == 1 then self:PressComposerKey()
-        elseif self.composerTab == 2 then self:InsertComposerReply()
+        elseif self.composerTab == TAB.KEYBOARD then self:PressComposerKey()
+        elseif self.composerTab == TAB.SHORTCUTS then self:InsertComposerReply()
         else self:PerformComposerEmote() end
     elseif key == 'PADLSHOULDER' then self:SetComposerTab(self.composerTab - 1)
     elseif key == 'PADRSHOULDER' then self:SetComposerTab(self.composerTab + 1)
-    elseif key == 'PADLSTICK' then self:ToggleComposerChannels()
-    elseif key == 'PADRSTICK' and self.composerTab == 1 and not frame.channels:IsShown() then
+    elseif key == 'PADLSTICK' and self.composerTab ~= TAB.EMOTES then self:ToggleComposerChannels()
+    elseif key == 'PADRSTICK' and self.composerTab == TAB.KEYBOARD and not frame.channels:IsShown() then
         frame.symbols = not frame.symbols
         self:RefreshComposerKeyboard()
-    elseif not frame.channels:IsShown() and self.composerTab ~= 3 then
-        if key == 'PAD3' then self:StartComposerRepeat('delete')
-        elseif key == 'PAD4' then Input:InsertSpace()
-        elseif key == 'PADLTRIGGER' then frame.shift = true; self:RefreshComposerKeyboard()
-        elseif key == 'PADRTRIGGER' then self:SubmitComposer() end
+    elseif not frame.channels:IsShown() and self.composerTab ~= TAB.EMOTES then
+        if key == 'PADRTRIGGER' then self:SubmitComposer()
+        elseif self.composerTab == TAB.KEYBOARD then
+            if key == 'PAD3' then self:StartComposerRepeat('delete')
+            elseif key == 'PAD4' then Input:InsertSpace()
+            elseif key == 'PADLTRIGGER' then frame.shift = true; self:RefreshComposerKeyboard() end
+        end
     end
 end
 
@@ -174,7 +177,7 @@ function chat:ComposerGamepadStick(stick, x, y)
     local readyKey = stick == 'Left' and 'leftReady' or 'rightReady'
     local directionKey = stick == 'Left' and 'leftDirection' or 'rightDirection'
     local prior = frame[directionKey]
-    if stick == 'Left' and self.composerTab == 1 and not frame.channels:IsShown() then
+    if stick == 'Left' and self.composerTab == TAB.KEYBOARD and not frame.channels:IsShown() then
         if length < KEYBOARD_DEADZONE then
             frame.leftReady = true
             -- Brake immediately on release: smoothing must not cause drift.
@@ -198,7 +201,7 @@ function chat:ComposerGamepadStick(stick, x, y)
         frame.keyboardMoveX, frame.keyboardMoveY = x * scale, y * scale
         return
     end
-    if stick == 'Left' and self.composerTab == 3 and not frame.channels:IsShown() then
+    if stick == 'Left' and self.composerTab == TAB.EMOTES and not frame.channels:IsShown() then
         self:ComposerEmoteStick(x, y)
         return
     end
@@ -213,7 +216,7 @@ function chat:ComposerGamepadStick(stick, x, y)
     if stick == 'Left' then
         if math.abs(x) > math.abs(y) then action = x < 0 and 'PADDLEFT' or 'PADDRIGHT'
         else action = y > 0 and 'PADDUP' or 'PADDDOWN' end
-    elseif self.composerTab ~= 3 and not frame.channels:IsShown() and math.abs(x) > math.abs(y) then
+    elseif self.composerTab == TAB.KEYBOARD and not frame.channels:IsShown() and math.abs(x) > math.abs(y) then
         action = x < 0 and 'caretLeft' or 'caretRight'
     end
     if action and action ~= prior then
@@ -224,7 +227,7 @@ end
 
 function chat:MoveComposerKeyboardPointer(elapsed)
     local frame = self.composer
-    if self.composerTab ~= 1 or frame.channels:IsShown()
+    if self.composerTab ~= TAB.KEYBOARD or frame.channels:IsShown()
         or not frame.keyboardPointerActive or not frame.keyboardStickActive then return end
     -- Smooth velocity instead of chasing an absolute stick position. Integrate
     -- the exponential exactly so travel is independent of the frame rate.

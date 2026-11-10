@@ -1,6 +1,7 @@
 -- All emotes on one surface, selected by a smoothed, center-relative pointer.
 local _, addon = ...
 local chat = addon.Chat
+local TAB = chat.COMPOSER_TABS
 local function db() return addon.db.profile.chat end
 local ICON_SHEET = 'Interface\\AddOns\\CouchMode\\Resources\\Media\\Emotes\\emote-icons-focused.tga'
 local EXTRA_ICON_SHEET = 'Interface\\AddOns\\CouchMode\\Resources\\Media\\Emotes\\emote-icons-extra.tga'
@@ -122,7 +123,7 @@ end
 function chat:DrawComposerEmotePointer()
     local frame = self.composer
     if not frame.emotePointer then return end
-    local shown = frame.emotePointerActive and self.composerTab == 3
+    local shown = frame.emotePointerActive and self.composerTab == TAB.EMOTES
         and self.composerActive and not frame.channels:IsShown()
     frame.emotePointer:SetShown(shown)
     frame.emoteBand:SetShown(shown and (math.abs(frame.emotePointerX) + math.abs(frame.emotePointerY) > 0.001))
@@ -210,7 +211,7 @@ end
 
 function chat:UpdateComposerEmotePointer(elapsed)
     local frame = self.composer
-    if self.composerTab ~= 3 or frame.channels:IsShown() or not frame.emotePointerActive then
+    if self.composerTab ~= TAB.EMOTES or frame.channels:IsShown() or not frame.emotePointerActive then
         self:DrawComposerEmotePointer()
         return
     end

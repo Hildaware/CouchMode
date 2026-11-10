@@ -1,6 +1,7 @@
 -- Profile-backed shortcut phrases and destination selection.
 local _, addon = ...
 local chat = addon.Chat
+local TAB = chat.COMPOSER_TABS
 local Input = addon.ChatInput
 local function db() return addon.db.profile.chat end
 
@@ -31,7 +32,7 @@ local function styleShortcut(button)
     else button.label:SetTextColor(0.87, 0.84, 0.76) end
 end
 
-local function shortcutButton(parent, width, height, action, compact)
+local function shortcutButton(parent, width, height, action)
     local button = CreateFrame('Button', nil, parent, 'BackdropTemplate')
     button:SetSize(width, height)
     button:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8',
@@ -42,12 +43,12 @@ local function shortcutButton(parent, width, height, action, compact)
     button.selectionMark:SetPoint('BOTTOMLEFT', 2, 3)
     button.selectionMark:SetWidth(2)
     button.label = button:CreateFontString(nil, 'ARTWORK')
-    button.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), compact and 14 or 17, '')
-    button.label:SetPoint('TOPLEFT', compact and 4 or 10, compact and -1 or -3)
-    button.label:SetPoint('BOTTOMRIGHT', compact and -4 or -8, compact and 1 or 3)
-    button.label:SetJustifyH(compact and 'CENTER' or 'LEFT')
+    button.label:SetFont(addon.Media.ResolveFont(db().msgFontFace), 17, '')
+    button.label:SetPoint('TOPLEFT', 10, -3)
+    button.label:SetPoint('BOTTOMRIGHT', -8, 3)
+    button.label:SetJustifyH('LEFT')
     button.label:SetJustifyV('MIDDLE')
-    if button.label.SetMaxLines then button.label:SetMaxLines(compact and 1 or 2) end
+    if button.label.SetMaxLines then button.label:SetMaxLines(2) end
     button:RegisterForClicks('LeftButtonUp')
     button:SetScript('OnClick', function()
         if not chat.composerActive then chat:ResumeComposer() end
@@ -89,9 +90,9 @@ function chat:BuildComposerReplies(page)
     frame.replyIndex, frame.replyFirst = 1, 1
     frame.replyButtons = {}
     local columnGap = 6
-    local rowGap, footerHeight, footerGap = 4, 18, 4
+    local rowGap = 4
     local buttonWidth = (page:GetWidth() - (REPLY_COLUMNS - 1) * columnGap) / REPLY_COLUMNS
-    local buttonHeight = (page:GetHeight() - footerHeight - footerGap - 2 * rowGap) / 3
+    local buttonHeight = (page:GetHeight() - 2 * rowGap) / 3
     for slot = 1, REPLIES_PER_PAGE do
         local index = slot
         local button = shortcutButton(page, buttonWidth, buttonHeight, function()
@@ -105,20 +106,14 @@ function chat:BuildComposerReplies(page)
     frame.replyEmpty = page:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
     frame.replyEmpty:SetPoint('CENTER')
     frame.replyEmpty:SetText('No shortcuts. Add phrases in Chat settings.')
-    local previous = shortcutButton(page, 90, footerHeight,
-        function() chat:PageComposerReplies(-1) end, true)
-    previous.label:SetText('‹ ' .. (PREVIOUS or 'Previous'))
-    previous:SetPoint('BOTTOMLEFT')
-    frame.replyPrevious = previous
-    local nextButton = shortcutButton(page, 90, footerHeight,
-        function() chat:PageComposerReplies(1) end, true)
-    nextButton.label:SetText((NEXT or 'Next') .. ' ›')
-    nextButton:SetPoint('BOTTOMRIGHT')
-    frame.replyNext = nextButton
-    frame.replyCount = page:CreateFontString(nil, 'OVERLAY')
+    frame.replyCount = frame.footer:CreateFontString(nil, 'ARTWORK')
     frame.replyCount:SetFont(addon.Media.ResolveFont(db().msgFontFace), 14, '')
     frame.replyCount:SetTextColor(0.75, 0.72, 0.65)
-    frame.replyCount:SetPoint('BOTTOM', 0, 2)
+    frame.replyCount:SetPoint('TOPRIGHT')
+    frame.replyCount:SetPoint('BOTTOMRIGHT')
+    frame.replyCount:SetWidth(100)
+    frame.replyCount:SetJustifyH('RIGHT')
+    frame.replyCount:SetWordWrap(false)
     page:EnableMouseWheel(true)
     page:SetScript('OnMouseWheel', function(_, delta) chat:PageComposerReplies(delta > 0 and -1 or 1) end)
     self:RefreshComposerReplies()
@@ -140,11 +135,8 @@ function chat:RefreshComposerReplies()
         styleShortcut(button)
     end
     frame.replyEmpty:SetShown(#replies == 0)
-    frame.replyCount:SetText(pageCount > 1 and (pageIndex + 1 .. ' / ' .. pageCount) or '')
-    frame.replyPrevious:SetShown(pageCount > 1)
-    frame.replyNext:SetShown(pageCount > 1)
-    frame.replyPrevious:SetEnabled(pageCount > 1)
-    frame.replyNext:SetEnabled(pageCount > 1)
+    frame.replyCount:SetText(pageCount > 0 and ('Page ' .. (pageIndex + 1) .. ' / ' .. pageCount) or '')
+    frame.replyCount:SetShown(self.composerTab == TAB.SHORTCUTS and pageCount > 0)
 end
 
 function chat:PageComposerReplies(direction)
@@ -179,14 +171,14 @@ function chat:InsertComposerReply()
     local phrase = self:GetQuickReplies()[self.composer.replyIndex]
     if not phrase then return end
     Input:InsertPhrase(phrase)
-    self:SetComposerTab(1)
+    self:SetComposerTab(TAB.KEYBOARD)
 end
 
 function chat:BuildComposerChannels()
     local frame = self.composer
     local panel = CreateFrame('Frame', nil, frame, 'BackdropTemplate')
-    panel:SetPoint('TOPLEFT', 16, -64)
-    panel:SetSize(frame.pages[1]:GetWidth(), 272)
+    panel:SetPoint('BOTTOMLEFT', frame.footer, 'TOPLEFT', 0, 8)
+    panel:SetSize(frame.pages[TAB.KEYBOARD]:GetWidth(), 272)
     panel:SetFrameLevel(frame:GetFrameLevel() + 5)
     panel:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8',
         edgeFile = 'Interface\\Buttons\\WHITE8X8', edgeSize = 1 })
@@ -211,6 +203,7 @@ function chat:BuildComposerChannels()
 end
 
 function chat:ToggleComposerChannels()
+    if self.composerTab == TAB.EMOTES then return end
     local frame = self.composer
     if frame.channels:IsShown() then frame.channels:Hide(); return end
     self:ResetComposerHeldInput(true)
