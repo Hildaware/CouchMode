@@ -1,5 +1,5 @@
--- Inline identity colors for player emotes. Preserve the localized sentence
--- and raw message; the event provides no separate emote target identity.
+-- Inline identity colors for emotes. Preserve the localized sentence and raw
+-- message; the event provides no separate emote target identity.
 local addonName, addon = ...
 local chat = addon.Chat
 local isSecret = addon.Utils.IsSecretValue
@@ -91,6 +91,13 @@ end
 
 function chat:FormatEmoteText(msg)
     if not safeString(msg.text) then return nil end
+    local text = msg.text
+    if addon.ChatSources.IsNpc(msg.event) and safeString(msg.sender) then
+        -- Blizzard NPC emotes are format strings ("%s cuts the logs...").
+        -- Player emotes are already rendered and may contain literal percent signs.
+        local ok, formatted = pcall(string.format, text, msg.sender, msg.sender)
+        if ok then text = formatted end
+    end
     local colors = {}
     local function add(name, realm, classFile)
         if not safeString(name) then return end
@@ -143,5 +150,5 @@ function chat:FormatEmoteText(msg)
 
     local names = {}
     for name, color in pairs(colors) do names[#names + 1] = { name = name, color = color } end
-    return highlightText(msg.text, names)
+    return highlightText(text, names)
 end

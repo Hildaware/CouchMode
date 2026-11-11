@@ -72,14 +72,19 @@ function merchant:GetOptions()
     return 'merchant', {
         name = 'Merchant', type = 'group', order = 1.5,
         args = {
-            enabled = {
-                name = 'Enable', desc = 'Use the custom merchant view on retail and WoW: Forever.',
-                type = 'toggle', order = 1,
-                get = function() return addon.db.profile.merchant.enabled end,
-                set = function(_, value)
-                    addon.db.profile.merchant.enabled = value
-                    if value then self:Enable() else self:Disable() end
-                end,
+            general = {
+                name = 'General', type = 'group', inline = true, order = 1,
+                args = {
+                    enabled = {
+                        name = 'Enable', desc = 'Use the custom merchant view on retail and WoW: Forever.',
+                        type = 'toggle', order = 1,
+                        get = function() return addon.db.profile.merchant.enabled end,
+                        set = function(_, value)
+                            addon.db.profile.merchant.enabled = value
+                            if value then self:Enable() else self:Disable() end
+                        end,
+                    },
+                },
             },
         },
     }

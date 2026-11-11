@@ -177,13 +177,21 @@ function bubbles:ShowMatchedBubble(request, frame, state)
     end
     self:EnrichNpc(request.msg)
     local bubble, duration = self:BuildBubble(request.msg)
-    local token = {}
-    bubble._bubbleToken, bubble.finish = token, request.finish
-    bubble.shownAt, bubble.bubbleDuration = GetTime(), duration
     self:ClaimNativeBubble(bubble, frame, state)
     bubble.widget:SetParent(frame)
     bubble.widget:SetIgnoreParentAlpha(false)
-    self:ApplyBubblePosition(bubble)
+    self:ShowBubble(bubble, duration, request.finish)
+end
+
+-- Shared presentation for native replacements and the NPC preview.
+function bubbles:ShowBubble(bubble, duration, finish)
+    local token = {}
+    bubble._bubbleToken, bubble.finish = token, finish
+    bubble.shownAt, bubble.bubbleDuration = GetTime(), duration
+    if self:ApplyBubblePosition(bubble) == false then
+        self:RemoveChatBubble(bubble, true)
+        return false
+    end
     bubble.widget:SetAlpha(0)
     bubble.widget:Show()
     self.active[#self.active + 1] = bubble
@@ -200,35 +208,46 @@ function bubbles:ShowMatchedBubble(request, frame, state)
     alpha:SetToAlpha(1)
     ag:Play()
 
-    bubble.resultTimer = C_Timer.NewTimer(duration * .8, function()
-        if bubble._bubbleToken ~= token then return end
-        bubble.resultTimer = nil
-        if bubble.widget:IsShown() then request.finish('displayed') end
-    end)
+    if finish then
+        bubble.resultTimer = C_Timer.NewTimer(duration * .8, function()
+            if bubble._bubbleToken ~= token then return end
+            bubble.resultTimer = nil
+            if bubble.widget:IsShown() then finish('displayed') end
+        end)
+    end
     bubble.expiryTimer = C_Timer.NewTimer(duration, function()
         if bubble._bubbleToken ~= token then return end
         bubble.expiryTimer = nil
         self:RemoveChatBubble(bubble)
     end)
+    return true
 end
 
 --- Native anchoring follows the NPC; our own frame owns scale and screen bounds.
 function bubbles:ApplyBubblePosition(bubble)
-    local frame, widget, d = bubble.nativeFrame, bubble.widget, db()
-    if not frame or frame:IsForbidden() then return end
-    local scale = d.scale * UIParent:GetEffectiveScale() / frame:GetEffectiveScale()
+    local frame, widget, d = bubble.previewFrame or bubble.nativeFrame, bubble.widget, db()
+    if not frame or frame:IsForbidden() then return false end
+    local scale = d.scale * UIParent:GetEffectiveScale() / widget:GetParent():GetEffectiveScale()
+    local clamp = not bubble.previewFrame and d.clampToScreen or false
     local previous = bubble.position
     if previous and previous.scale == scale and previous.x == d.offsetX and previous.y == d.offsetY
-        and previous.clamp == d.clampToScreen and previous.noPortrait == bubble.noPortrait then return end
-    if widget:GetScale() ~= scale then widget:SetScale(scale) end
+        and previous.clamp == clamp and previous.noPortrait == bubble.noPortrait then return end
     widget:ClearAllPoints()
-    widget:SetPoint('BOTTOM', frame, 'BOTTOM', d.offsetX, d.offsetY)
-    -- Include the portrait border and text shadows extending outside the body.
-    widget:SetClampRectInsets(bubble.noPortrait and -4 or -40, 8, 24, -8)
-    widget:SetClampedToScreen(d.clampToScreen)
+    widget:SetScale(scale)
+    if bubble.previewFrame then
+        -- Nameplates cannot be measured, and anchoring to one restricts our widget.
+        -- Disable clamping while detached, before establishing that relationship.
+        widget:SetClampedToScreen(false)
+        widget:SetPoint('BOTTOM', frame, 'TOP', d.offsetX, d.offsetY)
+    else
+        widget:SetPoint('BOTTOM', frame, 'BOTTOM', d.offsetX, d.offsetY)
+        -- Include the portrait border and text shadows extending outside the body.
+        widget:SetClampRectInsets(bubble.noPortrait and -4 or -40, 8, 24, -8)
+        widget:SetClampedToScreen(clamp)
+    end
     bubble.position = {
         scale = scale, x = d.offsetX, y = d.offsetY,
-        clamp = d.clampToScreen, noPortrait = bubble.noPortrait,
+        clamp = clamp, noPortrait = bubble.noPortrait,
     }
 end
 
@@ -250,6 +269,7 @@ function bubbles:RemoveChatBubble(bubble, immediate)
     bubble._bubbleToken = nil
     cancelTimer(bubble, 'resultTimer')
     cancelTimer(bubble, 'expiryTimer')
+    cancelTimer(bubble, 'previewTicker')
     if bubble.animationGroup then
         bubble.animationGroup:Stop()
         bubble.animationGroup = nil

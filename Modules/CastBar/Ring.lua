@@ -470,27 +470,6 @@ function castRing:OnEnable()
                     castRing:Refresh()
                 end,
             },
-            {
-                kind    = EditMode.SettingType.Dropdown,
-                name    = 'Frame Strata',
-                desc    = 'Rendering layer for the ring. Raise this if other frames overlap it.',
-                default = 'MEDIUM',
-                values  = {
-                    { text = 'Background',        value = 'BACKGROUND' },
-                    { text = 'Low',               value = 'LOW' },
-                    { text = 'Medium',            value = 'MEDIUM' },
-                    { text = 'High',              value = 'HIGH' },
-                    { text = 'Dialog',            value = 'DIALOG' },
-                    { text = 'Fullscreen',        value = 'FULLSCREEN' },
-                    { text = 'Fullscreen Dialog', value = 'FULLSCREEN_DIALOG' },
-                    { text = 'Tooltip',           value = 'TOOLTIP' },
-                },
-                get = function(_) return db.frameStrata end,
-                set = function(_, value, fromReset)
-                    db.frameStrata = fromReset and 'MEDIUM' or value
-                    castRing:Refresh()
-                end,
-            },
         })
 
         EditMode:RegisterCallback('layout', function(layoutName)

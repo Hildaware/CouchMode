@@ -260,55 +260,6 @@ function chat:BuildPanel()
                 chat:ApplyLayout()
             end,
         },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Active Opacity', desc = 'Panel opacity while at least one message is visible.',
-            default = 1, minValue = 0.1, maxValue = 1, valueStep = 0.05,
-            get = function() return db().activeOpacity end,
-            set = function(_, value, fromReset)
-                db().activeOpacity = (fromReset and 1 or value)
-                chat:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Background Opacity', desc = 'Panel opacity after all visible messages fade.',
-            default = 0, minValue = 0, maxValue = 1, valueStep = 0.05,
-            get = function() return db().backgroundOpacity end,
-            set = function(_, value, fromReset)
-                db().backgroundOpacity = (fromReset and 0 or value)
-                chat:ApplyPanelBackgroundOpacity()
-                chat:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Fade Delay', desc = 'Seconds each message remains visible before fading.',
-            default = 15, minValue = 0, maxValue = 60, valueStep = 1,
-            get = function() return db().fadeDelay end,
-            set = function(_, value, fromReset)
-                db().fadeDelay = (fromReset and 15 or value)
-                chat:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Dropdown,
-            name = 'Message Font', desc = 'Font used for message text.',
-            default = 'Arial Narrow',
-            values = (function()
-                local values = {}
-                for name in pairs(addon.Media.GetFontOptions()) do
-                    values[#values + 1] = { text = name, value = name }
-                end
-                table.sort(values, function(a, b) return a.text < b.text end)
-                return values
-            end)(),
-            get = function() return db().msgFontFace end,
-            set = function(_, value, fromReset)
-                db().msgFontFace = (fromReset and 'Arial Narrow' or value)
-                chat:Recompute()
-            end,
-        },
     })
 
     EditMode:RegisterCallback('layout', function(layoutName)

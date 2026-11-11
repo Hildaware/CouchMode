@@ -346,17 +346,20 @@ function controllerProto:RemoveMessage(msg)
     self.layoutAnimation = animation
 end
 
----@param msg  ChatBubblesMessage
----@param text string
----@param type string
----@return number duration
-function controllerProto:FormatMessage(msg, text, type)
-    -- Sync container width in case itemWidth changed since this widget was created.
+function controllerProto:ApplyWidth()
     local w = db().itemWidth
     local sw = self.parent.widget.subWidgets
     self.parent.widget:SetWidth(w)
     sw.textureBottom:SetWidth(w)
     sw.textureTop:SetWidth(w)
+end
+
+---@param msg  ChatBubblesMessage
+---@param text string
+---@param type string
+---@return number duration
+function controllerProto:FormatMessage(msg, text, type)
+    self:ApplyWidth()
 
     local duration = bubbles.CalculateDisplayDuration(text)
     msg:Format(text, type, self.parent.noPortrait, self.parent.pinned)
@@ -527,6 +530,7 @@ local function _BubbleReset(pool, bubble)
     bubble.position = nil
     bubble.shownAt = nil
     bubble.bubbleDuration = nil
+    bubble.previewFrame = nil
     bubble.widget:SetHeight(bubble.minimumHeight)
     bubble.widget:SetScale(1)
     bubble.widget:Hide()
@@ -555,7 +559,7 @@ end
 function bubbles:ReleaseBubble(bubble)
     if not self._pool:IsActive(bubble) then return end
     bubble._bubbleToken = nil
-    for _, key in ipairs({ 'resultTimer', 'expiryTimer', 'fadeTimer' }) do
+    for _, key in ipairs({ 'resultTimer', 'expiryTimer', 'fadeTimer', 'previewTicker' }) do
         if bubble[key] then bubble[key]:Cancel(); bubble[key] = nil end
     end
     if bubble.animationGroup then
@@ -563,6 +567,7 @@ function bubbles:ReleaseBubble(bubble)
         bubble.animationGroup = nil
     end
     UIFrameFadeRemoveFrame(bubble.widget)
+    if self.previewBubble == bubble then self.previewBubble = nil end
     bubble.widget:Hide()
     self:ReleaseNativeBubble(bubble)
     for i = #self.active, 1, -1 do
@@ -578,6 +583,7 @@ function bubbles:RefreshVisibleBubbles()
     for bubble in self._pool:EnumerateActive() do
         if bubble.data and not bubble.released then
             self:StyleBubbleHeader(bubble)
+            bubble.controller:ApplyWidth()
             local height = bubble.minimumHeight
             for _, msg in ipairs(bubble.widget.subWidgets.messages) do
                 msg:Format(msg.text, msg.event, bubble.noPortrait, true, true)

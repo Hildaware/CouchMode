@@ -90,6 +90,25 @@ end
 
 --#endregion
 
+-- Rendering order is an appearance setting, shared by resource and cast bars.
+function StatusBarBase.GetFrameStrataOption(settings, refresh)
+    return {
+        name = 'Frame Strata',
+        desc = 'Rendering layer. Raise this if another frame covers the bar.',
+        type = 'select', order = 90,
+        values = {
+            BACKGROUND = 'Background', LOW = 'Low', MEDIUM = 'Medium', HIGH = 'High',
+            DIALOG = 'Dialog', FULLSCREEN = 'Fullscreen', FULLSCREEN_DIALOG = 'Fullscreen Dialog',
+            TOOLTIP = 'Tooltip',
+        },
+        get = function() return settings().frameStrata end,
+        set = function(_, value)
+            settings().frameStrata = value
+            refresh()
+        end,
+    }
+end
+
 --#region ── Shared helpers ────────────────────────────────────────────────────
 
 --- Applies size and label visibility from the config to the gui.
@@ -356,6 +375,37 @@ function StatusBarBase.GetBaseOptionArgs(dbKey, module, opts)
     for k, v in pairs(extraDisplay) do args.display.args[k] = v end
     for k, v in pairs(extraColors) do args.colors.args[k] = v end
 
+    local general = { enabled = args.enabled }
+    for _, key in ipairs({ 'autoHide', 'showThreshold', 'showOnlyInCombat', 'showWhenNotFull' }) do
+        general[key] = args.display.args[key]
+        general[key].order = general[key].order + 1
+        args.display.args[key] = nil
+    end
+    local appearance = args.display.args
+    for key, option in pairs(args.colors.args) do
+        option.order = (option.order or 0) + 10
+        appearance[key] = option
+    end
+    appearance.frameStrata = StatusBarBase.GetFrameStrataOption(db, function() module:Refresh() end)
+    args.enabled, args.display, args.colors = nil, nil, nil
+    args.general = { name = 'General', type = 'group', inline = true, order = 2, args = general }
+    args.layout = {
+        name = 'Layout', type = 'group', inline = true, order = 3,
+        args = EditMode:GetLayoutOptions(module:GetName()),
+    }
+    args.appearance = { name = 'Appearance', type = 'group', inline = true, order = 4, args = appearance }
+    args.preview = {
+        name = 'Preview', type = 'group', inline = true, order = 5,
+        args = {
+            toggle = {
+                name = function() return module.preview and 'Stop Preview' or 'Preview Bar' end,
+                type = 'execute', order = 1,
+                disabled = function() return not module:IsEnabled() end,
+                func = function() module:TogglePreview() end,
+            },
+        },
+    }
+
     return args
 end
 
@@ -370,7 +420,7 @@ end
 ---@field exitFn?       fun()   Exit callback; defaults to module:UpdateValue()
 
 --- Registers a standard horizontal bar frame with EditMode.
---- Sets the initial position, wires up AddFrame + AddFrameSettings (Width, Height, Frame Strata),
+--- Sets the initial position, wires up AddFrame + AddFrameSettings (Width, Height),
 --- and registers layout / enter / exit callbacks.
 ---@param frame  Frame
 ---@param db     table  the module's config subtable
@@ -410,27 +460,6 @@ function StatusBarBase.RegisterWithEditMode(frame, db, module, opts)
             get = function(_) return db.height end,
             set = function(_, value, fromReset)
                 db.height = fromReset and opts.heightDefault or value
-                module:Refresh()
-            end,
-        },
-        {
-            kind    = EditMode.SettingType.Dropdown,
-            name    = 'Frame Strata',
-            desc    = 'Rendering layer for the bar. Raise this if other frames overlap it.',
-            default = 'MEDIUM',
-            values  = {
-                { text = 'Background',        value = 'BACKGROUND' },
-                { text = 'Low',               value = 'LOW' },
-                { text = 'Medium',            value = 'MEDIUM' },
-                { text = 'High',              value = 'HIGH' },
-                { text = 'Dialog',            value = 'DIALOG' },
-                { text = 'Fullscreen',        value = 'FULLSCREEN' },
-                { text = 'Fullscreen Dialog', value = 'FULLSCREEN_DIALOG' },
-                { text = 'Tooltip',           value = 'TOOLTIP' },
-            },
-            get = function(_) return db.frameStrata end,
-            set = function(_, value, fromReset)
-                db.frameStrata = fromReset and 'MEDIUM' or value
                 module:Refresh()
             end,
         },

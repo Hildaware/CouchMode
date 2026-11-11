@@ -120,6 +120,9 @@ function chat:Enrich(msg)
         if not msg.displayId and msg.guid then
             msg.unitToken = self:ResolveUnit(msg)
         end
+        if Sources.IsEmote(msg.event) then
+            msg.emoteText = self:FormatEmoteText(msg)
+        end
         return
     end
 

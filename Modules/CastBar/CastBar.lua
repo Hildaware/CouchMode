@@ -26,7 +26,7 @@ local function bar() return addon:GetModule('PlayerCastBar') --[[@as PlayerCastB
 function castBar:GetDefaults()
     return {
         castRing = {
-            enabled             = true,
+            enabled             = false,
             size                = 128,
             xPos                = 0,
             yPos                = -150,
@@ -89,7 +89,7 @@ function castBar:GetPlayerBarGeneralOptions()
 end
 
 function castBar:GetOptions()
-    return 'castBars', {
+    local group = {
         name        = 'Cast',
         type        = 'group',
         order       = 3,
@@ -500,6 +500,48 @@ function castBar:GetOptions()
             },
         },
     }
+
+    for _, entry in ipairs({ { 'playerCastBar', 'PlayerCastBar', bar }, { 'castRing', 'CastRing', ring } }) do
+        local key, moduleName, getModule = entry[1], entry[2], entry[3]
+        local args = group.args[key].args
+        local general = args.general and args.general.args or {}
+        general.enabled = args.enabled
+        general.enabled.order = 0
+        args.enabled = nil
+        args.general = { name = 'General', type = 'group', inline = true, order = 2, args = general }
+        local layout = addon.EditMode:GetLayoutOptions(moduleName)
+        if args.nameplate then
+            args.nameplate.order = 20
+            layout.nameplate = args.nameplate
+            args.nameplate = nil
+        end
+        args.layout = { name = 'Layout', type = 'group', inline = true, order = 3, args = layout }
+        local appearance = {}
+        for index, section in ipairs({ 'display', 'colors', 'border' }) do
+            if args[section] then
+                for optionKey, option in pairs(args[section].args) do
+                    option.order = (option.order or 0) + (index - 1) * 10
+                    appearance[optionKey] = option
+                end
+                args[section] = nil
+            end
+        end
+        appearance.frameStrata = addon.StatusBarBase.GetFrameStrataOption(
+            function() return addon.db.profile[key] end, function() getModule():Refresh() end)
+        args.appearance = { name = 'Appearance', type = 'group', inline = true, order = 4, args = appearance }
+        args.preview = {
+            name = 'Preview', type = 'group', inline = true, order = 5,
+            args = {
+                toggle = {
+                    name = function() return getModule().preview and 'Stop Preview' or 'Preview Cast' end,
+                    type = 'execute', order = 1,
+                    disabled = function() return not getModule():IsEnabled() end,
+                    func = function() getModule():TogglePreview() end,
+                },
+            },
+        }
+    end
+    return 'castBars', group
 end
 
 castBar:Enable()

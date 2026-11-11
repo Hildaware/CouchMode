@@ -93,7 +93,7 @@ function bubbles:GetDefaults()
             enlargeYells = true,
             enlargeSingleLine = true,
             -- Text reveal
-            revealText = false,
+            revealText = true,
             revealSpeed = 44,
         },
     }
@@ -105,125 +105,120 @@ end
 
 function bubbles:GetOptions()
     return 'chatBubbles', {
-        name = 'Chat Bubbles',
-        type = 'group',
-        order = 30,
+        name = 'Chat Bubbles', type = 'group', order = 30, childGroups = 'tab',
         args = {
-            description = {
-                name = 'Reskins NPC overhead speech bubbles with portraits and reveal animation. '
-                    .. 'Messages it cannot replace are routed to the CouchMode Chat feed.',
-                type = 'description',
-                order = 1,
-            },
-            enabled = {
-                name = 'Enable',
-                desc = 'Replace NPC overhead speech bubbles.',
-                type = 'toggle',
-                order = 2,
-                get = function() return db().enabled end,
-                set = function(_, value)
-                    db().enabled = value
-                    if value then bubbles:Enable() else bubbles:Disable() end
-                end,
-            },
-            misc = {
-                name = 'Misc',
-                type = 'group',
-                inline = true,
-                order = 99,
+            general = {
+                name = 'General', type = 'group', order = 10,
                 args = {
-                    openChat = {
-                        name = 'Open Chat',
-                        desc = 'Open the CouchMode Chat feed.',
-                        type = 'execute',
-                        order = 1,
-                        func = function() addon.Chat:Toggle() end,
+                    description = {
+                        name = 'Reskins NPC overhead speech bubbles with portraits and reveal animation. '
+                            .. 'Messages it cannot replace are routed to the CouchMode Chat feed.',
+                        type = 'description', order = 1,
                     },
-                    test = {
-                        name = 'Test',
-                        desc = 'Fire sample NPC messages to preview the overhead display.',
-                        type = 'execute',
-                        order = 2,
-                        func = function()
-                            addon.ChatMock.Run(addon.ChatRouter, 'npc', 3)
-                        end,
-                    },
-                },
-            },
-            control = {
-                name = 'Controls',
-                type = 'group',
-                inline = true,
-                order = 4,
-                args = {
-                    disableTalkingHead = {
-                        name = 'Hide Talking Head',
-                        desc = 'Hide the Blizzard Talking Head frame while Chat Bubbles is active.',
-                        type = 'toggle',
-                        order = 1,
-                        get = function() return db().disableTalkingHead end,
-                        set = function(_, val)
-                            db().disableTalkingHead = val
-                            bubbles:ApplyTalkingHeadSuppression(val)
+                    enabled = {
+                        name = 'Enable', desc = 'Replace NPC overhead speech bubbles.',
+                        type = 'toggle', order = 2,
+                        get = function() return db().enabled end,
+                        set = function(_, value)
+                            db().enabled = value
+                            if value then bubbles:Enable() else bubbles:Disable() end
                         end,
                     },
                     mode = {
                         name = 'NPC Routing',
                         desc = 'Fallback only keeps successful overhead replacements out of Chat. '
                             .. 'Always record mirrors every NPC line into Chat as well.',
-                        type = 'select',
-                        style = 'dropdown',
-                        order = 2,
-                        values = {
-                            ['fallback'] = 'Fallback only',
-                            ['always'] = 'Always record',
-                        },
+                        type = 'select', style = 'dropdown', order = 3,
+                        values = { fallback = 'Fallback only', always = 'Always record' },
                         get = function() return db().mode end,
-                        set = function(_, val) db().mode = val end,
+                        set = function(_, value) db().mode = value end,
+                    },
+                    disableTalkingHead = {
+                        name = 'Hide Talking Head',
+                        desc = 'Hide the Blizzard Talking Head frame while Chat Bubbles is active.',
+                        type = 'toggle', order = 4,
+                        get = function() return db().disableTalkingHead end,
+                        set = function(_, value)
+                            db().disableTalkingHead = value
+                            bubbles:ApplyTalkingHeadSuppression(value)
+                        end,
+                    },
+                    revealText = toggleOption('Reveal Text', 'Reveal message text character by character.',
+                        'revealText', 5),
+                    revealSpeed = {
+                        name = 'Reveal Speed', desc = 'Characters revealed per second.',
+                        type = 'range', order = 6, min = 10, max = 120, step = 5,
+                        disabled = function() return not db().revealText end,
+                        get = function() return db().revealSpeed end,
+                        set = function(_, value) db().revealSpeed = value end,
                     },
                 },
             },
-            positioning = {
-                name = 'Positioning', type = 'group', inline = true, order = 4.5,
+            layout = {
+                name = 'Layout', type = 'group', order = 20,
                 args = {
+                    description = {
+                        name = 'Bubbles follow their NPCs. Adjust their size and offsets here; they do not have a fixed Edit Mode position.',
+                        type = 'description', order = 0,
+                    },
+                    width = {
+                        name = 'Width', desc = 'Bubble width in pixels.',
+                        type = 'range', order = 1, min = 200, max = 700, step = 10,
+                        get = function() return db().itemWidth end,
+                        set = function(_, value) db().itemWidth = value; bubbles:RefreshVisibleBubbles() end,
+                    },
                     offsetX = {
                         name = 'Horizontal Offset', desc = 'Move the bubble left or right of its NPC anchor.',
-                        type = 'range', order = 1, min = -200, max = 200, step = 1,
+                        type = 'range', order = 2, min = -200, max = 200, step = 1,
                         get = function() return db().offsetX end,
                         set = function(_, value) db().offsetX = value; bubbles:RefreshVisibleBubbles() end,
                     },
                     offsetY = {
                         name = 'Vertical Offset', desc = 'Move the bubble above or below its NPC anchor.',
-                        type = 'range', order = 2, min = -200, max = 200, step = 1,
+                        type = 'range', order = 3, min = -200, max = 200, step = 1,
                         get = function() return db().offsetY end,
                         set = function(_, value) db().offsetY = value; bubbles:RefreshVisibleBubbles() end,
                     },
                     scale = {
-                        name = 'Scale', type = 'range', order = 3, min = .5, max = 2, step = .05,
+                        name = 'Scale', type = 'range', order = 4, min = .5, max = 2, step = .05,
                         get = function() return db().scale end,
                         set = function(_, value) db().scale = value; bubbles:RefreshVisibleBubbles() end,
                     },
                     clampToScreen = toggleOption('Keep on Screen',
-                        'Keep the bubble and portrait within the screen edges.', 'clampToScreen', 4),
+                        'Keep the bubble and portrait within the screen edges.', 'clampToScreen', 5),
                 },
             },
-            nameStyling = fontOptions('NPC Name', 'name', 5),
-            messageStyling = fontOptions('Message', 'msg', 7, 'styleByType'),
-            messageBehavior = {
-                name = 'Message Behavior', type = 'group', inline = true, order = 8,
+            appearance = {
+                name = 'Appearance', type = 'group', order = 30,
                 args = {
+                    nameStyling = fontOptions('NPC Name', 'name', 1),
+                    messageStyling = fontOptions('Message', 'msg', 2, 'styleByType'),
                     enlargeYells = toggleOption('Enlarge Yells', 'Increase the font size for NPC yells by 25%.',
-                        'enlargeYells', 1),
+                        'enlargeYells', 3),
                     enlargeSingleLine = toggleOption('Enlarge Short Messages',
-                        'Increase the font size by 30% when the larger text fits on one line.', 'enlargeSingleLine', 2),
-                    revealText = toggleOption('Reveal Text', 'Reveal message text character by character.',
-                        'revealText', 3),
-                    revealSpeed = {
-                        name = 'Reveal Speed', desc = 'Characters revealed per second.',
-                        type = 'range', order = 4, min = 10, max = 120, step = 5,
-                        disabled = function() return not db().revealText end,
-                        get = function() return db().revealSpeed end,
-                        set = function(_, value) db().revealSpeed = value end,
+                        'Increase the font size by 30% when the larger text fits on one line.', 'enlargeSingleLine', 4),
+                },
+            },
+            preview = {
+                name = 'Preview', type = 'group', order = 90,
+                args = {
+                    test = {
+                        name = 'Preview NPC Bubble',
+                        desc = 'Show a sample bubble above your targeted NPC, or another visible NPC. '
+                            .. 'The NPC must have a visible nameplate. Screen clamping is unavailable in this preview.',
+                        type = 'execute', order = 1,
+                        disabled = function() return not bubbles:IsEnabled() end,
+                        func = function() bubbles:PreviewNpcBubble() end,
+                    },
+                    openChat = {
+                        name = 'Open Chat', desc = 'Open the CouchMode Chat feed.',
+                        type = 'execute', order = 2,
+                        func = function() addon.Chat:Toggle() end,
+                    },
+                    chatSettings = {
+                        name = 'Open Chat Settings', desc = 'Configure the feed used when an NPC bubble cannot be replaced.',
+                        type = 'execute', order = 3,
+                        func = function() addon:GetModule('Options'):OpenModule('Chat') end,
                     },
                 },
             },

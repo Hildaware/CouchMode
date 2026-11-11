@@ -9,8 +9,6 @@ local function now() return (type(GetTime) == 'function') and GetTime() or 0 end
 local PAD = 8
 local DEFAULT_WIDTH = toasts.DEFAULT_WIDTH
 local DEFAULT_MAX_ITEMS = toasts.DEFAULT_MAX_ITEMS
-local MAX_ITEMS_LIMIT = toasts.MAX_ITEMS_LIMIT
-local FADE_DELAY_DESC = toasts.FADE_DELAY_DESC
 local NEUTRAL = { r = 0.16, g = 0.16, b = 0.16 }
 local MONEY = { r = 0.83, g = 0.68, b = 0.21 }
 local REPUTATION = { r = 0.30, g = 0.58, b = 0.95 }
@@ -288,56 +286,6 @@ function toasts:BuildPanel()
             set = function(_, value, fromReset)
                 db().width = (fromReset and DEFAULT_WIDTH or value)
                 toasts:ApplyLayout()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Max Items', desc = 'Maximum number of active toast rows shown at once. Additional rewards wait in the queue.',
-            default = DEFAULT_MAX_ITEMS, minValue = 1, maxValue = MAX_ITEMS_LIMIT, valueStep = 1,
-            get = function() return db().maxItems or DEFAULT_MAX_ITEMS end,
-            set = function(_, value, fromReset)
-                db().maxItems = (fromReset and DEFAULT_MAX_ITEMS or value)
-                if toasts.feed then toasts.feed:TrimToCount(db().maxItems) end
-                toasts:ApplyLayout()
-                if toasts:HasQueuedEntries() then toasts:SchedulePresentationQueue(0) end
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
-            default = 1, minValue = 0.1, maxValue = 1, valueStep = 0.05,
-            get = function() return db().activeOpacity end,
-            set = function(_, value, fromReset)
-                db().activeOpacity = (fromReset and 1 or value)
-                toasts:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Slider,
-            name = 'Fade Delay', desc = FADE_DELAY_DESC,
-            default = 15, minValue = 0, maxValue = 120, valueStep = 1,
-            get = function() return db().fadeDelay end,
-            set = function(_, value, fromReset)
-                db().fadeDelay = (fromReset and 15 or value)
-                toasts:Touch()
-            end,
-        },
-        {
-            kind = EditMode.SettingType.Dropdown,
-            name = 'Font', desc = 'Font used for reward text.',
-            default = 'Arial Narrow',
-            values = (function()
-                local values = {}
-                for name in pairs(addon.Media.GetFontOptions()) do
-                    values[#values + 1] = { text = name, value = name }
-                end
-                table.sort(values, function(a, b) return a.text < b.text end)
-                return values
-            end)(),
-            get = function() return db().fontFace end,
-            set = function(_, value, fromReset)
-                db().fontFace = (fromReset and 'Arial Narrow' or value)
-                toasts:ApplyFont()
             end,
         },
     })

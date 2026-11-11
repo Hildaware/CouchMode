@@ -135,7 +135,9 @@ function bubbles:ScanBubbles()
     -- Remove vanished, forbidden, or changed native frames before assigning new owners.
     for i = #self.active, 1, -1 do
         local bubble = self.active[i]
-        if not visible[bubble.nativeFrame] then
+        if bubble.previewFrame then
+            -- Preview anchoring and visibility are owned by its nameplate watcher.
+        elseif not visible[bubble.nativeFrame] then
             self:RemoveChatBubble(bubble, true)
         elseif not bubble.released then
             self:ApplyBubblePosition(bubble)

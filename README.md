@@ -34,6 +34,23 @@ Utilities that make World of Warcraft feel more like a console experience.
 Chat and Chat Bubbles share a single message router (`Modules/Chat/Router.lua`)
 so WoW chat events are normalized and dispatched once, deduplicated by line ID.
 
+## Configuration
+
+Open `/cm` for module settings. General contains enable and behavior controls;
+Layout contains dimensions, scale, and anchoring; Appearance contains fonts,
+colors, and opacity. Modules with sample displays have a Preview section.
+Source filters, moderation, and other module-specific controls keep their own groups.
+
+Use **Edit Layout** to open Edit Mode, then select the component to move or resize
+it. Geometry controls in `/cm` and Edit Mode share the same values and ranges;
+enable a component before adjusting its geometry. **More Settings** on its Edit
+Mode panel opens the corresponding `/cm` page. This leaves Edit Mode open so
+unsaved Blizzard layout changes are preserved.
+
+Positions follow the active Edit Mode layout. Dimensions and appearance are
+shared across layouts within the current CouchMode profile. Chat Bubbles follow
+NPCs, so their offsets and scale live in `/cm` alongside **Preview NPC Bubble**.
+
 ## Chat composer
 
 Assign **CouchMode → Chat Composer** in Key Bindings, or open it from
@@ -83,11 +100,8 @@ Combat behavior and native Gamepad UI taint still require validation in WoW.
 
 ## TODO
 
-### ALL
-- Re-visit settings within edit mode / options panel
-
 ### Chat Bubbles
-- Test Bubble configs
+- Sizing
 
 ### Map
 - There's a new gamepad map scroll thing added to Forever. Once it's out of alpha we should adopt it for the gamepad map scroll.

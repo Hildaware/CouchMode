@@ -106,7 +106,9 @@ function tips.buildCharacteristics()
                     self.classIcon:SetTexture(specInfo.specIcon)
                     -- Unspecialized players can report their class as the spec name.
                     local specName = specInfo.specName
-                    if className and specName and specName ~= "" and specName ~= className then
+                    if specInfo.talentPoints then
+                        self.info:SetText((className or "") .. " (" .. specInfo.talentPoints .. ")")
+                    elseif className and specName and specName ~= "" and specName ~= className then
                         self.info:SetText(specName .. " " .. className)
                     else
                         self.info:SetText(className or specName or "")

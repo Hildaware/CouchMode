@@ -53,22 +53,77 @@ function toasts:BuildArgs()
             type = 'description',
             order = 1,
         },
-        enabled = {
-            name = 'Enable',
-            desc = 'Show Toasts and hide recognized lines from Blizzard chat.',
-            type = 'toggle',
-            order = 2,
-            get = function() return db().enabled end,
-            set = function(_, value)
-                db().enabled = value
-                if value then toasts:Enable() else toasts:Disable() end
-            end,
+        general = {
+            name = 'General', type = 'group', inline = true, order = 2,
+            args = {
+                enabled = {
+                    name = 'Enable',
+                    desc = 'Show Toasts and hide recognized lines from Blizzard chat.',
+                    type = 'toggle',
+                    order = 0,
+                    get = function() return db().enabled end,
+                    set = function(_, value)
+                        db().enabled = value
+                        if value then toasts:Enable() else toasts:Disable() end
+                    end,
+                },
+                maxItems = {
+                    name = 'Max Items',
+                    desc = 'Maximum number of active toast rows shown at once. Additional rewards wait in the queue.',
+                    type = 'range', min = 1, max = MAX_ITEMS_LIMIT, step = 1, order = 2,
+                    get = function() return db().maxItems or DEFAULT_MAX_ITEMS end,
+                    set = function(_, value)
+                        db().maxItems = value
+                        if toasts.feed then toasts.feed:TrimToCount(value) end
+                        toasts:ApplyLayout()
+                        if toasts:HasQueuedEntries() then toasts:SchedulePresentationQueue(0) end
+                    end,
+                },
+                fadeDelay = {
+                    name = 'Fade Delay', desc = FADE_DELAY_DESC,
+                    type = 'range', min = 0, max = 120, step = 1, order = 6,
+                    get = function() return db().fadeDelay end,
+                    set = function(_, value) db().fadeDelay = value; toasts:Touch() end,
+                },
+                filterJunk = {
+                    name = 'Filter Junk',
+                    desc = 'Hide repetitive action errors such as “Out of range” and “You have no target.”',
+                    type = 'toggle', order = 12,
+                    get = function() return db().filterJunk end,
+                    set = function(_, value) db().filterJunk = value end,
+                },
+            },
+        },
+        layout = {
+            name = 'Layout', type = 'group', inline = true, order = 3,
+            args = addon.EditMode:GetLayoutOptions('Toasts'),
+        },
+        appearance = {
+            name = 'Appearance', type = 'group', inline = true, order = 4,
+            args = {
+                activeOpacity = {
+                    name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
+                    type = 'range', min = 0.1, max = 1, step = 0.05, order = 4,
+                    get = function() return db().activeOpacity end,
+                    set = function(_, value) db().activeOpacity = value; toasts:Touch() end,
+                },
+                fontFace = {
+                    name = 'Font', desc = 'Font used for reward text.',
+                    type = 'select', style = 'dropdown', order = 8,
+                    values = addon.Media.GetFontOptions(),
+                    get = function() return db().fontFace end,
+                    set = function(_, value) db().fontFace = value; toasts:ApplyFont() end,
+                },
+                fontSize = {
+                    name = 'Font Size', desc = 'Reward text size.',
+                    type = 'range', min = 8, max = 28, step = 1, order = 9,
+                    get = function() return db().fontSize end,
+                    set = function(_, value) db().fontSize = value; toasts:ApplyFont() end,
+                },
+            },
         },
         rewards = {
-            name = 'Rewards',
-            type = 'group',
-            inline = true,
-            order = 10,
+            name = 'Reward Categories', type = 'group', inline = true, order = 5,
             args = {
                 items = {
                     name = 'Items', desc = 'Items looted by you.',
@@ -94,81 +149,20 @@ function toasts:BuildArgs()
                     get = function() return db().reputation end,
                     set = function(_, value) db().reputation = value end,
                 },
-            },
-        },
-        system = {
-            name = 'System Messages',
-            desc = 'Show system messages in a distinct toast style instead of duplicating them in CouchMode Chat.',
-            type = 'toggle', order = 11,
-            get = function() return db().system end,
-            set = function(_, value) db().system = value end,
-        },
-        filterJunk = {
-            name = 'Filter Junk',
-            desc = 'Hide repetitive action errors such as “Out of range” and “You have no target.”',
-            type = 'toggle', order = 12,
-            get = function() return db().filterJunk end,
-            set = function(_, value) db().filterJunk = value end,
-        },
-        appearance = {
-            name = 'Appearance',
-            type = 'group',
-            inline = true,
-            order = 20,
-            args = {
-                width = {
-                    name = 'Width', desc = 'Feed width in pixels.',
-                    type = 'range', min = 200, max = 900, step = 10, order = 1,
-                    get = function() return db().width end,
-                    set = function(_, value) db().width = value; toasts:ApplyLayout() end,
-                },
-                maxItems = {
-                    name = 'Max Items',
-                    desc = 'Maximum number of active toast rows shown at once. Additional rewards wait in the queue.',
-                    type = 'range', min = 1, max = MAX_ITEMS_LIMIT, step = 1, order = 2,
-                    get = function() return db().maxItems or DEFAULT_MAX_ITEMS end,
-                    set = function(_, value)
-                        db().maxItems = value
-                        if toasts.feed then toasts.feed:TrimToCount(value) end
-                        toasts:ApplyLayout()
-                        if toasts:HasQueuedEntries() then toasts:SchedulePresentationQueue(0) end
-                    end,
-                },
-                activeOpacity = {
-                    name = 'Active Opacity', desc = 'Feed opacity while at least one reward is visible.',
-                    type = 'range', min = 0.1, max = 1, step = 0.05, order = 4,
-                    get = function() return db().activeOpacity end,
-                    set = function(_, value) db().activeOpacity = value; toasts:Touch() end,
-                },
-                fadeDelay = {
-                    name = 'Fade Delay', desc = FADE_DELAY_DESC,
-                    type = 'range', min = 0, max = 120, step = 1, order = 6,
-                    get = function() return db().fadeDelay end,
-                    set = function(_, value) db().fadeDelay = value; toasts:Touch() end,
-                },
-                fontFace = {
-                    name = 'Font', desc = 'Font used for reward text.',
-                    type = 'select', style = 'dropdown', order = 8,
-                    values = addon.Media.GetFontOptions(),
-                    get = function() return db().fontFace end,
-                    set = function(_, value) db().fontFace = value; toasts:ApplyFont() end,
-                },
-                fontSize = {
-                    name = 'Font Size', desc = 'Reward text size.',
-                    type = 'range', min = 8, max = 28, step = 1, order = 9,
-                    get = function() return db().fontSize end,
-                    set = function(_, value) db().fontSize = value; toasts:ApplyFont() end,
+                system = {
+                    name = 'System Messages',
+                    desc = 'Show system messages in a distinct toast style instead of duplicating them in CouchMode Chat.',
+                    type = 'toggle', order = 11,
+                    get = function() return db().system end,
+                    set = function(_, value) db().system = value end,
                 },
             },
         },
-        misc = {
-            name = 'Misc',
-            type = 'group',
-            inline = true,
-            order = 99,
+        preview = {
+            name = 'Preview', type = 'group', inline = true, order = 90,
             args = {
                 testRewards = {
-                    name = 'Test Rewards',
+                    name = 'Preview Rewards',
                     desc = 'Fire mock toasts for every category.\n\nAlso available as /cm toasts mock.',
                     type = 'execute', order = 1,
                     func = function() toasts:RunMock('all') end,

@@ -5,6 +5,8 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addonName)
 
 ---@class Options: AceModule
 local options = addon:NewModule('Options')
+addon.Options = options
+local modulePaths = {}
 
 ---@class OptionsModule: AceModule
 ---@field GetDefaults  fun(self: OptionsModule): table<string, any>
@@ -40,6 +42,18 @@ function options:SetReloadRequiredOption(settings, key, value, label)
     StaticPopup_Show('COUCHMODE_RELOAD_REQUIRED', label, nil, {
         settings = settings, key = key, value = value,
     })
+end
+
+-- Keep Edit Mode open when following this link: closing it can discard unsaved
+-- Blizzard layout changes. Edit Layout closes /cm to return to the canvas.
+function options:OpenModule(moduleName)
+    local path = modulePaths[moduleName]
+    local dialog = LibStub('AceConfigDialog-3.0')
+    if path then
+        dialog:Open(addonName, unpack(path))
+    else
+        dialog:Open(addonName)
+    end
 end
 
 function options:OnInitialize()
@@ -101,12 +115,16 @@ function options:OnInitialize()
             local key, group = mod:GetOptions()
             if PLAYER_BAR_MODULES[modName] then
                 playerBarsGroup.args[key] = group
+                modulePaths[modName] = { 'playerBars', key }
             else
                 settings.args[key] = group
+                modulePaths[modName] = { key }
             end
         end
     end
     settings.args['playerBars'] = playerBarsGroup
+    modulePaths.CastRing = { 'playerBars', 'castBars', 'castRing' }
+    modulePaths.PlayerCastBar = { 'playerBars', 'castBars', 'playerCastBar' }
 
     LibStub("AceConfig-3.0"):RegisterOptionsTable(addonName, settings)
     addon.Utils.InstallAceConfigTooltipCompatibility()

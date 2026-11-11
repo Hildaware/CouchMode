@@ -15,6 +15,17 @@ local editMode = {
     },
 }
 
+-- Names match the frame labels supplied by each module at registration.
+local moduleByLabel = {
+    ['CouchMode Map'] = 'Minimap', ['CouchMode Tips'] = 'Tips',
+    ['CouchMode Party'] = 'Party', ['CouchMode Toasts'] = 'Toasts',
+    ['CouchMode Chat'] = 'Chat', ['CouchMode Cast Ring'] = 'CastRing',
+    ['CouchMode Cast Bar'] = 'PlayerCastBar', ['CouchMode Health'] = 'PlayerHealthBar',
+    ['CouchMode Power'] = 'PlayerPowerBar', ['CouchMode Mana'] = 'PlayerManaBar',
+}
+editMode.registrations = {}
+local moduleByFrame = {}
+
 ---Register a frame with the active Edit Mode backend.
 function editMode:RegisterFrame(frame, callback, default, name)
     backend:AddFrame(frame, function(registeredFrame, layoutName, ...)
@@ -22,6 +33,18 @@ function editMode:RegisterFrame(frame, callback, default, name)
             callback(registeredFrame, layoutName, ...)
         end
     end, default, name)
+    local moduleName = moduleByLabel[name]
+    if moduleName then
+        moduleByFrame[frame] = moduleName
+        self.registrations[moduleName] = { frame = frame }
+        backend:AddFrameSettingsButtons(frame, {
+            {
+                text = 'More Settings', name = 'More Settings',
+                desc = 'Open this component in CouchMode settings.',
+                click = function() addon:GetModule('Options'):OpenModule(moduleName) end,
+            },
+        })
+    end
 end
 
 ---Register Edit Mode controls for a frame.
@@ -45,7 +68,16 @@ function editMode:RegisterFrameSettings(frame, settings)
         backendSettings[index] = backendSetting
     end
 
-    return backend:AddFrameSettings(frame, backendSettings)
+    backend:AddFrameSettings(frame, backendSettings)
+    local moduleName = moduleByFrame[frame]
+    if moduleName then
+        self.registrations[moduleName].settings = settings
+        self:RefreshLayoutOptions(moduleName)
+    end
+end
+
+function editMode:RefreshFrameSettings(frame)
+    backend:RefreshFrameSettings(frame)
 end
 
 ---Register for an Edit Mode lifecycle or layout callback.

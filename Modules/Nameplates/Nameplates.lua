@@ -99,7 +99,7 @@ function nameplates:GetDefaults()
 end
 
 function nameplates:GetOptions()
-    return 'nameplates', {
+    local group = {
         name = 'Nameplates',
         type = 'group',
         order = 9,
@@ -138,7 +138,7 @@ function nameplates:GetOptions()
                         end,
                     },
                     fontSize = {
-                        name = 'Size',
+                        name = 'Font Size',
                         type = 'range',
                         order = 2,
                         min = 8,
@@ -151,7 +151,7 @@ function nameplates:GetOptions()
                         end,
                     },
                     fontFlag = {
-                        name = 'Style',
+                        name = 'Font Outline',
                         type = 'select',
                         order = 3,
                         values = FONT_FLAGS,
@@ -175,7 +175,7 @@ function nameplates:GetOptions()
                 },
             },
             consoleVariables = {
-                name = 'Console Variables',
+                name = 'Targeting and Visibility',
                 type = 'group',
                 inline = true,
                 order = 5,
@@ -324,6 +324,13 @@ function nameplates:GetOptions()
             },
         },
     }
+    local args = group.args
+    local general = { enabled = args.enabled }
+    general.enabled.order = 0
+    for key, option in pairs(args.automation.args) do general[key] = option end
+    args.general = { name = 'General', type = 'group', inline = true, order = 2, args = general }
+    args.enabled, args.automation = nil, nil
+    return 'nameplates', group
 end
 
 --#endregion

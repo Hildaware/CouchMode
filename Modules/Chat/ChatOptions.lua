@@ -143,145 +143,48 @@ end
 
 function chat:BuildArgs()
     local args = {
-        description = {
-            name = 'A full chat replacement: scrollback, filters, identity icons, moderation and channel aliases. '
-                .. 'Disabling restores Blizzard chat exactly as it was.',
-            type = 'description',
-            order = 1,
-        },
-        enabled = {
-            name = 'Enable',
-            desc = 'Replace Blizzard chat with the CouchMode Chat feed.',
-            type = 'toggle',
-            order = 2,
-            get = function() return db().enabled end,
-            set = function(_, value)
-                db().enabled = value
-                if value then chat:Enable() else chat:Disable() end
-            end,
-        },
-        appearance = {
-            name = 'Appearance',
-            type = 'group',
-            order = 10,
+        general = {
+            name = 'General', type = 'group', order = 10,
             args = {
-                width = {
-                    name = 'Width', desc = 'Panel width in pixels.',
-                    type = 'range', min = 240, max = 1200, step = 10, order = 1,
-                    get = function() return db().width end,
-                    set = function(_, v) db().width = v; chat:ApplyLayout(true) end,
+                description = {
+                    name = 'A full chat replacement: scrollback, filters, identity icons, moderation and channel aliases. '
+                        .. 'Disabling restores Blizzard chat exactly as it was.',
+                    type = 'description',
+                    order = 1,
                 },
-                growthDirection = {
-                    name = 'Growth Direction',
-                    desc = 'Choose the fixed edge that live chat grows away from.',
-                    type = 'select', order = 2,
-                    values = { bottom = 'Bottom', top = 'Top' },
-                    get = function() return db().growthDirection or 'bottom' end,
-                    set = function(_, v) db().growthDirection = v; chat:ApplyLayout() end,
-                },
-                maxLiveMessages = {
-                    name = 'Live Messages',
-                    desc = 'Maximum number of unfaded messages shown in live chat.',
-                    type = 'range', min = 1, max = 20, step = 1, order = 3,
-                    get = function() return db().maxLiveMessages or 6 end,
-                    set = function(_, v) db().maxLiveMessages = v; chat:ApplyLayout() end,
-                },
-                historyHeight = {
-                    name = 'History Height',
-                    desc = 'Total panel height while browsing history, including visible controls.',
-                    type = 'range', min = 200, max = 900, step = 10, order = 4,
-                    get = function() return db().historyHeight or chat.DEFAULT_HISTORY_HEIGHT end,
-                    set = function(_, v) db().historyHeight = v; chat:ApplyLayout() end,
-                },
-                scale = {
-                    name = 'Scale', desc = 'Overall panel scale.',
-                    type = 'range', min = 0.5, max = 2, step = 0.05, order = 5,
-                    get = function() return db().scale end,
-                    set = function(_, v) db().scale = v; chat:ApplyLayout() end,
-                },
-                activeOpacity = {
-                    name = 'Active Opacity', desc = 'Panel opacity while at least one message is visible.',
-                    type = 'range', min = 0.1, max = 1, step = 0.05, order = 6,
-                    get = function() return db().activeOpacity end,
-                    set = function(_, v) db().activeOpacity = v; chat:Touch() end,
-                },
-                backgroundOpacity = {
-                    name = 'Background Opacity', desc = 'Panel opacity after all visible messages fade.',
-                    type = 'range', min = 0, max = 1, step = 0.05, order = 7,
-                    get = function() return db().backgroundOpacity end,
-                    set = function(_, v) db().backgroundOpacity = v; chat:ApplyPanelBackgroundOpacity() end,
+                enabled = {
+                    name = 'Enable',
+                    desc = 'Replace Blizzard chat with the CouchMode Chat feed.',
+                    type = 'toggle',
+                    order = 2,
+                    get = function() return db().enabled end,
+                    set = function(_, value)
+                        db().enabled = value
+                        if value then chat:Enable() else chat:Disable() end
+                    end,
                 },
                 fadeEnabled = {
                     name = 'Auto-fade', desc = 'Fade each message after its delay, then fade the panel when none remain.',
-                    type = 'toggle', order = 8,
+                    type = 'toggle', order = 3,
                     get = function() return db().fadeEnabled end,
                     set = function(_, v) db().fadeEnabled = v; chat:Touch() end,
                 },
                 fadeDelay = {
                     name = 'Fade Delay', desc = 'Seconds each message remains visible before fading.',
-                    type = 'range', min = 0, max = 60, step = 1, order = 9,
+                    type = 'range', min = 0, max = 60, step = 1, order = 4,
                     get = function() return db().fadeDelay end,
                     set = function(_, v) db().fadeDelay = v; chat:Touch() end,
-                },
-                compactMode = {
-                    name = 'Compact Mode',
-                    desc = 'Place the speaker name beside the channel, move messages directly below the header, and halve identity icon sizing.',
-                    type = 'toggle', order = 10,
-                    get = function() return db().compactMode end,
-                    set = function(_, v) db().compactMode = v; chat:Recompute() end,
-                },
-                channelHeader = { name = 'Channel', type = 'header', order = 11 },
-                channelFont = {
-                    name = 'Font', desc = 'Font for the channel label.',
-                    type = 'select', style = 'dropdown', order = 12,
-                    values = addon.Media.GetFontOptions(),
-                    get = function() return db().channelFontFace end,
-                    set = function(_, v) db().channelFontFace = v; chat:Recompute() end,
-                },
-                channelSize = {
-                    name = 'Font Size', desc = 'Channel label size.',
-                    type = 'range', min = 6, max = 28, step = 1, order = 13,
-                    get = function() return db().channelFontSize end,
-                    set = function(_, v) db().channelFontSize = v; chat:Recompute() end,
-                },
-                nameHeader = { name = 'Name', type = 'header', order = 14 },
-                nameFont = {
-                    name = 'Font', desc = 'Font for the speaker name.',
-                    type = 'select', style = 'dropdown', order = 15,
-                    values = addon.Media.GetFontOptions(),
-                    get = function() return db().nameFontFace end,
-                    set = function(_, v) db().nameFontFace = v; chat:Recompute() end,
-                },
-                nameSize = {
-                    name = 'Font Size', desc = 'Speaker name size.',
-                    type = 'range', min = 6, max = 32, step = 1, order = 16,
-                    get = function() return db().nameFontSize end,
-                    set = function(_, v) db().nameFontSize = v; chat:Recompute() end,
-                },
-                msgHeader = { name = 'Message', type = 'header', order = 17 },
-                msgFont = {
-                    name = 'Font', desc = 'Font for message text.',
-                    type = 'select', style = 'dropdown', order = 18,
-                    values = addon.Media.GetFontOptions(),
-                    get = function() return db().msgFontFace end,
-                    set = function(_, v) db().msgFontFace = v; chat:Recompute() end,
-                },
-                msgSize = {
-                    name = 'Font Size', desc = 'Message text size.',
-                    type = 'range', min = 8, max = 28, step = 1, order = 19,
-                    get = function() return db().msgFontSize end,
-                    set = function(_, v) db().msgFontSize = v; chat:Recompute() end,
                 },
                 revealText = {
                     name = 'Reveal Text',
                     desc = 'Message text reveals character-by-character; the channel and name fade in.',
-                    type = 'toggle', order = 20,
+                    type = 'toggle', order = 5,
                     get = function() return db().revealText end,
                     set = function(_, v) db().revealText = v; chat:Recompute() end,
                 },
                 revealSpeed = {
                     name = 'Reveal Speed', desc = 'Characters revealed per second.',
-                    type = 'range', min = 5, max = 120, step = 1, order = 21,
+                    type = 'range', min = 5, max = 120, step = 1, order = 6,
                     disabled = function() return not db().revealText end,
                     get = function() return db().revealSpeed end,
                     set = function(_, v) db().revealSpeed = v; chat:Recompute() end,
@@ -289,7 +192,7 @@ function chat:BuildArgs()
                 messagePace = {
                     name = 'Message Pace',
                     desc = 'Seconds between messages displayed during a burst. Messages remain queued and are shown in order. Set to 0 for the fastest possible display.',
-                    type = 'range', min = 0, max = 1, step = 0.05, order = 22,
+                    type = 'range', min = 0, max = 1, step = 0.05, order = 7,
                     get = function() return db().messagePace end,
                     set = function(_, v)
                         db().messagePace = v
@@ -300,47 +203,121 @@ function chat:BuildArgs()
                     name = 'Specialization Badges',
                     desc = 'Throttled, out-of-combat inspects add a specialization badge to player icons.',
                     type = 'toggle',
-                    order = 23,
+                    order = 8,
                     get = function() return db().specEnrichment end,
                     set = function(_, v) db().specEnrichment = v end,
                 },
+                clear = {
+                    name = 'Clear History', desc = 'Clear the current login\'s message history.',
+                    type = 'execute', order = 99,
+                    func = function() chat:ClearSession() end,
+                },
             },
         },
-        moderation = {
-            name = 'Moderation',
-            type = 'group',
-            order = 30,
+        layout = {
+            name = 'Layout', type = 'group', order = 20,
             args = {
-                blocking = {
-                    name = 'Blocking',
-                    type = 'group',
-                    inline = true,
+                growthDirection = {
+                    name = 'Growth Direction',
+                    desc = 'Choose the fixed edge that live chat grows away from.',
+                    type = 'select', order = 20,
+                    values = { bottom = 'Bottom', top = 'Top' },
+                    get = function() return db().growthDirection or 'bottom' end,
+                    set = function(_, v) db().growthDirection = v; chat:ApplyLayout() end,
+                },
+                maxLiveMessages = {
+                    name = 'Live Messages',
+                    desc = 'Maximum number of unfaded messages shown in live chat.',
+                    type = 'range', min = 1, max = 20, step = 1, order = 21,
+                    get = function() return db().maxLiveMessages or 6 end,
+                    set = function(_, v) db().maxLiveMessages = v; chat:ApplyLayout() end,
+                },
+                historyHeight = {
+                    name = 'History Height',
+                    desc = 'Total panel height while browsing history, including visible controls.',
+                    type = 'range', min = 200, max = 900, step = 10, order = 22,
+                    get = function() return db().historyHeight or chat.DEFAULT_HISTORY_HEIGHT end,
+                    set = function(_, v) db().historyHeight = v; chat:ApplyLayout() end,
+                },
+                compactMode = {
+                    name = 'Compact Mode',
+                    desc = 'Place the speaker name beside the channel, move messages directly below the header, and halve identity icon sizing.',
+                    type = 'toggle', order = 23,
+                    get = function() return db().compactMode end,
+                    set = function(_, v) db().compactMode = v; chat:Recompute() end,
+                },
+            },
+        },
+        appearance = {
+            name = 'Appearance', type = 'group', order = 30,
+            args = {
+                activeOpacity = {
+                    name = 'Active Opacity', desc = 'Panel opacity while at least one message is visible.',
+                    type = 'range', min = 0.1, max = 1, step = 0.05, order = 1,
+                    get = function() return db().activeOpacity end,
+                    set = function(_, v) db().activeOpacity = v; chat:Touch() end,
+                },
+                backgroundOpacity = {
+                    name = 'Background Opacity', desc = 'Panel opacity after all visible messages fade.',
+                    type = 'range', min = 0, max = 1, step = 0.05, order = 2,
+                    get = function() return db().backgroundOpacity end,
+                    set = function(_, v) db().backgroundOpacity = v; chat:ApplyPanelBackgroundOpacity() end,
+                },
+                channelHeader = { name = 'Channel', type = 'header', order = 3 },
+                channelFont = {
+                    name = 'Font', desc = 'Font for the channel label.',
+                    type = 'select', style = 'dropdown', order = 4,
+                    values = addon.Media.GetFontOptions(),
+                    get = function() return db().channelFontFace end,
+                    set = function(_, v) db().channelFontFace = v; chat:Recompute() end,
+                },
+                channelSize = {
+                    name = 'Font Size', desc = 'Channel label size.',
+                    type = 'range', min = 6, max = 28, step = 1, order = 5,
+                    get = function() return db().channelFontSize end,
+                    set = function(_, v) db().channelFontSize = v; chat:Recompute() end,
+                },
+                nameHeader = { name = 'Name', type = 'header', order = 6 },
+                nameFont = {
+                    name = 'Font', desc = 'Font for the speaker name.',
+                    type = 'select', style = 'dropdown', order = 7,
+                    values = addon.Media.GetFontOptions(),
+                    get = function() return db().nameFontFace end,
+                    set = function(_, v) db().nameFontFace = v; chat:Recompute() end,
+                },
+                nameSize = {
+                    name = 'Font Size', desc = 'Speaker name size.',
+                    type = 'range', min = 6, max = 32, step = 1, order = 8,
+                    get = function() return db().nameFontSize end,
+                    set = function(_, v) db().nameFontSize = v; chat:Recompute() end,
+                },
+                msgHeader = { name = 'Message', type = 'header', order = 9 },
+                msgFont = {
+                    name = 'Font', desc = 'Font for message text.',
+                    type = 'select', style = 'dropdown', order = 10,
+                    values = addon.Media.GetFontOptions(),
+                    get = function() return db().msgFontFace end,
+                    set = function(_, v) db().msgFontFace = v; chat:Recompute() end,
+                },
+                msgSize = {
+                    name = 'Font Size', desc = 'Message text size.',
+                    type = 'range', min = 8, max = 28, step = 1, order = 11,
+                    get = function() return db().msgFontSize end,
+                    set = function(_, v) db().msgFontSize = v; chat:Recompute() end,
+                },
+            },
+        },
+        filtering = {
+            name = 'Filtering',
+            type = 'group',
+            order = 40,
+            args = {
+                openBlizzardFiltering = {
+                    name = 'Open Blizzard Chat Filtering',
+                    desc = 'Configure the General chat window. Changes affect new CouchMode Chat messages.',
+                    type = 'execute',
                     order = 1,
-                    args = {
-                        blockName = {
-                            name = 'Block Player', desc = 'Name or Name-Realm. A bare name matches any realm.',
-                            type = 'input', width = 1, order = 1,
-                            get = function() return '' end,
-                            set = function(_, v)
-                                if v and v ~= '' then chat:BlockName(v) end
-                            end,
-                        },
-                        blockGuild = {
-                            name = 'Block Guild', desc = 'Guild name. Best effort: requires known membership.',
-                            type = 'input', width = 1, order = 2,
-                            get = function() return '' end,
-                            set = function(_, v)
-                                if v and v ~= '' then chat:BlockGuild(v) end
-                            end,
-                        },
-                        blocked = {
-                            name = 'Blocked', desc = 'Locally blocked players and guilds.',
-                            type = 'select', style = 'dropdown', width = 'full', order = 3,
-                            values = function() return chat:BuildBlockedList() end,
-                            get = function() return '__none' end,
-                            set = function() end,
-                        },
-                    },
+                    func = function() chat:OpenBlizzardChatFiltering() end,
                 },
                 aliases = {
                     name = 'Aliases',
@@ -382,40 +359,68 @@ function chat:BuildArgs()
                 },
             },
         },
-        misc = {
-            name = 'Misc',
+        moderation = {
+            name = 'Moderation',
             type = 'group',
-            order = 99,
+            order = 60,
             args = {
-                clear = {
-                    name = 'Clear History', desc = 'Clear the current login\'s message history.',
+                blocking = {
+                    name = 'Blocking',
+                    type = 'group',
+                    inline = true,
+                    order = 1,
+                    args = {
+                        blockName = {
+                            name = 'Block Player', desc = 'Name or Name-Realm. A bare name matches any realm.',
+                            type = 'input', width = 1, order = 1,
+                            get = function() return '' end,
+                            set = function(_, v)
+                                if v and v ~= '' then chat:BlockName(v) end
+                            end,
+                        },
+                        blockGuild = {
+                            name = 'Block Guild', desc = 'Guild name. Best effort: requires known membership.',
+                            type = 'input', width = 1, order = 2,
+                            get = function() return '' end,
+                            set = function(_, v)
+                                if v and v ~= '' then chat:BlockGuild(v) end
+                            end,
+                        },
+                        blocked = {
+                            name = 'Blocked', desc = 'Locally blocked players and guilds.',
+                            type = 'select', style = 'dropdown', width = 'full', order = 3,
+                            values = function() return chat:BuildBlockedList() end,
+                            get = function() return '__none' end,
+                            set = function() end,
+                        },
+                    },
+                },
+            },
+        },
+        preview = {
+            name = 'Preview', type = 'group', order = 90,
+            args = {
+                openChat = {
+                    name = 'Open Chat', desc = 'Show the CouchMode Chat panel.',
                     type = 'execute', order = 1,
-                    func = function() chat:ClearSession() end,
+                    func = function() chat:Toggle() end,
                 },
                 testMessages = {
-                    name = 'Test Messages',
-                    desc = 'Fire mock messages for every source into the feed.\n\nAlso available in chat as /cm chat mock [set] and /cm chat sets.',
+                    name = 'Preview Chat Messages',
+                    desc = 'Display sample messages from every chat source.\n\nAlso available as /cm chat mock [set] and /cm chat sets.',
                     type = 'execute', order = 2,
                     func = function() chat:RunMock('all') end,
                 },
             },
         },
-        filtering = {
-            name = 'Filtering',
-            type = 'group',
-            order = 40,
-            args = {
-                openBlizzardFiltering = {
-                    name = 'Open Blizzard Chat Filtering',
-                    desc = 'Configure the General chat window. Changes affect new CouchMode Chat messages.',
-                    type = 'execute',
-                    order = 1,
-                    func = function() chat:OpenBlizzardChatFiltering() end,
-                },
-            },
-        },
     }
+    local layout = addon.EditMode:GetLayoutOptions('Chat')
+    for key, option in pairs(args.layout.args) do
+        layout[key] = option
+    end
+    args.layout.args = layout
     args.quickReplies = self:BuildQuickRepliesOptions()
+    args.quickReplies.order = 50
     return args
 end
 

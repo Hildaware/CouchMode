@@ -67,32 +67,27 @@ end
 
 function tips:GetOptions()
     return 'tips', {
-        name = 'Tips',
-        type = 'group',
-        order = 10,
+        name = 'Tips', type = 'group', order = 10,
         args = {
             description = {
                 name = 'Custom unit tooltips for players and NPCs.',
                 type = 'description',
                 order = 1,
             },
-            enabled = {
-                name = 'Enable',
-                desc = 'Show custom tooltip for targeted and moused-over units.',
-                type = 'toggle',
-                order = 2,
-                get = function() return tipsDB().enabled end,
-                set = function(_, value)
-                    tipsDB().enabled = value
-                    if value then tips:Enable() else tips:Disable() end
-                end,
-            },
-            visibility = {
-                name = 'Visibility',
-                type = 'group',
-                inline = true,
-                order = 4,
+            general = {
+                name = 'General', type = 'group', inline = true, order = 2,
                 args = {
+                    enabled = {
+                        name = 'Enable',
+                        desc = 'Show custom tooltip for targeted and moused-over units.',
+                        type = 'toggle',
+                        order = 0,
+                        get = function() return tipsDB().enabled end,
+                        set = function(_, value)
+                            tipsDB().enabled = value
+                            if value then tips:Enable() else tips:Disable() end
+                        end,
+                    },
                     showFriendlyNpcs = {
                         name = 'Show Friendly NPC Tips',
                         desc = 'Show tooltip for friendly (non-attackable) NPCs.',
@@ -129,11 +124,15 @@ function tips:GetOptions()
                     },
                 },
             },
+            layout = {
+                name = 'Layout', type = 'group', inline = true, order = 3,
+                args = addon.EditMode:GetLayoutOptions('Tips'),
+            },
             appearance = {
                 name = 'Appearance',
                 type = 'group',
                 inline = true,
-                order = 3,
+                order = 4,
                 args = {
                     font = {
                         name = 'Font',

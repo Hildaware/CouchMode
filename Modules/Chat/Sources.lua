@@ -153,9 +153,10 @@ function M.IsNpc(event)
     return M.NPC_EVENTS[event] == true
 end
 
---- Player emotes, including both custom /e text and built-in actions.
+--- Player actions and NPC emotes share the same feed presentation.
 function M.IsEmote(event)
     return event == 'CHAT_MSG_EMOTE' or event == 'CHAT_MSG_TEXT_EMOTE'
+        or event == 'CHAT_MSG_MONSTER_EMOTE' or event == 'CHAT_MSG_RAID_BOSS_EMOTE'
 end
 
 --- Whether the speech is addressed to the group rather than the open world.

@@ -14,7 +14,7 @@ local options = addon:NewModule('Bags.Options')
 local database = addon:GetModule('Bags.Database')
 
 function bagsModule:GetOptions()
-    return 'bags', {
+    local group = {
         name = 'Bags',
         type = 'group',
         order = 1,
@@ -60,8 +60,8 @@ function bagsModule:GetOptions()
                 end
             },
             itemWidth = {
-                name = 'Item Width',
-                desc = 'The width of each item in the view.',
+                name = 'Inventory Width',
+                desc = 'Width of the inventory list.',
                 type = 'range',
                 min = 400,
                 max = 1200,
@@ -91,6 +91,30 @@ function bagsModule:GetOptions()
             },
         }
     }
+    local args = group.args
+    args.itemWidth.order, args.itemHeight.order, args.backgroundOpacity.order = 1, 2, 2
+    group.args = {
+        general = {
+            name = 'General', type = 'group', inline = true, order = 1,
+            args = { enabled = args.enabled, viewType = args.viewType },
+        },
+        layout = {
+            name = 'Layout', type = 'group', inline = true, order = 2,
+            args = {
+                description = {
+                    name = 'Compact bags can be moved by dragging their header. Full bags use a docked layout.',
+                    type = 'description', order = 0,
+                },
+                itemWidth = args.itemWidth, itemHeight = args.itemHeight,
+            },
+        },
+        appearance = {
+            name = 'Appearance', type = 'group', inline = true, order = 3,
+            args = { font = args.font, backgroundOpacity = args.backgroundOpacity },
+        },
+    }
+    args.font.order = 1
+    return 'bags', group
 end
 
 function bagsModule:GetDefaults()
