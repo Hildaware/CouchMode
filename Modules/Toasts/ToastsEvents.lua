@@ -75,6 +75,14 @@ local JUNK_SYSTEM_MESSAGES = {
         fallbacks = { 'You need to be closer to interact with that target' },
     },
     {
+        globals = { 'SPELL_FAILED_NOT_BEHIND', 'ERR_SPELL_FAILED_NOT_BEHIND' },
+        fallbacks = { 'You must be behind your target' },
+    },
+    {
+        globals = { 'ERR_MAIL_DATABASE_ERROR' },
+        fallbacks = { 'Internal Mail Database Error' },
+    },
+    {
         globals = { 'ERR_OUT_OF_MANA', 'LE_GAME_ERR_OUT_OF_MANA', 'ERR_SPELL_FAILED_NOT_ENOUGH_MANA' },
         fallbacks = { 'Not enough Mana' },
     },
