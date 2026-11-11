@@ -11,6 +11,8 @@
     <Include file = 'Components/Metal.lua' />
     <Include file = 'Components/NineSliceButton.lua' />
     <Include file = 'Components/GamepadLegend.lua' />
+    <Include file = 'Components/UnitFrameStatus.lua' />
+    <Include file = 'Components/UnitFramePrediction.lua' />
     <Include file = 'Components/UnitFrame.lua' />
     <Include file = 'StatusBarBase.lua' />
     <Include file = 'QuestUtils.lua' />

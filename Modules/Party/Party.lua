@@ -17,7 +17,39 @@ local DEFAULT_X = 38
 local DEFAULT_Y = -180
 local VISIBILITY_RULE = '[group:party] show; hide'
 local SOLO_VISIBILITY_RULE = '[group:raid] hide; [group:party] show; show'
-local previewNames = { 'Player', 'Party member 1', 'Party member 2', 'Party member 3', 'Party member 4' }
+local previewAuras = {
+    fortitude = { spellID = 21562, icon = 'Interface\\Icons\\Spell_Holy_WordFortitude' },
+    intellect = { spellID = 1459, icon = 'Interface\\Icons\\Spell_Holy_MagicalSentry' },
+    renew = { spellID = 139, icon = 'Interface\\Icons\\Spell_Holy_Renew', duration = 15 },
+    rejuvenation = { spellID = 774, icon = 'Interface\\Icons\\Spell_Nature_Rejuvenation', duration = 12 },
+    shield = { spellID = 17, icon = 'Interface\\Icons\\Spell_Holy_PowerWordShield', duration = 30 },
+    poison = { spellID = 2818, icon = 'Interface\\Icons\\Ability_Rogue_DualWeild', applications = 3,
+        duration = 60, dispellable = true },
+    slow = { spellID = 116, icon = 'Interface\\Icons\\Spell_Frost_FrostBolt02', duration = 45, dispellable = true },
+    bleed = { spellID = 772, icon = 'Interface\\Icons\\Ability_Gouge', applications = 2, duration = 30 },
+}
+local previewMembers = {
+    { name = 'Warrior', class = 'WARRIOR', role = 'TANK', leader = true, health = 100, power = 65, powerToken = 'RAGE',
+        selected = true, raidMarker = 8, threat = 3, ready = 'ready', pvpFaction = 'Horde', absorb = 18,
+        buffs = { previewAuras.fortitude, previewAuras.intellect, previewAuras.renew, previewAuras.shield },
+        debuffs = { previewAuras.bleed } },
+    { name = 'Priest', class = 'PRIEST', role = 'HEALER', health = 84, power = 72, powerToken = 'MANA',
+        ready = 'waiting', summon = 'Pending', incomingHeal = 10, absorb = 8,
+        buffs = { previewAuras.fortitude, previewAuras.intellect, previewAuras.shield }, debuffs = {} },
+    { name = 'Mage', class = 'MAGE', role = 'DAMAGER', health = 52, power = 38, powerToken = 'MANA',
+        raidMarker = 3, pvpFaction = 'Alliance', phased = true, outOfRange = true,
+        incomingHeal = 20, absorb = 12, healAbsorb = 28,
+        buffs = { previewAuras.fortitude, previewAuras.intellect },
+        debuffs = { previewAuras.poison, previewAuras.slow } },
+    { name = 'Rogue', class = 'ROGUE', role = 'DAMAGER', health = 0, power = 0, powerToken = 'ENERGY',
+        state = 'dead', resurrection = true, summon = 'Pending', ready = 'waiting', raidMarker = 7,
+        buffs = { previewAuras.rejuvenation },
+        debuffs = { previewAuras.poison, previewAuras.bleed, previewAuras.slow } },
+    { name = 'Druid', class = 'DRUID', role = 'DAMAGER', health = 67, power = 91, powerToken = 'MANA',
+        state = 'offline', ready = 'notready',
+        buffs = { previewAuras.fortitude, previewAuras.intellect, previewAuras.rejuvenation },
+        debuffs = { previewAuras.slow } },
+}
 
 local function db() return addon.db.profile.party end
 
@@ -230,7 +262,7 @@ function party:ApplyProtectedState()
             self.unitWatching = false
         end
         for i, frame in ipairs(self.frames) do
-            frame:SetPreview(true, previewNames[i])
+            frame:SetPreview(true, previewMembers[i])
             frame:Show()
         end
         container:Show()
@@ -298,10 +330,24 @@ function party:OnUnitEvent(event, unit)
     if event == 'UNIT_HEALTH' or event == 'UNIT_MAXHEALTH' or event == 'UNIT_CONNECTION' or event == 'UNIT_FLAGS' then
         frame:UpdateHealth()
         if event == 'UNIT_FLAGS' then frame:UpdateCombat() end
+        if event == 'UNIT_FLAGS' or event == 'UNIT_CONNECTION' then frame.status:Refresh() end
     elseif event == 'UNIT_POWER_UPDATE' or event == 'UNIT_MAXPOWER' or event == 'UNIT_DISPLAYPOWER' then
         frame:UpdatePower()
     elseif event == 'UNIT_AURA' then
         frame:UpdateAuras()
+    elseif event == 'UNIT_HEAL_PREDICTION' or event == 'UNIT_ABSORB_AMOUNT_CHANGED'
+        or event == 'UNIT_HEAL_ABSORB_AMOUNT_CHANGED' then
+        if not frame.preview and not frame.healthStatus then frame.prediction:Refresh() end
+    elseif event == 'UNIT_THREAT_SITUATION_UPDATE' then
+        frame.status:UpdateThreat()
+    elseif event == 'UNIT_PHASE' or event == 'UNIT_OTHER_PARTY_CHANGED'
+        or event == 'INCOMING_RESURRECT_CHANGED' or event == 'INCOMING_SUMMON_CHANGED' then
+        frame.status:UpdatePresence()
+        frame.status:UpdateRange()
+    elseif event == 'UNIT_IN_RANGE_UPDATE' then
+        frame.status:UpdateRange()
+    elseif event == 'UNIT_FACTION' then
+        frame.status:UpdatePvP()
     else
         frame:UpdateIdentity()
     end
@@ -311,9 +357,31 @@ function party:OnIdentityChanged()
     self:RefreshAll()
 end
 
+function party:OnLeaderChanged()
+    if not self.frames then return end
+    for _, frame in ipairs(self.frames) do frame:UpdateLeader() end
+end
+
 function party:OnTargetChanged()
     if not self.frames then return end
-    for _, frame in ipairs(self.frames) do frame:UpdatePercentVisibility() end
+    for _, frame in ipairs(self.frames) do
+        frame:UpdatePercentVisibility()
+        frame.status:UpdateTarget()
+    end
+end
+
+function party:OnStatusChanged()
+    if not self.frames then return end
+    for _, frame in ipairs(self.frames) do frame.status:Refresh() end
+end
+
+function party:OnReadyCheck(event)
+    if not self.frames then return end
+    for _, frame in ipairs(self.frames) do
+        if event == 'READY_CHECK' then frame.status:BeginReadyCheck()
+        elseif event == 'READY_CHECK_FINISHED' then frame.status:FinishReadyCheck()
+        else frame.status:UpdateReadyCheck() end
+    end
 end
 
 function party:OnInspectReady(_, guid)
@@ -334,6 +402,7 @@ end
 function party:OnEnable()
     if not db().enabled then self:Disable(); return end
     addon.Utils.RegisterEventIfValid(self, 'GROUP_ROSTER_UPDATE', 'OnRosterChanged')
+    addon.Utils.RegisterEventIfValid(self, 'PARTY_LEADER_CHANGED', 'OnLeaderChanged')
     addon.Utils.RegisterEventIfValid(self, 'PLAYER_ENTERING_WORLD', 'OnRosterChanged')
     addon.Utils.RegisterEventIfValid(self, 'INSPECT_READY', 'OnInspectReady')
     addon.Utils.RegisterEventIfValid(self, 'PLAYER_SPECIALIZATION_CHANGED', 'OnIdentityChanged')
@@ -341,9 +410,19 @@ function party:OnEnable()
     addon.Utils.RegisterEventIfValid(self, 'PLAYER_TARGET_CHANGED', 'OnTargetChanged')
     addon.Utils.RegisterEventIfValid(self, 'ROLE_CHANGED_INFORM', 'OnIdentityChanged')
     addon.Utils.RegisterEventIfValid(self, 'PLAYER_ROLES_ASSIGNED', 'OnIdentityChanged')
+    addon.Utils.RegisterEventIfValid(self, 'SPELLS_CHANGED', 'OnIdentityChanged')
+    for _, event in ipairs({ 'RAID_TARGET_UPDATE', 'PLAYER_FLAGS_CHANGED', 'PVP_TIMER_UPDATE' }) do
+        addon.Utils.RegisterEventIfValid(self, event, 'OnStatusChanged')
+    end
+    for _, event in ipairs({ 'READY_CHECK', 'READY_CHECK_CONFIRM', 'READY_CHECK_FINISHED' }) do
+        addon.Utils.RegisterEventIfValid(self, event, 'OnReadyCheck')
+    end
     for _, event in ipairs({ 'UNIT_HEALTH', 'UNIT_MAXHEALTH', 'UNIT_POWER_UPDATE', 'UNIT_MAXPOWER',
         'UNIT_DISPLAYPOWER', 'UNIT_AURA', 'UNIT_NAME_UPDATE', 'UNIT_LEVEL', 'UNIT_CONNECTION',
-        'UNIT_FLAGS', 'UNIT_PORTRAIT_UPDATE', 'UNIT_MODEL_CHANGED' }) do
+        'UNIT_FLAGS', 'UNIT_PORTRAIT_UPDATE', 'UNIT_MODEL_CHANGED', 'UNIT_HEAL_PREDICTION',
+        'UNIT_ABSORB_AMOUNT_CHANGED', 'UNIT_HEAL_ABSORB_AMOUNT_CHANGED', 'UNIT_THREAT_SITUATION_UPDATE',
+        'UNIT_PHASE', 'UNIT_OTHER_PARTY_CHANGED', 'UNIT_IN_RANGE_UPDATE', 'UNIT_FACTION',
+        'INCOMING_RESURRECT_CHANGED', 'INCOMING_SUMMON_CHANGED' }) do
         addon.Utils.RegisterEventIfValid(self, event, 'OnUnitEvent')
     end
     self:QueueProtectedState()
