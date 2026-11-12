@@ -34,24 +34,99 @@ chat.inspectQueue = {}    ---@type {unit:string, guid:string}[]
 
 --#region ── Identity ──────────────────────────────────────────────────────────
 
-local function findUnitTokenByGUID(guid)
-    if not guid then return nil end
-    if UnitGUID('player') == guid then return 'player' end
+local nearbyTokens = { 'target', 'mouseover', 'focus', 'npc', 'softinteract',
+    'softenemy', 'softfriend', 'targettarget', 'focustarget', 'player', 'pet' }
+
+local function matchesSpeaker(unit, guid, name)
+    if isSecret(unit) or not unit then return false end
+    local unitGuid = UnitGUID(unit)
+    if isSecret(unitGuid) or not unitGuid then return false end
+    if guid then return unitGuid == guid end
+    local isPlayer = UnitIsPlayer(unit)
+    if isSecret(isPlayer) or isPlayer then return false end
+    local unitName = UnitName(unit)
+    return not isSecret(unitName) and unitName == name
+end
+
+local function findUnitToken(guid, name)
+    -- Prefer the client's GUID lookup, but verify its result just like a cached
+    -- token: targets and nameplate tokens are reused as the world changes.
+    if guid and UnitTokenFromGUID then
+        local unit = UnitTokenFromGUID(guid)
+        if matchesSpeaker(unit, guid) then return unit end
+    end
+
+    local candidates = {}
+    for _, unit in ipairs(nearbyTokens) do candidates[#candidates + 1] = unit end
     local n = GetNumGroupMembers and GetNumGroupMembers() or 0
     local isRaid = IsInRaid and IsInRaid()
     for i = 1, n do
         local token = isRaid and ('raid' .. i) or ('party' .. i)
-        if UnitGUID(token) == guid then return token end
+        candidates[#candidates + 1] = token
+        candidates[#candidates + 1] = token .. 'target'
     end
+    for i = 1, 5 do candidates[#candidates + 1] = 'boss' .. i end
+    if C_NamePlate and C_NamePlate.GetNamePlates then
+        for _, plate in pairs(C_NamePlate.GetNamePlates()) do
+            if not (plate.IsForbidden and plate:IsForbidden()) then
+                local unit = plate.namePlateUnitToken or plate.unitToken
+                if not isSecret(unit) and unit then candidates[#candidates + 1] = unit end
+            end
+        end
+    end
+
+    local match, matchGuid
+    for _, unit in ipairs(candidates) do
+        if matchesSpeaker(unit, guid, name) then
+            if guid then return unit end
+            local unitGuid = UnitGUID(unit)
+            -- Two tokens can identify one NPC. Two distinct NPCs with the same
+            -- name are ambiguous; never guess which one spoke.
+            if matchGuid and matchGuid ~= unitGuid then return nil end
+            match, matchGuid = unit, unitGuid
+        end
+    end
+    return match
 end
 
 function chat:ResolveUnit(msg)
-    if not msg.guid then return nil end
-    local cached = self.unitByGuid[msg.guid]
-    if cached ~= nil and cached ~= false then return cached end
-    local token = findUnitTokenByGUID(msg.guid) or (UnitTokenFromGUID and UnitTokenFromGUID(msg.guid))
-    self.unitByGuid[msg.guid] = token or false
+    if isSecret(msg.guid) or isSecret(msg.portraitGuid) then return nil end
+    local guid = msg.guid or msg.portraitGuid
+    local name = Sources.IsNpc(msg.event) and msg.sender
+    if isSecret(name) then name = nil end
+    if not guid and not name then return nil end
+    local cached = guid and self.unitByGuid[guid]
+    if cached and matchesSpeaker(cached, guid) then return cached end
+    if guid and matchesSpeaker(msg.unitToken, guid) then
+        self.unitByGuid[guid] = msg.unitToken
+        return msg.unitToken
+    end
+    local token = findUnitToken(guid, name)
+    if guid then self.unitByGuid[guid] = token or nil end
+    if token and not guid then
+        -- Preserve identity across queue delays without changing the chat GUID.
+        msg.portraitGuid = UnitGUID(token)
+    end
     return token
+end
+
+function chat:EnrichNpc(msg)
+    msg.unitToken = self:ResolveUnit(msg)
+    if addon.BanterData then
+        local id, displayId = addon.BanterData.GetByGUID(msg.guid)
+        if not id then id, displayId = addon.BanterData.GetByGUID(msg.portraitGuid) end
+        if id then
+            msg.npcId = id
+            -- A name match for a different creature must not override this GUID.
+            if displayId then msg.displayId = displayId end
+        end
+        if not msg.displayId and msg.sender and not isSecret(msg.sender) then
+            local nameId, nameDisplayId = addon.BanterData.GetByName(msg.sender)
+            if not msg.npcId or msg.npcId == nameId then
+                msg.npcId, msg.displayId = nameId, nameDisplayId
+            end
+        end
+    end
 end
 
 function chat:ResolveIdentity(msg)
@@ -113,13 +188,7 @@ end
 
 function chat:Enrich(msg)
     if Sources.IsNpc(msg.event) then
-        if not msg.npcId and msg.sender and not isSecret(msg.sender) and addon.BanterData then
-            local id, displayId = addon.BanterData.GetByName(msg.sender)
-            msg.npcId, msg.displayId = id, displayId
-        end
-        if not msg.displayId and msg.guid then
-            msg.unitToken = self:ResolveUnit(msg)
-        end
+        self:EnrichNpc(msg)
         if Sources.IsEmote(msg.event) then
             msg.emoteText = self:FormatEmoteText(msg)
         end

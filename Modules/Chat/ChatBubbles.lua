@@ -57,17 +57,6 @@ end
 
 --#region ── Bubble construction ───────────────────────────────────────────────
 
-local function findUnitTokenByGUID(guid)
-    if not guid then return nil end
-    if UnitGUID('player') == guid then return 'player' end
-    local n = GetNumGroupMembers()
-    local isRaid = IsInRaid()
-    for i = 1, n do
-        local token = isRaid and ('raid' .. i) or ('party' .. i)
-        if UnitGUID(token) == guid then return token end
-    end
-end
-
 --- Builds a fully-rendered overhead bubble for an NPC message.
 ---@param msg ChatMessage
 ---@return ChatBubblesInstance bubble
@@ -81,13 +70,20 @@ function bubbles:BuildBubble(msg)
     self:StyleBubbleHeader(bubble)
 
     local portrait3D = bubble.widget.subWidgets.portrait3D
+    local unit = addon.Chat:ResolveUnit(msg)
     local hasDisplayId = msg.displayId and msg.displayId > 0
-    local hasPortrait = hasDisplayId or msg.unitToken
+    local hasPortrait = hasDisplayId or unit
 
-    if hasDisplayId then
+    if unit then
+        hasPortrait = portrait3D:SetUnit(unit)
+        -- Older clients may not return a success flag.
+        if hasPortrait == nil then hasPortrait = true end
+        if not hasPortrait and hasDisplayId then
+            portrait3D:SetDisplayInfo(msg.displayId)
+            hasPortrait = true
+        end
+    elseif hasDisplayId then
         portrait3D:SetDisplayInfo(msg.displayId)
-    elseif msg.unitToken then
-        portrait3D:SetUnit(msg.unitToken)
     end
     if hasPortrait then
         portrait3D:SetCamera(0)
@@ -111,12 +107,7 @@ end
 --- Resolves NPC identity (creature id / display id / unit token) for a message.
 ---@param msg ChatMessage
 function bubbles:EnrichNpc(msg)
-    if not msg.npcId and msg.sender and not isSecret(msg.sender) and addon.BanterData then
-        msg.npcId, msg.displayId = addon.BanterData.GetByName(msg.sender)
-    end
-    if not msg.displayId and msg.guid then
-        msg.unitToken = findUnitTokenByGUID(msg.guid) or (UnitTokenFromGUID and UnitTokenFromGUID(msg.guid))
-    end
+    addon.Chat:EnrichNpc(msg)
 end
 
 --#endregion

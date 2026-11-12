@@ -16,16 +16,6 @@ local Rules = addon.ChatRules
 
 local DEFAULT_TEXT_COLOR = { r = 1, g = 0.82, b = 0 }
 
-local CATEGORY_PLACEHOLDER_ICONS = {
-    SYSTEM = 136235,
-    GUILD = 135026,
-    GROUP = 134149,
-    WHISPER = 134148,
-    NPC = 512617,
-    PUBLIC = 134330,
-}
-local TOTAL_FALLBACK_ICON = 134400
-
 --#endregion
 
 --#region ── DB accessor ───────────────────────────────────────────────────────
@@ -115,22 +105,22 @@ function chat:StyleIdentity(g, msg, feed)
     g.iconBorder:Hide()
     g.spec:Hide()
 
-    local unit = msg.unitToken or (msg.guid and self:ResolveUnit(msg))
+    local unit = self:ResolveUnit(msg)
     local displayId = msg.displayId
 
     -- Resolve which 2D image to show, and a cache key so repeated rebuilds do
     -- not re-render the same portrait every time.
     local iconKey, apply
     if msg.category == 'NPC' then
-        if displayId and displayId > 0 and SetPortraitTextureFromCreatureDisplayID then
+        if unit and SetPortraitTexture then
+            iconKey = 'u:' .. unit .. ':' .. (msg.guid or msg.portraitGuid or '')
+            apply = function() SetPortraitTexture(g.icon, unit) end
+        elseif displayId and displayId > 0 and SetPortraitTextureFromCreatureDisplayID then
             iconKey = 'd:' .. displayId
             apply = function() SetPortraitTextureFromCreatureDisplayID(g.icon, displayId) end
-        elseif unit and SetPortraitTexture then
-            iconKey = 'u:' .. unit
-            apply = function() SetPortraitTexture(g.icon, unit) end
         end
     elseif unit and SetPortraitTexture then
-        iconKey = 'u:' .. unit
+        iconKey = 'u:' .. unit .. ':' .. (msg.guid or '')
         apply = function() SetPortraitTexture(g.icon, unit) end
     else
         local atlas = raceAtlas(msg.raceFile or (identity and identity.raceFile), msg.sex)
@@ -149,17 +139,8 @@ function chat:StyleIdentity(g, msg, feed)
         end
     end
 
-    -- Every source category gets a recognizable icon when no identity portrait
-    -- is available. Keep a generic final fallback for unknown future sources.
-    if not iconKey then
-        local fileID = CATEGORY_PLACEHOLDER_ICONS[msg.category] or TOTAL_FALLBACK_ICON
-        iconKey = 'f:' .. fileID
-        apply = function()
-            g.icon:SetTexture(fileID)
-            g.icon:SetTexCoord(0, 1, 0, 1)
-        end
-    end
-
+    -- Without identity art, leave the icon and border hidden. Returning false
+    -- lets the feed reclaim the icon column for the header and message text.
     local shown = false
     if iconKey then
         if g._iconKey ~= iconKey then

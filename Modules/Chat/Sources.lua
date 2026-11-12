@@ -297,6 +297,7 @@ end
 ---@field npcId       number?
 ---@field displayId   number?
 ---@field unitToken   string?
+---@field portraitGuid string? Identity captured by a name-only NPC portrait match
 ---@field blocked     boolean?
 
 local function safeNumber(value)

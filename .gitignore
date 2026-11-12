@@ -3,3 +3,7 @@
 CLAUDE.md
 .stignore
 /.stfolder/**
+/Modules/Chat/Resources/creature_sources/
+/Modules/Chat/Resources/creature_sources.json
+/Modules/Chat/Resources/*.sources.json
+/Modules/Chat/Resources/Creature.*.csv

@@ -483,7 +483,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     local suffixHeight = 0
     for i = messageCount, 1, -1 do
         suffixHeight = suffixHeight + g._lineHeights[i] + LINE_GAP
-        heights[i] = math.max(messageTopFor(0) + suffixHeight, iconTopPad + iconSize)
+        heights[i] = math.max(messageTopFor(0) + suffixHeight, hasIcon and (iconTopPad + iconSize) or 0)
     end
     g._metrics = {
         lastMessage = messageCount,
