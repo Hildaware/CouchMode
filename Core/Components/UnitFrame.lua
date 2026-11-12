@@ -185,6 +185,7 @@ local function showAuraTooltip(icon)
         GameTooltip:SetOwner(icon, 'ANCHOR_RIGHT')
         GameTooltip:SetSpellByID(icon.previewSpellID)
     else
+        if not addon.Utils.CanReadAuras() then return end
         if not icon.auraIndex or not UnitExists(owner.unit) then return end
         GameTooltip:SetOwner(icon, 'ANCHOR_RIGHT')
         if icon.auraInstanceID and GameTooltip.SetUnitAuraByAuraInstanceID then
@@ -292,6 +293,7 @@ local function showPreviewAuraRow(icons, auras)
 end
 
 local function getAuras(unit, filter)
+    if not addon.Utils.CanReadAuras() then return {} end
     if C_UnitAuras and C_UnitAuras.GetUnitAuras then
         return C_UnitAuras.GetUnitAuras(unit, filter, AURAS_PER_ROW) or {}
     end
@@ -473,6 +475,12 @@ function UnitFrameMixin:ApplyLayout(width, height)
         self.debuffIcons[i]:ClearAllPoints()
         self.debuffIcons[i]:SetPoint('TOPLEFT', self.powerBarGroup, 'TOPRIGHT', x, -3)
     end
+    if self.auraRows then
+        self.auraRows.buffs:ClearAllPoints()
+        self.auraRows.debuffs:ClearAllPoints()
+        self.auraRows.buffs:SetPoint('TOPLEFT', self.healthBarGroup, 'TOPRIGHT', 5, 3)
+        self.auraRows.debuffs:SetPoint('TOPLEFT', self.powerBarGroup, 'TOPRIGHT', 5, -3)
+    end
     return true
 end
 
@@ -608,6 +616,11 @@ function UnitFrameMixin:UpdateAuras()
     end
     local unit = self.unit
     if not unit or not UnitExists(unit) then return end
+    if self.auraRows then
+        addon.AuraDisplay.SetUnit(self.auraRows.buffs, unit)
+        addon.AuraDisplay.SetUnit(self.auraRows.debuffs, unit)
+        return
+    end
     local filter = AuraUtil and AuraUtil.AuraFilters
     local helpful = filter and filter.Helpful or 'HELPFUL'
     local harmful = filter and filter.Harmful or 'HARMFUL'
@@ -637,6 +650,10 @@ function UnitFrameMixin:SetPreview(enabled, data)
     self.preview = enabled
     self.previewData = enabled and (data or {}) or nil
     self:EnableMouse(not enabled)
+    if enabled and self.auraRows then
+        addon.AuraDisplay.SetUnit(self.auraRows.buffs, nil)
+        addon.AuraDisplay.SetUnit(self.auraRows.debuffs, nil)
+    end
     if not enabled then
         self.status.readyExpires = nil
         self.status:SetReadyCheck(nil)
@@ -887,6 +904,23 @@ function addon.UnitFrame.Create(parent, unit, opts)
     for i = 1, AURAS_PER_ROW do
         frame.buffIcons[i] = makeAuraIcon(frame)
         frame.debuffIcons[i] = makeAuraIcon(frame, true)
+    end
+    if addon.AuraDisplay.IsSupported() then
+        local function createRow(filters, debuff)
+            return addon.AuraDisplay.Create(frame, {
+                width = AURA_SIZE, height = AURA_SIZE, gap = AURA_GAP,
+                maxCount = AURAS_PER_ROW, filters = filters, debuff = debuff,
+                countOffsetX = 2, countOffsetY = -2,
+                tooltips = true, shadow = true,
+                font = function() return addon.Media.ResolveFont('Bebas Neue'), 12, 'OUTLINE' end,
+            })
+        end
+        frame.auraRows = {
+            buffs = createRow({ 'HELPFUL|PLAYER' }),
+            -- Disjoint filters preserve priority and prevent duplicate icons.
+            debuffs = createRow({ 'HARMFUL|RAID', 'HARMFUL|CROWD_CONTROL|!RAID',
+                'HARMFUL|RAID_IN_COMBAT|!RAID|!CROWD_CONTROL' }, true),
+        }
     end
     frame:ApplyLayout(opts.width or 430, opts.height or 88)
     frame:Refresh()

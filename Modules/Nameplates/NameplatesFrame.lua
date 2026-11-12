@@ -10,16 +10,16 @@ local nameplates = addon:GetModule('Nameplates')
 
 local pool = {}
 local active = {}         -- [unitToken] = frame
-local hookedUFs = {}      -- [UnitFrame] = true; lock is currently active
+local hookedUFs = {}      -- [UnitFrame] = custom plate that owns suppression
 local installedHooks = {} -- [UnitFrame] = true; hook has been installed (never cleared)
 
 -- Shared with NameplatesPlate so event handlers can look up frames by unit token.
 nameplates.active = active
 
-local function lockUnitFrame(uf)
-    if uf:IsForbidden() then return end
+local function lockUnitFrame(uf, owner)
+    if not uf or uf:IsForbidden() then return end
+    hookedUFs[uf] = owner
     uf:SetAlpha(0)
-    hookedUFs[uf] = true
     if installedHooks[uf] then return end
     installedHooks[uf] = true
     local locking = false
@@ -31,8 +31,11 @@ local function lockUnitFrame(uf)
     end)
 end
 
-local function unlockUnitFrame(uf)
+local function unlockUnitFrame(uf, owner)
     if not uf or uf:IsForbidden() then return end
+    -- Blizzard pools these independently of the base nameplate. An old
+    -- plate's teardown must not restore a frame acquired by a newer owner.
+    if hookedUFs[uf] ~= owner then return end
     hookedUFs[uf] = nil
     uf:SetAlpha(1)
 end
@@ -52,6 +55,12 @@ local function buildFrame()
     local f = CreateFrame("Frame", nil, UIParent)
     f:SetSize(1, 1)
     f:SetIgnoreParentScale(true)
+    f:SetScript("OnShow", function(frame)
+        -- A native plate can return to view without another unit-added event.
+        if frame.unitToken then
+            nameplates:OnUnitStateChanged(nil, frame.unitToken)
+        end
+    end)
 
     f.bar = CreateFrame("Frame", nil, f)
     f.bar:SetSize(BAR_W, BAR_H)
@@ -127,6 +136,7 @@ local function acquire()
 end
 
 local function release(f)
+    f.unitToken = nil
     if f.layoutTween then
         f.layoutTween:Cancel()
         f.layoutTween = nil

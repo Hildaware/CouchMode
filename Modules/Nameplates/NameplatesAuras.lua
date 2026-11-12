@@ -11,11 +11,23 @@ local auraTimerElapsed = 0
 local auraTimerFrame = CreateFrame("Frame")
 auraTimerFrame:Hide()
 
+local function auraAccessRestricted()
+    return not addon.Utils.CanReadAuras()
+end
+
 local function startAuraTimers()
     auraTimerFrame:Show()
 end
 
 auraTimerFrame:SetScript("OnUpdate", function(self, elapsed)
+    if auraAccessRestricted() then
+        for _, f in pairs(nameplates.active) do
+            if f.auras and not f.auras.container then nameplates.hideAuras(f) end
+            if f.cc and not f.cc.container then nameplates.hideCC(f) end
+        end
+        self:Hide()
+        return
+    end
     auraTimerElapsed = auraTimerElapsed + elapsed
     if auraTimerElapsed < AURA_TIMER_INTERVAL then return end
     auraTimerElapsed = 0
@@ -25,7 +37,7 @@ auraTimerFrame:SetScript("OnUpdate", function(self, elapsed)
         if f.auras and f.auras:IsShown() then
             for i = 1, nameplates.AURA_MAX do
                 local icon = f.auras.icons[i]
-                if icon:IsShown() and icon.duration then
+                if icon and icon:IsShown() and icon.duration then
                     hasTimers = true
                     icon.timer:SetFormattedText("%.0f", icon.duration:GetRemainingDuration())
                 end
@@ -46,6 +58,29 @@ function nameplates.buildAurasFrame(f)
     local AURA_H = nameplates.AURA_H
     local AURA_GAP = nameplates.AURA_GAP
     local BAR_W = nameplates.BAR_W
+
+    if addon.AuraDisplay.IsSupported() then
+        local function createRow(filter, maxCount, crowdControl)
+            return addon.AuraDisplay.Create(f, {
+                width = AURA_W, height = AURA_H, gap = AURA_GAP,
+                maxCount = maxCount, filters = { filter }, timer = true,
+                anchorWidth = crowdControl and AURA_W or BAR_W,
+                innerBorder = true,
+                showCount = not crowdControl,
+                countOffsetX = 4, countOffsetY = -4,
+                timerAnchor = crowdControl and 'BOTTOM' or 'CENTER',
+                timerOffsetY = crowdControl and 1 or 0,
+                font = nameplates.currentCastFont,
+                shadow = function() return addon.db.profile.nameplates.shadowEnabled end,
+            })
+        end
+        f.auras = createRow('HARMFUL|PLAYER|INCLUDE_NAME_PLATE_ONLY', AURA_MAX)
+        f.auras.icons = {} -- legacy font/shadow loops must not inspect native buttons
+        f.auras:SetPoint('BOTTOM', f.bar, 'TOP', 0, 12)
+        f.cc = createRow('HARMFUL|CROWD_CONTROL|INCLUDE_NAME_PLATE_ONLY', 1, true)
+        f.cc:SetPoint('LEFT', f.bar, 'RIGHT', 4, 0)
+        return
+    end
 
     f.auras = CreateFrame("Frame", nil, f)
     f.auras:SetPoint("BOTTOM", f.bar, "TOP", 0, 12)
@@ -113,9 +148,22 @@ local AURA_FILTER = AuraUtil.CreateFilterString(
     AuraUtil.AuraFilters.IncludeNameplateOnly
 )
 
-local CC_FILTER = AuraUtil.CreateFilterString(AuraUtil.AuraFilters.Harmful, AuraUtil.AuraFilters.CrowdControl)
+local CC_FILTER = AuraUtil.CreateFilterString(
+    AuraUtil.AuraFilters.Harmful,
+    AuraUtil.AuraFilters.CrowdControl,
+    AuraUtil.AuraFilters.IncludeNameplateOnly
+)
 
 function nameplates.refreshAuras(f, unitToken)
+    if f.auras.container then
+        addon.AuraDisplay.SetUnit(f.auras, unitToken)
+        return
+    end
+    -- RequiresUnitAuraAccess errors before returning any data when restricted.
+    if auraAccessRestricted() then
+        nameplates.hideAuras(f)
+        return
+    end
     local auras = C_UnitAuras.GetUnitAuras(unitToken, AURA_FILTER)
     local shown = 0
     if auras then
@@ -147,6 +195,10 @@ function nameplates.refreshAuras(f, unitToken)
 end
 
 function nameplates.hideAuras(f)
+    if f.auras.container then
+        addon.AuraDisplay.SetUnit(f.auras, nil)
+        return
+    end
     for i = 1, AURA_MAX do
         local icon = f.auras.icons[i]
         icon:Hide()
@@ -157,6 +209,14 @@ function nameplates.hideAuras(f)
 end
 
 function nameplates.refreshCC(f, unitToken)
+    if f.cc.container then
+        addon.AuraDisplay.SetUnit(f.cc, unitToken)
+        return
+    end
+    if auraAccessRestricted() then
+        nameplates.hideCC(f)
+        return
+    end
     local auras = C_UnitAuras.GetUnitAuras(unitToken, CC_FILTER)
     local aura = auras and auras[1]
     if aura then
@@ -176,6 +236,10 @@ function nameplates.refreshCC(f, unitToken)
 end
 
 function nameplates.hideCC(f)
+    if f.cc.container then
+        addon.AuraDisplay.SetUnit(f.cc, nil)
+        return
+    end
     f.cc:Hide()
     f.cc.duration = nil
     f.cc.timer:SetText("")

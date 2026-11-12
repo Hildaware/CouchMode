@@ -21,6 +21,14 @@ local playerIsDK = (PLAYER_CLASS == "DEATHKNIGHT")
 
 -- Shared table reference set by NameplatesFrame.lua — mutations are visible here.
 local active = nameplates.active
+local pendingAdds = {}
+local visibilityEvents = {
+    "UNIT_FLAGS",
+    "UNIT_PHASE",
+    "UNIT_CONNECTION",
+    "UNIT_TARGETABLE_CHANGED",
+    "NAME_PLATE_UNIT_BEHIND_CAMERA_CHANGED",
+}
 local inCombat = UnitAffectingCombat("player") == true
 nameplates.inCombat = inCombat
 
@@ -160,6 +168,10 @@ end
 local function applyFrameShadow(f, enabled)
     setShadow(f.name, enabled)
     setShadow(f.guild, enabled)
+    if f.auras and f.auras.container then
+        addon.AuraDisplay.RefreshStyle(f.auras)
+        addon.AuraDisplay.RefreshStyle(f.cc)
+    end
     if f.cast and f.cast.spellName then setShadow(f.cast.spellName, enabled) end
     if f.auras then
         for i = 1, nameplates.AURA_MAX do
@@ -215,32 +227,45 @@ local function refreshBar(f, unitToken)
     else
         if f.cast then
             nameplates.hideCast(f)
+            nameplates.hidePower(f)
+        end
+        if UnitCanAttack("player", unitToken) then
+            -- Aura containers decide their own visibility. Display debuffs
+            -- even when combat/threat has not promoted this plate to a bar.
+            nameplates.ensureCombatFrames(f)
+            nameplates.refreshAuras(f, unitToken)
+            nameplates.refreshCC(f, unitToken)
+        elseif f.auras then
             nameplates.hideAuras(f)
             nameplates.hideCC(f)
-            nameplates.hidePower(f)
         end
         updateRoleIcon(f, unitToken)
     end
+    if f.auras then
+        f.auras:ClearAllPoints()
+        f.cc:ClearAllPoints()
+        if plateType == PlateType.Full then
+            f.auras:SetPoint("BOTTOM", f.bar, "TOP", 0, 12)
+            f.cc:SetPoint("LEFT", f.bar, "RIGHT", 4, 0)
+        else
+            f.auras:SetPoint("BOTTOM", f.name, "TOP", 0, 12)
+            f.cc:SetPoint("LEFT", f.name, "RIGHT", 4, 0)
+        end
+    end
 end
 
-local function showPlate(unitToken, np)
-    local f = active[unitToken]
-    if not f then
-        f = nameplates.acquire()
-        active[unitToken] = f
+local function refreshPlate(f, unitToken)
+    local np = f:GetParent()
+    if not np or np:IsForbidden() or not np.UnitFrame or np.UnitFrame:IsForbidden() then return end
+    if f.unitFrame ~= np.UnitFrame then
+        nameplates.unlockUnitFrame(f.unitFrame, f)
+        f.unitFrame = np.UnitFrame
     end
-
     local selected = isSelected(unitToken)
     f.isSelected = selected
-    f:SetParent(np) -- inherit np's alpha so occlusion applies automatically
     f:SetScale(selected and 1.0 or DIMMED_SCALE)
     f:SetFrameStrata(selected and "HIGH" or "MEDIUM")
     updateAlpha(f, unitToken)
-    f:SetPoint("CENTER", np.UnitFrame, "CENTER")
-    f.unitFrame = np.UnitFrame
-    nameplates.lockUnitFrame(np.UnitFrame)
-
-    f.name:SetFont(nameplates.currentFont())
     local hasQuest = nameplates.isQuestUnit(unitToken)
     f.showName = nameplates.shouldShowName(unitToken)
     f.questIcon:SetShown(hasQuest)
@@ -250,32 +275,46 @@ local function showPlate(unitToken, np)
     updateMark(f, unitToken)
     updateElite(f, unitToken)
     refreshBar(f, unitToken)
+    nameplates.lockUnitFrame(f.unitFrame, f)
+end
+
+local function showPlate(unitToken, np)
+    -- The native driver acquires UnitFrame during NAME_PLATE_UNIT_ADDED.
+    -- Our event handler can run before that setup has finished.
+    if np:IsForbidden() or not np.UnitFrame or np.UnitFrame:IsForbidden() then return false end
+
+    local f = active[unitToken]
+    if not f then
+        f = nameplates.acquire()
+        active[unitToken] = f
+    elseif f.unitFrame ~= np.UnitFrame then
+        nameplates.unlockUnitFrame(f.unitFrame, f)
+    end
+
+    f:SetParent(np) -- inherit np's alpha so occlusion applies automatically
+    -- UnitFrame is pooled independently and can move to another nameplate.
+    f:ClearAllPoints()
+    f:SetPoint("CENTER", np, "CENTER")
+    f.unitFrame = np.UnitFrame
+    f.name:SetFont(nameplates.currentFont())
+    refreshPlate(f, unitToken)
     f:Show()
+    f.unitToken = unitToken
+    return true
 end
 
 local function hidePlate(unitToken)
     local f = active[unitToken]
     if not f then return end
     active[unitToken] = nil
-    nameplates.unlockUnitFrame(f.unitFrame)
+    nameplates.unlockUnitFrame(f.unitFrame, f)
     f.unitFrame = nil
     nameplates.release(f)
 end
 
 local function refreshAll()
     for unitToken, f in pairs(active) do
-        local selected = isSelected(unitToken)
-        f.isSelected = selected
-        f:SetScale(selected and 1.0 or DIMMED_SCALE)
-        f:SetFrameStrata(selected and "HIGH" or "MEDIUM")
-        updateAlpha(f, unitToken)
-        f.showName = nameplates.shouldShowName(unitToken)
-        f.name:SetShown(f.showName or f.questIcon:IsShown())
-        nameplates.applyGuild(f, unitToken)
-        nameplates.applyMusicIcon(f, unitToken)
-        updateMark(f, unitToken)
-        updateElite(f, unitToken)
-        refreshBar(f, unitToken) -- also calls applyName
+        refreshPlate(f, unitToken)
     end
 end
 
@@ -346,6 +385,18 @@ function nameplates:OnEnable()
     SetCVar("nameplateSelectedScale", 1.0)
     SetCVar("nameplateOccludedAlphaMult", addon.db.profile.nameplates.occludedAlpha)
     applyFriendlyVisibility()
+    -- The native driver can run before or after our AceEvent listener. Its
+    -- post-hook is the point at which the pooled UnitFrame is fully assigned.
+    if not self._nativePlateHookInstalled and NamePlateDriverFrame
+        and type(NamePlateDriverFrame.OnNamePlateAdded) == "function" then
+        self._nativePlateHookInstalled = true
+        hooksecurefunc(NamePlateDriverFrame, "OnNamePlateAdded", function(_, unitToken)
+            if not nameplates:IsEnabled() then return end
+            pendingAdds[unitToken] = nil
+            local np = C_NamePlate.GetNamePlateForUnit(unitToken)
+            if np then showPlate(unitToken, np) end
+        end)
+    end
     if not nameplates._trpCallbackRegistered then
         nameplates._trpCallbackRegistered = true
         addon.TRPUtils.registerDataUpdatedCallback(function()
@@ -372,6 +423,11 @@ function nameplates:OnEnable()
     self:RegisterEvent("UNIT_NAME_UPDATE", "OnNameUpdate")
     self:RegisterEvent("PLAYER_GUILD_UPDATE", "OnNameUpdate")
     self:RegisterEvent("UNIT_FACTION", "OnFactionChanged")
+    for _, event in ipairs(visibilityEvents) do
+        if addon.Utils.EventExists(event) then
+            self:RegisterEvent(event, "OnUnitStateChanged")
+        end
+    end
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatChanged")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatChanged")
     self:RegisterEvent("UNIT_SPELLCAST_START", "OnCastStart")
@@ -386,8 +442,14 @@ function nameplates:OnEnable()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", function() nameplates.rebuildPartyGUIDs() end)
     nameplates.rebuildPartyGUIDs()
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
+    if addon.Utils.EventExists("ADDON_RESTRICTION_STATE_CHANGED") then
+        self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnAuraRestrictionsChanged")
+    end
     self:RegisterEvent("UNIT_TARGET", "OnUnitEngagement")
     self:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE", "OnUnitEngagement")
+    if addon.Utils.EventExists("UNIT_THREAT_LIST_UPDATE") then
+        self:RegisterEvent("UNIT_THREAT_LIST_UPDATE", "OnUnitEngagement")
+    end
     self:RegisterEvent("UNIT_POWER_FREQUENT", "OnPlayerPower")
     self:RegisterEvent("UNIT_DISPLAYPOWER", "OnPlayerPower")
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnPlayerPower")
@@ -407,11 +469,29 @@ function nameplates:OnEnteringWorld()
 end
 
 function nameplates:OnUnitAdded(_, unitToken)
+    pendingAdds[unitToken] = nil
     local np = C_NamePlate.GetNamePlateForUnit(unitToken)
-    if np then showPlate(unitToken, np) end
+    if not np or np:IsForbidden() then return end
+
+    local f = active[unitToken]
+    if self._nativePlateHookInstalled and f and f:GetParent() == np
+        and f.unitFrame == np.UnitFrame then return end
+
+    -- Always defer the event fallback: a non-nil UnitFrame can still be the
+    -- previous pooled frame until Blizzard's own listener has run.
+    local pending = {}
+    pendingAdds[unitToken] = pending
+    C_Timer.After(0, function()
+        if pendingAdds[unitToken] ~= pending then return end
+        pendingAdds[unitToken] = nil
+        if nameplates:IsEnabled() and C_NamePlate.GetNamePlateForUnit(unitToken) == np then
+            showPlate(unitToken, np)
+        end
+    end)
 end
 
 function nameplates:OnUnitRemoved(_, unitToken)
+    pendingAdds[unitToken] = nil
     hidePlate(unitToken)
 end
 
@@ -459,19 +539,35 @@ end
 
 function nameplates:OnClassificationChanged(_, unitToken)
     local f = active[unitToken]
-    if f then updateElite(f, unitToken) end
+    if f then refreshPlate(f, unitToken) end
+end
+
+function nameplates:OnAuraRestrictionsChanged()
+    -- This event fires before an activating restriction is enforced. Wait
+    -- until dispatch completes so aura reads see the actual access state.
+    C_Timer.After(0, function()
+        if not nameplates:IsEnabled() then return end
+        for unitToken in pairs(active) do
+            nameplates:OnUnitAura(nil, unitToken)
+        end
+    end)
 end
 
 function nameplates:OnUnitAura(_, unitToken)
     local f = active[unitToken]
-    if f and f.bar:IsShown() then
+    if not f then return end
+    -- Combat/threat can arrive alongside an aura event, but layout never
+    -- depends on enumerating a unit's potentially restricted aura data.
+    if getLayoutType(unitToken) ~= f.plateType then
+        refreshPlate(f, unitToken)
+    elseif f.auras and UnitCanAttack("player", unitToken) then
         nameplates.refreshAuras(f, unitToken)
         nameplates.refreshCC(f, unitToken)
     end
 end
 
--- Fires when a unit changes target (UNIT_TARGET) or threat shifts (UNIT_THREAT_SITUATION_UPDATE).
--- Both indicate the unit's engagement state with the player may have changed.
+-- Target and threat-list changes also cover a crowd-controlled enemy joining
+-- the fight without changing the player's current target.
 function nameplates:OnUnitEngagement(_, unitToken)
     if not inCombat then return end
     local f = active[unitToken]
@@ -479,10 +575,7 @@ function nameplates:OnUnitEngagement(_, unitToken)
 
     local plateType = getLayoutType(unitToken)
     if plateType ~= f.plateType then
-        refreshBar(f, unitToken)
-        if plateType == nameplates.PlateType.NameOnly then
-            nameplates.applyGuild(f, unitToken)
-        end
+        refreshPlate(f, unitToken)
     elseif plateType == nameplates.PlateType.Full then
         updateBarColor(f, unitToken)
     end
@@ -512,20 +605,21 @@ function nameplates:OnPlayerPower()
     end
 end
 
-function nameplates:OnNameUpdate(_, unitToken)
+function nameplates:OnUnitStateChanged(_, unitToken)
     local f = active[unitToken]
     if f then
-        nameplates.applyName(f, unitToken, getLayoutType(unitToken))
-        nameplates.applyGuild(f, unitToken)
-        nameplates.applyMusicIcon(f, unitToken)
+        refreshPlate(f, unitToken)
     end
 end
 
+function nameplates:OnNameUpdate(event, unitToken)
+    self:OnUnitStateChanged(event, unitToken)
+end
+
 function nameplates:OnFactionChanged(_, unitToken)
-    local f = active[unitToken]
-    if f then
-        nameplates.applyName(f, unitToken, getLayoutType(unitToken))
-    end
+    -- Hostility can change as a hidden enemy becomes targetable. Recompute
+    -- layout and visibility as well as the name's faction color.
+    self:OnUnitStateChanged(nil, unitToken)
 end
 
 function nameplates:OnDisable()
@@ -545,6 +639,10 @@ function nameplates:OnDisable()
     self:UnregisterEvent("UNIT_NAME_UPDATE")
     self:UnregisterEvent("PLAYER_GUILD_UPDATE")
     self:UnregisterEvent("UNIT_FACTION")
+    for _, event in ipairs(visibilityEvents) do
+        self:UnregisterEvent(event)
+    end
+    wipe(pendingAdds)
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self:UnregisterEvent("UNIT_SPELLCAST_START")
@@ -558,15 +656,17 @@ function nameplates:OnDisable()
     self:UnregisterEvent("UNIT_CLASSIFICATION_CHANGED")
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
     self:UnregisterEvent("UNIT_AURA")
+    self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     self:UnregisterEvent("UNIT_TARGET")
     self:UnregisterEvent("UNIT_THREAT_SITUATION_UPDATE")
+    self:UnregisterEvent("UNIT_THREAT_LIST_UPDATE")
     self:UnregisterEvent("UNIT_POWER_FREQUENT")
     self:UnregisterEvent("UNIT_DISPLAYPOWER")
     self:UnregisterEvent("PLAYER_TALENT_UPDATE")
     if playerIsDK then self:UnregisterEvent("RUNE_POWER_UPDATE") end
 
     for _, f in pairs(active) do
-        nameplates.unlockUnitFrame(f.unitFrame)
+        nameplates.unlockUnitFrame(f.unitFrame, f)
         f.unitFrame = nil
         nameplates.release(f)
     end

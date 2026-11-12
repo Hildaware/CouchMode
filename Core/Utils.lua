@@ -56,6 +56,12 @@ function addon.Utils.IsSecretValue(value)
     return isSecret ~= nil and isSecret(value)
 end
 
+-- Aura enumeration itself is forbidden while restricted, before it can
+-- return secret fields. All legacy readers must check this first.
+function addon.Utils.CanReadAuras()
+    return not (C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret())
+end
+
 --- Whether the client knows a given event. Uses the authoritative
 --- C_EventUtils.IsEventValid when available; otherwise probes RegisterEvent on a
 --- throwaway frame. Returns nil when validity cannot be determined.

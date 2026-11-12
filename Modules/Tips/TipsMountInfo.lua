@@ -8,6 +8,7 @@ local tips = addon:GetModule('Tips')
 
 function tips.getMountInfo(unit)
     if not C_MountJournal or not C_UnitAuras then return nil end
+    if not addon.Utils.CanReadAuras() then return nil end
     local i = 1
     while true do
         local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
