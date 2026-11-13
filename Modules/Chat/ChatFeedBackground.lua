@@ -18,11 +18,11 @@ local function smoothstep(t) return t * t * (3 - 2 * t) end
 
 function proto:GetAlpha() return self.alpha end
 
-local function layerAlpha(index, alpha)
+local function layerAlpha(index, alpha, maxOpacity)
     local t = (index - 1) / (LAYERS - 1)
     local previousT = math.max(index - 2, 0) / (LAYERS - 1)
-    local previous = OPACITY * alpha * smoothstep(previousT)
-    local opacity = OPACITY * alpha * smoothstep(t)
+    local previous = maxOpacity * alpha * smoothstep(previousT)
+    local opacity = maxOpacity * alpha * smoothstep(t)
     return (opacity - previous) / (1 - previous)
 end
 
@@ -30,7 +30,7 @@ function proto:SetAlpha(alpha)
     if self.alpha == alpha then return end
     self.alpha = alpha
     for i, layer in ipairs(self.layers) do
-        local opacity = layerAlpha(i, alpha)
+        local opacity = layerAlpha(i, alpha, self.opacity)
         for _, texture in ipairs(layer) do texture:SetAlpha(opacity) end
     end
 end
@@ -41,7 +41,7 @@ local function acquireBand(background, index, bandIndex)
     if not texture then
         texture = background.parent:CreateTexture(nil, 'BACKGROUND')
         texture:SetColorTexture(0, 0, 0, 1)
-        texture:SetAlpha(layerAlpha(index, background.alpha))
+        texture:SetAlpha(layerAlpha(index, background.alpha, background.opacity))
         layer[bandIndex] = texture
     end
     return texture
@@ -70,15 +70,15 @@ function proto:SetShape(headerRight, headerBottom, bodyTop, bodyRight, bottom, h
     for i, layer in ipairs(self.layers) do
         local progress = (i - 1) / (LAYERS - 1)
         -- The right edges trail much further past the header and message text.
-        local outset = OUTSET - (OUTSET + INSET) * progress
-        local rightOutset = RIGHT_OUTSET - (RIGHT_OUTSET + RIGHT_INSET) * progress
+        local outset = self.outset - (self.outset + self.inset) * progress
+        local rightOutset = self.rightOutset - (self.rightOutset + self.rightInset) * progress
         local baseTop = headerRight and 0 or bodyTop
         outset = math.max(outset, -(bottom - baseTop + PAD * 2 - 1) / 2)
         local left = baseLeft - outset
         local top = baseTop - PAD - outset
         local finish = bottom + PAD + outset
         local right = math.max(math.max(headerRight or 0, bodyRight) + PAD + rightOutset, left + 1)
-        local radius = math.max(0, math.min(CORNER_RADIUS + outset,
+        local radius = math.max(0, math.min(self.cornerRadius + outset,
             (finish - top) / 2, (right - left) / 2))
 
         local function circleInset(distance, r)
@@ -119,8 +119,18 @@ function proto:SetHeight(height)
     self:SetShape(s[1], s[2], s[3], s[4], height, s[6])
 end
 
-function M.Create(parent)
-    local background = setmetatable({ parent = parent, layers = {} }, proto)
+-- Optional contour settings let compact prompts share the chat treatment.
+function M.Create(parent, options)
+    options = options or {}
+    local background = setmetatable({
+        parent = parent, layers = {},
+        opacity = options.opacity or OPACITY,
+        outset = options.outset or OUTSET,
+        inset = options.inset or INSET,
+        rightOutset = options.rightOutset or RIGHT_OUTSET,
+        rightInset = options.rightInset or RIGHT_INSET,
+        cornerRadius = options.cornerRadius or CORNER_RADIUS,
+    }, proto)
     for i = 1, LAYERS do background.layers[i] = {} end
     background:SetAlpha(1)
     return background
