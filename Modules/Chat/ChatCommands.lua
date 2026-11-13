@@ -71,6 +71,7 @@ end
 
 function CouchMode_ChatHistoryToggle() addon.Chat:ToggleHistoryMode() end
 function CouchMode_ChatComposer()
+    if chat:IsComposerOpen() then chat:CloseComposer(); return end
     local qol = addon.QualityOfLife
     if qol and qol:IsQuickThanksShown() then qol:SendQuickThanks()
     else chat:ToggleComposer() end

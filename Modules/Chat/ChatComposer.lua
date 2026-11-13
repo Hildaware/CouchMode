@@ -390,17 +390,24 @@ function chat:SubmitComposer()
     -- Sending stays within the hardware-event callback; never defer it to a timer.
     local ok, err = pcall(handler, editBox)
     self.composerSubmitting = false
+    local submitted, tracked = Input:DidSubmit()
     if not ok then
-        Input:RestoreDraft(draft)
-        self:SetComposerStatus('Unable to send. Your draft has been kept.')
+        if submitted then
+            -- Native cleanup can fail after sending; never retain a sent draft.
+            self.composerDraft = nil
+            self:CloseComposer(true)
+        else
+            Input:RestoreDraft(draft)
+            self:SetComposerStatus('Unable to send. Your draft has been kept.')
+        end
         geterrorhandler()(err)
         return
     end
     -- Smart-whisper autocomplete can clear the text when it selects a recipient.
     -- Observe the native send path rather than treating an empty box as a send.
-    local submitted, tracked = Input:DidSubmit()
     if tracked and not submitted then Input:Focus(); return end
-    if editBox:GetText() ~= '' then return end
+    -- Native IM/gamepad styles can retain text even after a successful send.
+    if not tracked and editBox:GetText() ~= '' then return end
     self.composerDraft = nil
     self:CloseComposer(true)
 end

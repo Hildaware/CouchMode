@@ -3,6 +3,7 @@ local _, addon = ...
 local chat = addon.Chat
 local TAB = chat.COMPOSER_TABS
 local Input = addon.ChatInput
+local Icons = addon.Components.GamepadIcons
 local DELAY, INTERVAL = 0.35, 0.08
 local KEYBOARD_DEADZONE = 0.16
 local KEYBOARD_SMOOTH_TIME = 0.075
@@ -12,11 +13,40 @@ local directions = {
     PADDUP = { 0, -1 }, PADDDOWN = { 0, 1 },
 }
 
+local function heldKey(held, key)
+    if key == 'CTRL' then return IsControlKeyDown() end
+    if key == 'SHIFT' then return IsShiftKeyDown() end
+    if key == 'ALT' then return IsAltKeyDown() end
+    return held[key] == true
+end
+
+-- Capture consumes normal bindings. Match the configured physical chord here,
+-- using the same modifier-to-controller mapping as the displayed bind glyphs.
+local function composerToggleInput(key, held)
+    local modifier = false
+    for _, binding in ipairs({ GetBindingKey('COUCHMODE_CHAT_COMPOSER') }) do
+        if binding:find('PAD', 1, true) then
+            local keys = Icons.BindingKeys(binding)
+            -- Glyph resolution can collapse virtual stick directions to a stick
+            -- icon. Match the real bound button, rather than that display alias.
+            keys[#keys] = binding:match('([^-]+)$')
+            local matches = keys[#keys] == key
+            for i = 1, #keys - 1 do
+                if keys[i] == key then modifier = true end
+                if not heldKey(held, keys[i]) then matches = false end
+            end
+            if matches then return true, modifier end
+        end
+    end
+    return false, modifier
+end
+
 function chat:ResetComposerHeldInput(keepButtons)
     local frame = self.composer
     if not frame then return end
     if not keepButtons then frame.held = {} end
     frame.repeatAction = nil
+    frame.pendingComposerSend = nil
     frame.leftDirection, frame.rightDirection = nil, nil
     frame.leftReady, frame.rightReady = false, false
     frame.shift = false
@@ -140,10 +170,22 @@ function chat:ComposerGamepadButton(key, down)
             frame.repeatAction = nil
         end
         if key == 'PADLTRIGGER' then frame.shift = false; self:RefreshComposerKeyboard() end
+        if key == 'PADRTRIGGER' and frame.pendingComposerSend then
+            frame.pendingComposerSend = nil
+            self:SubmitComposer()
+        end
         return
     end
     if frame.held[key] then return end
     frame.held[key] = true
+    local toggle, modifier = composerToggleInput(key, frame.held)
+    if toggle then self:CloseComposer(); return end
+    if key == 'PADRTRIGGER' and modifier and self.composerTab ~= TAB.EMOTES
+        and not frame.channels:IsShown() then
+        -- R2 alone still sends on release, while R2+Start can close safely.
+        frame.pendingComposerSend = true
+        return
+    end
     if directions[key] then self:StartComposerRepeat(key)
     elseif key == 'PAD2' then self:ComposerBack()
     elseif key == 'PAD1' then
