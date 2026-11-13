@@ -32,6 +32,15 @@ local WEAPON_SKILL_ICONS = {
 -- messages whose global-string name differs between client flavors.
 local JUNK_SYSTEM_MESSAGES = {
     {
+        globals = { 'CHAT_YOU_CHANGED_NOTICE', 'CHAT_YOU_CHANGED_NOTICE_BN' },
+        -- Channel notices arrive as a status token before Blizzard formats them.
+        fallbacks = { 'YOU_CHANGED' },
+    },
+    {
+        globals = { 'CHAT_SUSPENDED_NOTICE', 'CHAT_SUSPENDED_NOTICE_BN' },
+        fallbacks = { 'SUSPENDED' },
+    },
+    {
         globals = { 'ERR_ABILITY_COOLDOWN' },
         fallbacks = { 'Ability is not ready yet' },
     },
@@ -42,6 +51,10 @@ local JUNK_SYSTEM_MESSAGES = {
     {
         globals = { 'ERR_ITEM_COOLDOWN' },
         fallbacks = { 'Item is not ready yet' },
+    },
+    {
+        globals = { 'ERR_ITEM_NOT_FOUND' },
+        fallbacks = { 'The Item was Not Found.' },
     },
     {
         globals = { 'ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS', 'LE_GAME_ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS' },
