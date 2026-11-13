@@ -70,7 +70,11 @@ end
 --#region ── Bindings ──────────────────────────────────────────────────────────
 
 function CouchMode_ChatHistoryToggle() addon.Chat:ToggleHistoryMode() end
-function CouchMode_ChatComposer() addon.Chat:ToggleComposer() end
+function CouchMode_ChatComposer()
+    local qol = addon.QualityOfLife
+    if qol and qol:IsQuickThanksShown() then qol:SendQuickThanks()
+    else chat:ToggleComposer() end
+end
 BINDING_NAME_COUCHMODE_CHAT_HISTORY_TOGGLE = 'Chat History' ---@diagnostic disable-line: lowercase-global
 BINDING_NAME_COUCHMODE_CHAT_COMPOSER = 'Chat Composer' ---@diagnostic disable-line: lowercase-global
 

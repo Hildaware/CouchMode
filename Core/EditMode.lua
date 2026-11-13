@@ -20,6 +20,7 @@ local moduleByLabel = {
     ['CouchMode Map'] = 'Minimap', ['CouchMode Tips'] = 'Tips',
     ['CouchMode Party'] = 'Party', ['CouchMode Toasts'] = 'Toasts',
     ['CouchMode Chat'] = 'Chat', ['CouchMode Cast Ring'] = 'CastRing',
+    ['CouchMode Quick Thanks'] = 'QualityOfLife',
     ['CouchMode Cast Bar'] = 'PlayerCastBar', ['CouchMode Health'] = 'PlayerHealthBar',
     ['CouchMode Power'] = 'PlayerPowerBar', ['CouchMode Mana'] = 'PlayerManaBar',
 }

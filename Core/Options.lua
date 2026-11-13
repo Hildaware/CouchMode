@@ -17,7 +17,7 @@ local modulePaths = {}
 -- Ordered list of modules that contribute defaults and settings panels.
 -- Order here determines tab order in the settings dialog.
 local MODULES = { 'Bags', 'Merchant', 'CastBar', 'Nameplates', 'Minimap', 'Tips', 'Party', 'PlayerHealthBar', 'PlayerPowerBar',
-    'PlayerManaBar', 'Chat', 'ChatBubbles', 'Toasts' }
+    'PlayerManaBar', 'Chat', 'ChatBubbles', 'Toasts', 'QualityOfLife' }
 
 -- Modules whose options are nested together under a single "Player Bars" group.
 local PLAYER_BAR_MODULES = { CastBar = true, PlayerHealthBar = true, PlayerPowerBar = true, PlayerManaBar = true }

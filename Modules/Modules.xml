@@ -10,5 +10,6 @@
     <Include file = 'Tips/Tips.xml' />
     <Include file = 'Party/Party.xml' />
     <Include file = 'Chat/Chat.xml' />
+    <Include file = 'QualityOfLife/QualityOfLife.xml' />
     <Include file = 'Toasts/Toasts.xml' />
 </UI>
