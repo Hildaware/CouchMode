@@ -162,10 +162,22 @@ function M.CreateGroup(parent)
     g.identityMenu = identityMenu
 
     g:SetScript('OnHyperlinkClick', function(_, link, text, button)
+        if getLinkType(link) == 'couchmodelanguage' then return end
         if SetItemRef then SetItemRef(link, text, button, g) end
     end)
 
     g:SetScript('OnHyperlinkEnter', function(_, link)
+        if getLinkType(link) == 'couchmodelanguage' then
+            local index = tonumber(link:match('^couchmodelanguage:(%d+)$'))
+            local msg = index and g.groupData and g.groupData.messages[index]
+            local language = msg and addon.Chat:NonDefaultLanguage(msg)
+            if language and GameTooltip then
+                GameTooltip:SetOwner(g, 'ANCHOR_CURSOR')
+                GameTooltip:SetText(language)
+                GameTooltip:Show()
+            end
+            return
+        end
         if not supportsHoverTooltip(link) or not GameTooltip then return end
 
         GameTooltip:SetOwner(g, 'ANCHOR_CURSOR')
@@ -227,6 +239,7 @@ function M.ResetGroup(g)
     g._lineAlphas = nil
     g._lineHeights = nil
     g._lineWidths = nil
+    g._lineTexts = nil
     g._metrics = nil
     g._firstDisplayedMessage = nil
     g.groupData = nil
@@ -281,11 +294,10 @@ end
 --- rebuilds (filter change, resize) render instantly and are marked revealed so
 --- they never re-animate later.
 ---@param fs FontString
----@param msg ChatMessage
+---@param text string
 ---@param animate boolean
-local function applyText(fs, msg, animate)
+local function applyText(fs, text, animate)
     local chat = addon.Chat
-    local text = msg.emoteText or msg.text
     chat:SetTextPlain(fs, text)
     if animate then
         chat:Reveal(fs, text)
@@ -468,13 +480,16 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
     local messageCount = #messages
     g._lineHeights = g._lineHeights or {}
     g._lineWidths = g._lineWidths or {}
+    g._lineTexts = g._lineTexts or {}
     for i = 1, messageCount do
         local msg = messages[i]
         local fs = acquireLine(g, i)
         chat:StyleLine(fs, msg, i == 1 and showsIdentity)
-        applyLineFont(fs, msgFace, msgSize)
+        local text, face = chat:LanguagePresentation(msg, i, msgFace, msgSize)
+        g._lineTexts[i] = text
+        applyLineFont(fs, face, msgSize)
         applyLineWidth(fs, available)
-        chat:SetTextPlain(fs, msg.emoteText or msg.text)
+        chat:SetTextPlain(fs, text)
         g._lineHeights[i] = fs:GetHeight() or msgSize
         g._lineWidths[i] = textWidth(fs, available)
     end
@@ -506,7 +521,7 @@ function M.RenderGroup(feed, g, group, animate, firstMessage)
         if lineAlphas then lineAlphas[i] = alpha end
         if historyVisible then alpha = 1 end
         if fs:GetAlpha() ~= alpha then fs:SetAlpha(alpha) end
-        applyText(fs, msg, animate ~= false)
+        applyText(fs, g._lineTexts[i], animate ~= false)
         fs:ClearAllPoints()
         fs:SetPoint('TOPLEFT', g, 'TOPLEFT', messageLeft, -y)
         fs:Show()

@@ -386,7 +386,8 @@ function M.Normalize(event, timestamp, clock, ...)
         channelID = safeNumber(channelID),
         zoneChannelID = safeNumber(zoneChannelID),
         language = safeString(language),
-        languageID = safeNumber(languageID),
+        -- Zero is Universal, which must remain distinguishable from missing data.
+        languageID = not isSecret(languageID) and type(languageID) == 'number' and languageID or nil,
         flags = safeString(flags),
         bnSenderID = safeNumber(bnSenderID),
         isBN = (bnSenderID ~= nil and not isSecret(bnSenderID) and bnSenderID ~= 0) or false,

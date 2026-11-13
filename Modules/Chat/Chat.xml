@@ -21,6 +21,7 @@
     <Include file='Chat.lua'/>
     <Include file='ChatSuppression.lua'/>
     <Include file='ChatReveal.lua'/>
+    <Include file='ChatLanguages.lua'/>
     <Include file='ChatStyle.lua'/>
     <Include file='ChatEmoteStyle.lua'/>
     <Include file='ChatIdentity.lua'/>

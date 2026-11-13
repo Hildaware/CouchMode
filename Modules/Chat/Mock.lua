@@ -109,6 +109,26 @@ local function publicSet()
     }
 end
 
+local function languagesSet()
+    local name, id = GetDefaultLanguage()
+    if GetAlternativeDefaultLanguage then
+        local alternative, alternativeID = GetAlternativeDefaultLanguage()
+        if alternative and alternative ~= '' then name, id = alternative, alternativeID end
+    end
+    return {
+        { event = 'CHAT_MSG_SAY', sender = 'Language Preview', language = name, languageID = id,
+            text = 'This message uses your normal language and font.' },
+        { event = 'CHAT_MSG_SAY', sender = 'Language Preview', language = 'Darnassian', languageID = 2,
+            text = 'The forest remembers those who walk beneath its boughs.' },
+        { event = 'CHAT_MSG_SAY', sender = 'Language Preview', language = 'Dwarven', languageID = 6,
+            text = 'A fine day for a long story by the hearth. This longer message also shows how the language icon and italic text wrap within the chat panel.' },
+        { event = 'CHAT_MSG_SAY', sender = 'Language Preview', language = 'Demonic', languageID = 8,
+            text = 'An unfamiliar tongue uses the book icon. Hover to see its name.' },
+        { event = 'CHAT_MSG_SAY', sender = 'Language Preview', language = name, languageID = id,
+            text = 'Back to the normal language, within the same message group.' },
+    }
+end
+
 local function systemSet()
     return {
         { event = 'CHAT_MSG_SYSTEM', text = 'You are now AFK.' },
@@ -152,6 +172,7 @@ end
 --#region ── Scenario registry ──────────────────────────────────────────────────
 
 M.SETS = {
+    languages = languagesSet,
     npc = npcSet,
     whisper = whisperSet,
     group = groupSet,
@@ -162,7 +183,7 @@ M.SETS = {
     burst = burstSet,
 }
 
-M.ORDER = { 'npc', 'whisper', 'group', 'guild', 'public', 'system', 'rich' }
+M.ORDER = { 'npc', 'whisper', 'group', 'guild', 'public', 'system', 'rich', 'languages' }
 
 ---@return string[]
 function M.Names()

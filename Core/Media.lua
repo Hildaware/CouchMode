@@ -28,6 +28,22 @@ function addon.Media.ResolveFont(face)
     return LSM:Fetch(LSM.MediaType.FONT, face) or FALLBACK_FONT
 end
 
+-- Use a matching registered italic face when available, otherwise the bundled
+-- condensed italic. FontString outline flags do not provide an italic style.
+function addon.Media.ResolveItalicFont(face)
+    if type(face) == 'string' then
+        if face:lower():find('italic', 1, true) or face:lower():find('oblique', 1, true) then
+            return addon.Media.ResolveFont(face)
+        end
+        for _, suffix in ipairs({ ' Italic', ' Oblique' }) do
+            if LSM:IsValid(LSM.MediaType.FONT, face .. suffix) then
+                return addon.Media.ResolveFont(face .. suffix)
+            end
+        end
+    end
+    return 'Interface\\AddOns\\CouchMode\\Resources\\Fonts\\RobotoCondensed-Italic.ttf'
+end
+
 --- Returns AceConfig select values with human-readable names for both keys and labels.
 ---@return table<string, string>
 function addon.Media.GetFontOptions()
