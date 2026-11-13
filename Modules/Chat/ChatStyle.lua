@@ -90,12 +90,14 @@ function chat:StyleIdentity(g, msg, feed)
         g.name:SetTextColor(r, gg, b, 1)
     end
 
-    local alias = Rules.ResolveAlias(db().aliases, Sources.ChatTypeKey(msg.event), msg.channelBase)
+    local channel = Sources.ChannelDisplayName(msg.channelBase, msg.zoneChannelID)
+    local alias = Rules.ResolveAlias(db().aliases, nil, msg.channelBase)
+        or Rules.ResolveAlias(db().aliases, Sources.ChatTypeKey(msg.event), channel)
     local r, gg, b = chatTypeColor(msg.event)
     local isEmote = Sources.IsEmote(msg.event)
     g.channel:SetShown(not isEmote)
     self:SetTextPlain(g.channel, isEmote and '' or (alias or (msg.category == 'SYSTEM' and ''
-        or (msg.channelBase or Sources.DisplayType(msg.event)))))
+        or (channel or Sources.DisplayType(msg.event)))))
     g.channel:SetFont(channelFont and channelFont.face or addon.Media.ResolveFont(db().channelFontFace),
         channelFont and channelFont.size or db().channelFontSize, 'OUTLINE')
     g.channel:SetTextColor(r, gg, b, 0.85)

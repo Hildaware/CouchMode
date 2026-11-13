@@ -312,6 +312,32 @@ local function safeString(value)
     return value
 end
 
+--- Localized display label for an official channel; retain custom channel names.
+--- Keep this cosmetic: channelBase and channelID still identify the real channel.
+function M.ChannelDisplayName(name, zoneChannelID)
+    name = safeString(name)
+    zoneChannelID = safeNumber(zoneChannelID)
+    if not zoneChannelID and name and C_ChatInfo and C_ChatInfo.GetChannelInfoFromIdentifier then
+        local ok, info = pcall(C_ChatInfo.GetChannelInfoFromIdentifier, name)
+        if ok and info and not isSecret(info) then
+            zoneChannelID = safeNumber(info.zoneChannelID)
+            if zoneChannelID and zoneChannelID > 0 then
+                local shortcut = safeString(info.shortcut)
+                if shortcut then return shortcut end
+            end
+        end
+    end
+    if zoneChannelID and zoneChannelID > 0 then
+        if C_ChatInfo and C_ChatInfo.GetChannelShortcutForChannelID then
+            local ok, shortcut = pcall(C_ChatInfo.GetChannelShortcutForChannelID, zoneChannelID)
+            if ok and safeString(shortcut) then return shortcut end
+        end
+        -- Blizzard's own display fallback removes the zone/language suffix.
+        if name then return (name:gsub('%s%-%s.*', '')) end
+    end
+    return name
+end
+
 --- Builds a normalized message record from a CHAT_MSG_* payload.
 --- Pure: only reads globals that exist in both WoW and the test harness.
 ---@param event string

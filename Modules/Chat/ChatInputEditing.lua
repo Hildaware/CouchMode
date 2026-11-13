@@ -159,7 +159,8 @@ function Input:GetDestinationLabel(compact)
     elseif draft.chatType == 'CHANNEL' then
         local id, name = GetChannelName(draft.channel or 0)
         if compact then return id and id > 0 and (tostring(id) .. '.') or 'Channel' end
-        return name and name ~= '' and (tostring(id) .. '. ' .. name) or 'Channel unavailable'
+        local label = addon.ChatSources.ChannelDisplayName(name)
+        return label and (tostring(id) .. '. ' .. label) or 'Channel unavailable'
     end
     return label
 end
@@ -195,7 +196,8 @@ function Input:GetDestinations()
         local channels = { GetChannelList() }
         for i = 1, #channels, 3 do
             local id, name, disabled = channels[i], channels[i + 1], channels[i + 2]
-            add('CHANNEL', not disabled, nil, id, tostring(id) .. '. ' .. tostring(name))
+            local label = addon.ChatSources.ChannelDisplayName(name) or tostring(name)
+            add('CHANNEL', not disabled, nil, id, tostring(id) .. '. ' .. label)
         end
     end
     local last, lastType
