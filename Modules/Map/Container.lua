@@ -5,6 +5,7 @@ local addon = LibStub('AceAddon-3.0'):GetAddon(addon_name)
 
 ---@class MapModule: AceModule
 local map = addon:GetModule('Minimap')
+local Icons = addon.Components.GamepadIcons
 
 local _G = _G
 local math_min = math.min
@@ -137,52 +138,25 @@ function map.createZoomIndicator()
     zi.numLevels = 0  -- cached; ticks only repositioned when this changes
     zi.lastZoom = -1  -- sentinel → first frame always redraws fill
 
-    local lt_tex = zi:CreateTexture(nil, "OVERLAY")
-    lt_tex:SetSize(16, 16)
-    lt_tex:SetPoint("RIGHT", zi, "LEFT", -3, 0)
-    lt_tex:Hide()
-    zi.ltTex = lt_tex
-
-    local rt_tex = zi:CreateTexture(nil, "OVERLAY")
-    rt_tex:SetSize(16, 16)
-    rt_tex:SetPoint("LEFT", zi, "RIGHT", 3, 0)
-    rt_tex:Hide()
-    zi.rtTex = rt_tex
-
-    zi.cpDevice = nil
+    zi.ltTex = Icons.Create(zi, 'PADLSHOULDER', 24)
+    zi.ltTex:SetPoint('RIGHT', zi, 'LEFT', -3, 0)
+    zi.rtTex = Icons.Create(zi, 'PADRSHOULDER', 24)
+    zi.rtTex:SetPoint('LEFT', zi, 'RIGHT', 3, 0)
+    Icons.RegisterCallback(zi, map.updateZoomIndicatorIcons)
+    map.updateZoomIndicatorIcons()
 end
 
 function map.updateZoomIndicatorIcons()
     local zi = map.zoomIndicator
     if not zi then return end
-    if not ConsolePort then
-        zi.ltTex:Hide(); zi.rtTex:Hide()
-        return
-    end
-    local device = ConsolePort:GetData().Gamepad:GetActiveDevice()
-    if not device then
-        zi.ltTex:Hide(); zi.rtTex:Hide()
-        return
-    end
-    local function apply(tex, button)
-        local path, useAtlas = device:GetIconForButton(button, 32)
-        if not path then
-            tex:Hide(); return
-        end
-        if useAtlas then
-            tex:SetAtlas(path)
-        else
-            tex:SetTexture(path)
-            tex:SetTexCoord(0.25, 0.75, 0.25, 0.75)
-        end
-        tex:Show()
-    end
-    apply(zi.ltTex, 'PADLSHOULDER')
-    apply(zi.rtTex, 'PADRSHOULDER')
-    zi.cpDevice = device
-
+    -- These hints describe the existing ConsolePort zoom handlers.
+    local shown = ConsolePort ~= nil
+    if zi.hasZoomHints == shown then return end
+    zi.hasZoomHints = shown
+    zi.ltTex:SetShown(shown)
+    zi.rtTex:SetShown(shown)
     zi:ClearAllPoints()
-    zi:SetPoint("BOTTOMRIGHT", map.container, "BOTTOMRIGHT", device and -23 or -4, 6)
+    zi:SetPoint('BOTTOMRIGHT', map.container, 'BOTTOMRIGHT', shown and -31 or -4, 6)
 end
 
 function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-local
@@ -194,12 +168,6 @@ function map.updateZoomIndicator(elapsed) ---@diagnostic disable-line: unused-lo
     if not shouldShow then return end
 
     if map.worldMapOpen and map.worldMap then
-        -- Refresh trigger icons if the active controller device changed
-        local cur_device = ConsolePort and ConsolePort:GetData().Gamepad:GetActiveDevice()
-        if cur_device ~= zi.cpDevice then
-            map.updateZoomIndicatorIcons()
-        end
-
         -- World map mode: continuous fill, logarithmic scale (each zoom doubling = equal bar width)
         local sc = map.worldMap.ScrollContainer
         local cur = sc:GetZoom()
@@ -263,11 +231,6 @@ function map.setupContainerScripts()
     map.createToolbar()
     map.createMailIndicator()
     map.createZoomIndicator()
-
-    if ConsolePort then
-        ConsolePort:GetData():RegisterCallback('Gamepad/Active', map.updateZoomIndicatorIcons)
-        map.updateZoomIndicatorIcons()
-    end
 
     map.container:SetScript("OnUpdate", function(_, elapsed)
 

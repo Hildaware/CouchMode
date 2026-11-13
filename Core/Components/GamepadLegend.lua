@@ -4,7 +4,8 @@ addon.Components = addon.Components or {}
 addon.Components.GamepadLegend = addon.Components.GamepadLegend or {}
 local legendComponent = addon.Components.GamepadLegend
 
-local ICON_SIZE = 24
+local Icons = addon.Components.GamepadIcons
+local ICON_SIZE = Icons.SIZE
 local EDGE = 10
 local ITEM_GAP = 15
 local ROW_GAP = 11
@@ -39,62 +40,6 @@ local function fallbackKeys(keys)
         return { 'PADDUP', 'PADDDOWN' }
     end
     return keys
-end
-
-local function activeConsolePortDevice()
-    local cp = _G.ConsolePort
-    local data = cp and cp.GetData and cp:GetData()
-    local gamepad = data and data.Gamepad
-    return gamepad and gamepad.GetActiveDevice and gamepad:GetActiveDevice()
-end
-
-local GLYPHS = {
-    PAD1 = 'A', PAD2 = 'B', PAD3 = 'X', PAD4 = 'Y',
-    PADDUP = '↑', PADDDOWN = '↓', PADDLEFT = '←', PADDRIGHT = '→',
-    PADLSHOULDER = 'L', PADRSHOULDER = 'R',
-    PADLTRIGGER = 'LT', PADRTRIGGER = 'RT', PADLSTICK = 'LS', PADRSTICK = 'RS',
-}
-
-local function updateIcon(icon, key, device)
-    local path, useAtlas
-    if device and device.GetIconForButton then
-        path, useAtlas = device:GetIconForButton(key, 32)
-    end
-    if not path and _G.InputIconTextureSetUtility and _G.InputIconTextureState
-        and InputIconTextureSetUtility.GetActiveInputIconButtonTextures then
-        local textures = InputIconTextureSetUtility.GetActiveInputIconButtonTextures(key)
-        path = textures and textures[InputIconTextureState.Normal]
-        useAtlas = path ~= nil
-    end
-    if path then
-        icon.glyph:Hide()
-        icon.texture:SetVertexColor(1, 1, 1, 1)
-        icon.texture:SetTexCoord(0, 1, 0, 1)
-        if useAtlas then
-            icon.texture:SetAtlas(path)
-        else
-            icon.texture:SetTexture(path)
-            icon.texture:SetTexCoord(0.25, 0.75, 0.25, 0.75)
-        end
-    else
-        icon.texture:SetTexture('Interface\\CharacterFrame\\TempPortraitAlphaMask')
-        icon.texture:SetTexCoord(0, 1, 0, 1)
-        icon.texture:SetVertexColor(0.38, 0.36, 0.32, 1)
-        icon.glyph:SetText(GLYPHS[key] or key)
-        icon.glyph:Show()
-    end
-end
-
-local function createFallbackIcon(parent, key, x)
-    local icon = CreateFrame('Frame', nil, parent)
-    icon:SetSize(ICON_SIZE, ICON_SIZE)
-    icon:SetPoint('LEFT', parent, 'LEFT', x, 0)
-    icon.key = key
-    icon.texture = icon:CreateTexture(nil, 'ARTWORK')
-    icon.texture:SetAllPoints(icon)
-    icon.glyph = icon:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightSmall')
-    icon.glyph:SetPoint('CENTER', icon, 'CENTER')
-    return icon
 end
 
 local function createFallback(parent, prompts, x, gap)
@@ -135,19 +80,11 @@ local function createFallback(parent, prompts, x, gap)
     for i, prompt in ipairs(prompts) do
         local item = CreateFrame('Frame', nil, frame)
         item:SetHeight(ICON_SIZE)
-        item.icons = {}
-        local keys = fallbackKeys(prompt.keys)
-        for j, key in ipairs(keys) do
-            local offset = (j - 1) * (ICON_SIZE + 14)
-            if j > 1 then
-                local divider = item:CreateFontString(nil, 'ARTWORK', 'GameFontNormalSmall')
-                divider:SetPoint('LEFT', item, 'LEFT', offset - 12, 0)
-                divider:SetText('/')
-            end
-            item.icons[j] = createFallbackIcon(item, key, offset)
-        end
+        item.buttons = Icons.CreateGroup(item, { size = ICON_SIZE, separator = '/' })
+        item.buttons:SetPoint('LEFT')
+        item.buttons:SetKeys(fallbackKeys(prompt.keys))
         item.label = item:CreateFontString(nil, 'ARTWORK', 'GameFontNormal')
-        item.label:SetPoint('LEFT', item.icons[#item.icons], 'RIGHT', 4, 0)
+        item.label:SetPoint('LEFT', item.buttons, 'RIGHT', 4, 0)
         item.label:SetJustifyH('LEFT')
         item.label:SetWordWrap(false)
         items[i] = item
@@ -156,7 +93,6 @@ local function createFallback(parent, prompts, x, gap)
 end
 
 function legendProto:RefreshFallback()
-    local device = activeConsolePortDevice()
     local maxWidth = math.max(44, self.maxWidth or self.parent:GetWidth() - 8)
     local x, y = EDGE, -EDGE
     local rows, usedWidth, visible = 1, 0, 0
@@ -165,7 +101,8 @@ function legendProto:RefreshFallback()
         local item = self.fallbackItems[i]
         local shown = promptShown(prompt)
         local label = promptLabel(prompt)
-        local iconWidth = #item.icons * ICON_SIZE + (#item.icons - 1) * 14
+        item.buttons:Refresh()
+        local iconWidth = item.buttons:GetWidth()
         item.label:SetText(label)
         local width = iconWidth + 4 + item.label:GetStringWidth()
         if self.singleRow then
@@ -183,7 +120,6 @@ function legendProto:RefreshFallback()
         item:SetShown(shown)
         if shown then
             visible = visible + 1
-            for _, icon in ipairs(item.icons) do updateIcon(icon, icon.key, device) end
             item:SetWidth(width)
             if not self.singleRow and x > EDGE and x + width + EDGE > maxWidth then
                 x, y = EDGE, y - ICON_SIZE - ROW_GAP
@@ -321,10 +257,7 @@ function legendComponent.Create(parent, options)
     instance.fallback, instance.fallbackItems = createFallback(
         parent, instance.prompts, instance.x, instance.gap)
     instance:RefreshFallback()
-    local cp = _G.ConsolePort
-    local data = cp and cp.GetData and cp:GetData()
-    if data and data.RegisterCallback then
-        data:RegisterCallback('Gamepad/Active', function() instance:Refresh() end)
-    end
+    -- Texture updates must not activate or refresh native binding groups.
+    Icons.RegisterCallback(instance, function() instance:RefreshFallback() end)
     return instance
 end

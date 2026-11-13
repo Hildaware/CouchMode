@@ -8,6 +8,7 @@ local bags          = addon:GetModule('Bags')
 
 ---@class Filtering: AceModule
 local filtering     = addon:NewModule('Bags.Filtering')
+local Icons = addon.Components.GamepadIcons
 
 ---@class Session: AceModule
 local session       = addon:GetModule('Bags.Session')
@@ -422,10 +423,8 @@ function filtering:BuildContainer(view, type)
 
     -- LEFT / RIGHT Buttons
     if _G['ConsolePort'] then
-        local lTexture = filterContainer:CreateTexture(nil, 'ARTWORK')
+        local lTexture = Icons.Create(filterContainer, 'PADLSHOULDER')
         lTexture:SetPoint('TOPLEFT', filterContainer, 'TOPLEFT', 6, -4)
-        lTexture:SetSize(24, 24)
-        lTexture:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\lb')
 
         local anim = lTexture:CreateAnimationGroup()
         local scaleOut = anim:CreateAnimation('Scale')
@@ -437,10 +436,8 @@ function filtering:BuildContainer(view, type)
         lTexture.animation = anim
         filterContainer.LeftButton = lTexture
 
-        local rTexture = filterContainer:CreateTexture(nil, 'ARTWORK')
+        local rTexture = Icons.Create(filterContainer, 'PADRSHOULDER')
         rTexture:SetPoint('TOPRIGHT', filterContainer, 'TOPRIGHT', -6, -4)
-        rTexture:SetSize(24, 24)
-        rTexture:SetTexture('Interface\\Addons\\CouchMode\\Modules\\Bags\\Media\\rb')
 
         local animRight = rTexture:CreateAnimationGroup()
         local scaleOutRight = animRight:CreateAnimation('Scale')

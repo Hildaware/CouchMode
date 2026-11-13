@@ -10,6 +10,8 @@
     <Include file = 'Components/CatalogView.lua' />
     <Include file = 'Components/Metal.lua' />
     <Include file = 'Components/NineSliceButton.lua' />
+    <Include file = 'Components/GamepadIconAtlases.lua' />
+    <Include file = 'Components/GamepadIcons.lua' />
     <Include file = 'Components/GamepadLegend.lua' />
     <Include file = 'Components/UnitFrameStatus.lua' />
     <Include file = 'Components/UnitFramePrediction.lua' />
