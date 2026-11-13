@@ -29,6 +29,7 @@
     <Include file='ChatPanel.lua'/>
     <Include file='ChatHistory.lua'/>
     <Include file='ChatComposer.lua'/>
+    <Include file='ChatComposerSelectors.lua'/>
     <Include file='ChatKeyboard.lua'/>
     <Include file='ChatComposerController.lua'/>
     <Include file='ChatQuickActions.lua'/>

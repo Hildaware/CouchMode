@@ -140,8 +140,13 @@ end
 function chat:MoveComposerSelection(dx, dy)
     local frame = self.composer
     if frame.channels:IsShown() then
+        if dx ~= 0 then
+            local kind = dx < 0 and 'language' or 'channel'
+            if frame.selectorKind ~= kind then self:SetComposerSelectorKind(kind) end
+            return
+        end
         local count = #frame.destinations
-        if count > 0 then frame.channelIndex = ((frame.channelIndex - 1 + (dy ~= 0 and dy or dx)) % count) + 1 end
+        if count > 0 then frame.channelIndex = ((frame.channelIndex - 1 + dy) % count) + 1 end
         self:RefreshComposerChannels()
     elseif self.composerTab == TAB.KEYBOARD then self:MoveComposerKey(dx, dy)
     elseif self.composerTab == TAB.SHORTCUTS then self:MoveComposerReply(dx, dy)

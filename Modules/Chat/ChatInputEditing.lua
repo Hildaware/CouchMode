@@ -29,7 +29,7 @@ function Input:CaptureDraft()
         chatType = get(frame, 'GetChatType', 'chatType') or 'SAY',
         target = get(frame, 'GetTellTarget', 'tellTarget'),
         channel = get(frame, 'GetChannelTarget', 'channelTarget'),
-        language = frame.languageID,
+        language = frame.languageID, languageName = frame.language,
     }
 end
 
@@ -40,6 +40,7 @@ function Input:RestoreDraft(draft)
     set(frame, 'SetTellTarget', 'tellTarget', draft.target)
     set(frame, 'SetChannelTarget', 'channelTarget', draft.channel)
     frame.languageID = draft.language
+    frame.language = draft.languageName
     frame:SetText(draft.text or '')
     frame:SetCursorPosition(math.min(draft.cursor or 0, #(draft.text or '')))
     self:UpdateDestinationHeader()
@@ -237,4 +238,48 @@ function Input:SelectDestination(destination)
     set(frame, 'SetTellTarget', 'tellTarget', destination.target)
     set(frame, 'SetChannelTarget', 'channelTarget', destination.channel)
     self:UpdateDestinationHeader()
+end
+
+function Input:GetLanguages()
+    local result = {}
+    if not GetNumLanguages or not GetLanguageByIndex then return result end
+    for index = 1, GetNumLanguages() do
+        local name, id = GetLanguageByIndex(index)
+        if type(name) == 'string' and name ~= '' and type(id) == 'number'
+            and (not C_ChatInfo or not C_ChatInfo.CanPlayerSpeakLanguage
+                or C_ChatInfo.CanPlayerSpeakLanguage(id)) then
+            result[#result + 1] = { name = name, id = id, label = name }
+        end
+    end
+    return result
+end
+
+function Input:GetLanguage()
+    local frame = self:GetEditBox()
+    if frame and frame.languageID ~= nil then
+        if frame.language and frame.language ~= '' then return frame.language, frame.languageID end
+        for _, entry in ipairs(self:GetLanguages()) do
+            if entry.id == frame.languageID then return entry.name, entry.id end
+        end
+    end
+    if GetDefaultLanguage then return GetDefaultLanguage() end
+    return LANGUAGE or 'Language'
+end
+
+function Input:SelectLanguage(language)
+    local frame = self:GetEditBox()
+    if not frame then return false end
+    -- Recheck temporary languages and racial changes before updating the native
+    -- edit box. Its send handler already uses languageID for outgoing chat.
+    for _, entry in ipairs(self:GetLanguages()) do
+        if entry.id == language.id then
+            if frame.SetGameLanguage then frame:SetGameLanguage(entry.name, entry.id)
+            else
+                frame.language, frame.languageID = entry.name, entry.id
+                self:UpdateDestinationHeader()
+            end
+            return true
+        end
+    end
+    return false
 end

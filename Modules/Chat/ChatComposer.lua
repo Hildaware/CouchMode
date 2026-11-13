@@ -6,7 +6,7 @@ local Metal = addon.Components.Metal
 local function db() return addon.db.profile.chat end
 local TAB_TOP, TAB_HEIGHT, HEADER_TOP, HEADER_HEIGHT = 16, 40, 66, 30
 local PAGE_TOP, PAGE_TOP_WITHOUT_HEADER, PAGE_BOTTOM = 106, 66, 16
-local FOOTER_HEIGHT, FOOTER_GAP = 18, 8
+local FOOTER_HEIGHT, FOOTER_GAP = 24, 8
 local LEGEND_GAP = 16
 local TAB = { SHORTCUTS = 1, KEYBOARD = 2, EMOTES = 3 }
 chat.COMPOSER_TABS = TAB
@@ -134,8 +134,11 @@ function chat:ApplyComposerLayout()
     frame.footer:ClearAllPoints()
     frame.footer:SetPoint('BOTTOMLEFT', 16, PAGE_BOTTOM + extraHeight)
     frame.footer:SetPoint('BOTTOMRIGHT', -16, PAGE_BOTTOM + extraHeight)
+    frame.language:ClearAllPoints()
+    frame.language:SetPoint('TOPLEFT')
+    frame.language:SetPoint('BOTTOMLEFT')
     frame.destination:ClearAllPoints()
-    frame.destination:SetPoint('TOPLEFT')
+    frame.destination:SetPoint('TOPLEFT', frame.language, 'TOPRIGHT', 16, 0)
     frame.destination:SetPoint('BOTTOMRIGHT', frame.footer, 'BOTTOMRIGHT', self.composerTab == TAB.SHORTCUTS and -110 or 0, 0)
     frame.replyCount:SetShown(self.composerTab == TAB.SHORTCUTS and #self:GetQuickReplies() > 0)
     for _, page in ipairs(frame.pages) do
@@ -211,14 +214,6 @@ function chat:BuildComposer()
     divider:SetPoint('BOTTOMRIGHT', frame.footer, 'TOPRIGHT', 0, 4)
     divider:SetHeight(1)
     divider:SetColorTexture(0.5, 0.42, 0.27, 0.35)
-    frame.destination = frame.footer:CreateFontString(nil, 'ARTWORK')
-    frame.destination:SetFont(addon.Media.ResolveFont(db().msgFontFace), 16, '')
-    frame.destination:SetTextColor(0.87, 0.84, 0.76)
-    -- Thicken the configured face without requiring a separate bold font asset.
-    frame.destination:SetShadowColor(0.87, 0.84, 0.76, 1)
-    frame.destination:SetShadowOffset(0.65, 0)
-    frame.destination:SetJustifyH('LEFT')
-    frame.destination:SetWordWrap(false)
 
     frame.tabs, frame.pages = {}, {}
     local tabGap = 8
@@ -238,7 +233,7 @@ function chat:BuildComposer()
     self:BuildComposerKeyboard(frame.pages[TAB.KEYBOARD])
     self:BuildComposerReplies(frame.pages[TAB.SHORTCUTS])
     self:BuildComposerEmotes(frame.pages[TAB.EMOTES])
-    self:BuildComposerChannels()
+    self:BuildComposerSelectors()
 
     frame.status = frame:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
     frame.status:SetPoint('BOTTOMLEFT', 20, 20)
@@ -428,10 +423,7 @@ function chat:UpdateComposer(elapsed)
     if self.composerActive then self:UpdateComposerHeldInput(elapsed) end
     self:UpdateComposerKeyboardPointer()
     if self.composerTab ~= TAB.EMOTES then
-        self.composer.destination:SetText('Channel: ' .. Input:GetDestinationLabel())
-        local r, g, b = Input:GetDestinationColor()
-        self.composer.destination:SetTextColor(r, g, b)
-        self.composer.destination:SetShadowColor(r, g, b, 1)
+        self:RefreshComposerFooter()
     end
 end
 

@@ -1,4 +1,4 @@
--- Profile-backed shortcut phrases and destination selection.
+-- Profile-backed shortcut phrases.
 local _, addon = ...
 local chat = addon.Chat
 local TAB = chat.COMPOSER_TABS
@@ -172,72 +172,4 @@ function chat:InsertComposerReply()
     if not phrase then return end
     Input:InsertPhrase(phrase)
     self:SetComposerTab(TAB.KEYBOARD)
-end
-
-function chat:BuildComposerChannels()
-    local frame = self.composer
-    local panel = CreateFrame('Frame', nil, frame, 'BackdropTemplate')
-    panel:SetPoint('BOTTOMLEFT', frame.footer, 'TOPLEFT', 0, 8)
-    panel:SetSize(frame.pages[TAB.KEYBOARD]:GetWidth(), 272)
-    panel:SetFrameLevel(frame:GetFrameLevel() + 5)
-    panel:SetBackdrop({ bgFile = 'Interface\\Buttons\\WHITE8X8',
-        edgeFile = 'Interface\\Buttons\\WHITE8X8', edgeSize = 1 })
-    panel:SetBackdropColor(0.035, 0.045, 0.065, 1)
-    panel:SetBackdropBorderColor(0.65, 0.54, 0.32, 1)
-    panel:EnableMouse(true)
-    panel:Hide()
-    frame.channels = panel
-    frame.channelButtons = {}
-    frame.channelIndex, frame.channelFirst = 1, 1
-    for slot = 1, 6 do
-        local index = slot
-        local button = self:ComposerButton(panel, '', panel:GetWidth() - 32, 36, function()
-            chat.composer.channelIndex = chat.composer.channelFirst + index - 1
-            chat:ChooseComposerChannel()
-        end)
-        button:SetPoint('TOPLEFT', 16, -12 - (slot - 1) * 42)
-        frame.channelButtons[slot] = button
-    end
-    panel:SetScript('OnMouseWheel', function(_, delta) chat:MoveComposerSelection(0, -delta) end)
-    panel:EnableMouseWheel(true)
-end
-
-function chat:ToggleComposerChannels()
-    if self.composerTab == TAB.EMOTES then return end
-    local frame = self.composer
-    if frame.channels:IsShown() then frame.channels:Hide(); return end
-    self:ResetComposerHeldInput(true)
-    frame.destinations = Input:GetDestinations()
-    frame.channelIndex, frame.channelFirst = 1, 1
-    self:RefreshComposerChannels()
-    frame.channels:Show()
-end
-
-function chat:RefreshComposerChannels()
-    local frame = self.composer
-    if frame.channelIndex < frame.channelFirst then frame.channelFirst = frame.channelIndex end
-    if frame.channelIndex >= frame.channelFirst + 6 then frame.channelFirst = frame.channelIndex - 5 end
-    for slot, button in ipairs(frame.channelButtons) do
-        local index = frame.channelFirst + slot - 1
-        local entry = frame.destinations[index]
-        button:SetShown(entry ~= nil)
-        button.label:SetText(entry and entry.label or '')
-        self:HighlightComposerButton(button, index == frame.channelIndex)
-    end
-end
-
-function chat:ChooseComposerChannel()
-    local entry = self.composer.destinations[self.composer.channelIndex]
-    if not entry then return end
-    -- Recheck availability; group/channel membership can change while choosing.
-    local available = false
-    for _, current in ipairs(Input:GetDestinations()) do
-        if current.chatType == entry.chatType and current.target == entry.target and current.channel == entry.channel then
-            available = true; break
-        end
-    end
-    if not available then self:SetComposerStatus('That destination is no longer available.'); return end
-    Input:SelectDestination(entry)
-    self.composer.channels:Hide()
-    self:SetComposerStatus('')
 end
