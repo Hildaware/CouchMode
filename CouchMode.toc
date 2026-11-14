@@ -2,7 +2,7 @@
 ## Title: CouchMode
 ## Notes: Utilities to make WoW a more 'Console-like' experience
 ## Author: Sel
-## Version: 12.1.7
+## Version: 12.1.8
 ## Category: User Interface
 ## IconTexture: Interface\AddOns\CouchMode\Resources\Media\logo
 ## OptionalDeps: ConsolePort, Masque, Pawn, CanIMogIt, Scrap, totalRP3, Musician
