@@ -84,6 +84,10 @@ local JUNK_SYSTEM_MESSAGES = {
         fallbacks = { 'Out of range' },
     },
     {
+        globals = { 'SPELL_FAILED_TOO_CLOSE' },
+        fallbacks = { 'Target too close' },
+    },
+    {
         globals = { 'ERR_TOO_FAR_TO_INTERACT' },
         fallbacks = { 'You need to be closer to interact with that target' },
     },
