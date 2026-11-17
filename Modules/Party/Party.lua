@@ -15,7 +15,7 @@ local DEFAULT_WIDTH = 430
 local DEFAULT_POINT = 'TOPLEFT'
 local DEFAULT_X = 38
 local DEFAULT_Y = -180
-local VISIBILITY_RULE = '[group:party] show; hide'
+local VISIBILITY_RULE = '[group:raid] hide; [group:party] show; hide'
 local SOLO_VISIBILITY_RULE = '[group:raid] hide; [group:party] show; show'
 local previewAuras = {
     fortitude = { spellID = 21562, icon = 'Interface\\Icons\\Spell_Holy_WordFortitude' },
