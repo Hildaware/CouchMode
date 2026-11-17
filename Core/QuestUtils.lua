@@ -82,6 +82,9 @@ end
 local function getEntry(unit)
     local _, instanceType = IsInInstance()
     if instanceType ~= "none" then return nil end
+    -- Tamed pets can retain their creature's quest tooltip data. Ownership
+    -- takes precedence over both that data and any cached objective result.
+    if UnitPlayerControlled(unit) then return nil end
     local guid = UnitGUID(unit)
     if not guid then return nil end
     if not questCache[guid] then
