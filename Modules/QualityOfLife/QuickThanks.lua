@@ -1,5 +1,5 @@
--- Correlate real buff applications with readable player auras. Never infer a
--- new application from a login/zone aura snapshot or from an unidentified unit.
+-- Observe real aura changes, with optional combat-log correlation when the
+-- aura has no readable caster. Login/zone snapshots never trigger prompts.
 local _, addon = ...
 local qol = addon.QualityOfLife
 local Utils = addon.Utils
@@ -17,6 +17,7 @@ local LEGACY_FLAGS = {
 qol.quickThanksPending = {}
 qol.quickThanksCooldowns = {}
 qol.quickThanksGroup = {}
+qol.quickThanksAuras = nil
 
 local function safe(value, kind)
     return not isSecret(value) and type(value) == kind
@@ -41,9 +42,33 @@ function qol:IsQuickThanksEnabled()
 end
 
 function qol:QuickThanksAvailable()
-    return type(combatLogReader()) == 'function' and type(auraReader()) == 'function'
+    return type(auraReader()) == 'function' and Utils.EventExists('UNIT_AURA') ~= false
+end
+
+function qol:QuickThanksCombatLogAvailable()
+    return type(combatLogReader()) == 'function'
         and bit and bit.band and bit.bor and combatFlag('TypePlayer') and combatFlag('AffiliationMine')
         and combatFlag('AffiliationParty') and combatFlag('AffiliationRaid')
+        and Utils.EventExists('COMBAT_LOG_EVENT_UNFILTERED') ~= false
+end
+
+function qol:IsQuickThanksOutsider(guid, unit)
+    if not safe(guid, 'string') or guid == UnitGUID('player') or self.quickThanksGroup[guid] then return false end
+    if not guid:match('^Player%-') then return false end
+    -- Check both memberships when a home party coexists with an instance
+    -- group. Battleground teammates are in the instance party/raid. GUID
+    -- membership also works when a stranger has no usable unit token.
+    local inGroup = C_PartyInfo and C_PartyInfo.IsGUIDInGroup or IsGUIDInGroup
+    for _, category in ipairs({ LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE }) do
+        if inGroup then
+            local member = inGroup(guid, category)
+            if isSecret(member) or member then return false end
+        elseif safe(unit, 'string') then
+            local inParty, inRaid = UnitInParty(unit, category), UnitInRaid(unit, category)
+            if isSecret(inParty) or isSecret(inRaid) or inParty or inRaid then return false end
+        end
+    end
+    return true
 end
 
 function qol:RefreshQuickThanksGroup()
@@ -62,7 +87,11 @@ function qol:ResetQuickThanks()
     self:DismissQuickThanks(false)
     self.quickThanksPending = {}
     self.quickThanksCooldowns = {}
-    if Utils.IsFlavor('forever') then self:RefreshQuickThanksGroup() end
+    self.quickThanksAuras = nil
+    if Utils.IsFlavor('forever') then
+        self:RefreshQuickThanksGroup()
+        self:MatchQuickThanksBuffs(false)
+    end
 end
 
 function qol:StopQuickThanks()
@@ -80,25 +109,35 @@ function qol:ConfigureQuickThanks()
     if not self:QuickThanksAvailable() then return end
     if not self.quickThanksEvents then
         self.quickThanksEvents = CreateFrame('Frame')
-        self.quickThanksEvents:SetScript('OnEvent', function(_, event, unit)
+        self.quickThanksEvents:SetScript('OnEvent', function(_, event, unit, updateInfo)
             if event == 'COMBAT_LOG_EVENT_UNFILTERED' then
                 qol:OnQuickThanksCombatLog()
             elseif event == 'UNIT_AURA' then
-                if not isSecret(unit) and unit == 'player' then qol:ScheduleQuickThanksMatch() end
+                if not isSecret(unit) and unit == 'player' then
+                    -- A full update establishes a baseline, rather than a new
+                    -- cast. Older clients omit updateInfo and use snapshot diffs.
+                    local fullUpdate = isSecret(updateInfo)
+                        or (updateInfo and (isSecret(updateInfo.isFullUpdate) or updateInfo.isFullUpdate))
+                    qol:MatchQuickThanksBuffs(not fullUpdate)
+                end
             elseif event == 'GROUP_ROSTER_UPDATE' then
                 qol:RefreshQuickThanksGroup()
                 qol.quickThanksPending = {}
                 local prompt = qol.quickThanksActive
-                if prompt and qol.quickThanksGroup[prompt.guid] then qol:DismissQuickThanks(true) end
+                if prompt and not prompt.preview and not qol:IsQuickThanksOutsider(prompt.guid) then
+                    qol:DismissQuickThanks(true)
+                end
             else
                 qol:RefreshQuickThanksBinding()
             end
         end)
     end
     local frame = self.quickThanksEvents
-    for _, event in ipairs({ 'COMBAT_LOG_EVENT_UNFILTERED',
-        'GROUP_ROSTER_UPDATE', 'UPDATE_BINDINGS', 'GAME_PAD_ACTIVE_CHANGED' }) do
+    for _, event in ipairs({ 'GROUP_ROSTER_UPDATE', 'UPDATE_BINDINGS', 'GAME_PAD_ACTIVE_CHANGED' }) do
         Utils.RegisterEventIfValid(frame, event)
+    end
+    if self:QuickThanksCombatLogAvailable() then
+        Utils.RegisterEventIfValid(frame, 'COMBAT_LOG_EVENT_UNFILTERED')
     end
     if Utils.EventExists('UNIT_AURA') == true then
         pcall(frame.RegisterUnitEvent, frame, 'UNIT_AURA', 'player')
@@ -129,7 +168,7 @@ function qol:OnQuickThanksCombatLog()
     local eligible = bit.band(flags, combatFlag('TypePlayer')) ~= 0
         and bit.band(flags, bit.bor(combatFlag('AffiliationMine'), combatFlag('AffiliationParty'),
             combatFlag('AffiliationRaid'))) == 0
-        and guid ~= UnitGUID('player') and not self.quickThanksGroup[guid]
+        and self:IsQuickThanksOutsider(guid)
     for i = #self.quickThanksPending, 1, -1 do
         local record = self.quickThanksPending[i]
         if now - record.time > MATCH_WINDOW then
@@ -159,15 +198,23 @@ local function readBuffs()
                     expirationTime = expiration, sourceUnit = source }
             end
         end
+        if isSecret(aura) then break end
         if not aura then break end
-        if not isSecret(aura) and not isSecret(aura.sourceUnit)
-            and safe(aura.spellId, 'number') and safe(aura.duration, 'number')
+        if safe(aura.spellId, 'number') and safe(aura.duration, 'number')
             and aura.duration >= MIN_DURATION and safe(aura.expirationTime, 'number') then
+            local source = safe(aura.sourceUnit, 'string') and aura.sourceUnit or nil
             local guid
-            if safe(aura.sourceUnit, 'string') then guid = UnitGUID(aura.sourceUnit) end
+            if source then guid = UnitGUID(source) end
+            local instanceID = safe(aura.auraInstanceID, 'number') and aura.auraInstanceID or nil
+            if not safe(guid, 'string') and instanceID and C_UnitAuras and C_UnitAuras.GetAuraCasterGUID then
+                local ok, caster = pcall(C_UnitAuras.GetAuraCasterGUID, 'player', instanceID)
+                if ok and safe(caster, 'string') then guid = caster end
+            end
+            guid = safe(guid, 'string') and guid or nil
             buffs[#buffs + 1] = {
                 spellID = aura.spellId, applied = aura.expirationTime - aura.duration,
-                guid = safe(guid, 'string') and guid or nil,
+                guid = guid, sourceUnit = source,
+                key = instanceID or (tostring(aura.spellId) .. ':' .. (guid or 'unknown')),
                 icon = (safe(aura.icon, 'number') or safe(aura.icon, 'string')) and aura.icon or nil,
             }
         end
@@ -175,7 +222,19 @@ local function readBuffs()
     return buffs
 end
 
-function qol:MatchQuickThanksBuffs()
+function qol:OfferQuickThanksBuff(guid, name, aura)
+    if aura.notified or not self:IsQuickThanksOutsider(guid, aura.sourceUnit) then return end
+    if (self.quickThanksCooldowns[guid] or 0) > GetTime() then return end
+    if not safe(name, 'string') and safe(aura.sourceUnit, 'string') then name = UnitName(aura.sourceUnit) end
+    if not safe(name, 'string') and GetPlayerInfoByGUID then
+        local ok, _, _, _, _, _, casterName = pcall(GetPlayerInfoByGUID, guid)
+        if ok then name = casterName end
+    end
+    aura.notified = true
+    self:ShowQuickThanks(guid, safe(name, 'string') and name or 'Someone', false, aura.spellID, aura.icon)
+end
+
+function qol:MatchQuickThanksBuffs(detectChanges)
     if not self:IsQuickThanksEnabled() then return end
     local now = GetTime()
     for guid, expires in pairs(self.quickThanksCooldowns) do
@@ -184,11 +243,23 @@ function qol:MatchQuickThanksBuffs()
     for i = #self.quickThanksPending, 1, -1 do
         if now - self.quickThanksPending[i].time > MATCH_WINDOW then table.remove(self.quickThanksPending, i) end
     end
-    if #self.quickThanksPending == 0 then return end
     if Utils.CanReadAuras() then
         -- Some clients reject enumeration before returning secret fields.
         local ok, buffs = pcall(readBuffs)
         if ok then
+            local previous, current = self.quickThanksAuras, {}
+            for _, aura in ipairs(buffs) do
+                local old = previous and previous[aura.key]
+                local unchanged = old and old.guid == aura.guid and old.spellID == aura.spellID
+                    and math.abs(old.applied - aura.applied) < 0.01
+                aura.notified = unchanged and old.notified or false
+                current[aura.key] = aura
+                if detectChanges and previous and not unchanged
+                    and math.abs(now - aura.applied) <= MATCH_WINDOW then
+                    self:OfferQuickThanksBuff(aura.guid, nil, aura)
+                end
+            end
+            self.quickThanksAuras = current
             for _, record in ipairs(self.quickThanksPending) do
                 if record.eligible and not record.handled and not self.quickThanksGroup[record.guid] then
                     for _, aura in ipairs(buffs) do
@@ -204,16 +275,18 @@ function qol:MatchQuickThanksBuffs()
                             end
                             if matched then
                                 record.handled = true
-                                if not self.quickThanksCooldowns[record.guid] then
-                                    self:ShowQuickThanks(record.guid, record.name, false, aura.spellID, aura.icon)
-                                end
+                                self:OfferQuickThanksBuff(record.guid, record.name, aura)
                                 break
                             end
                         end
                     end
                 end
             end
+        else
+            self.quickThanksAuras = nil
         end
+    else
+        self.quickThanksAuras = nil
     end
     -- Only a short, bounded retry window; no permanent aura polling.
     self:ScheduleQuickThanksMatch()
@@ -248,7 +321,7 @@ function qol:SendQuickThanks()
     local active = self.quickThanksActive
     if self.quickThanksEditing or not active or active.sent or active.submitting
         or not self:IsQuickThanksEnabled() then return end
-    if GetTime() >= active.expires or self.quickThanksGroup[active.guid] then
+    if GetTime() >= active.expires or (not active.preview and not self:IsQuickThanksOutsider(active.guid)) then
         self:DismissQuickThanks(true); return
     end
     if active.preview then self:ConfirmQuickThanks(); return end

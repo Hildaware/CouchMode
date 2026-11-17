@@ -51,11 +51,8 @@ function qol:BuildQuickThanksOptions()
             },
             unavailable = {
                 type = 'description', order = 3,
-                name = 'Buff detection is unavailable on this client: readable auras and combat-log events are required.',
-                hidden = function()
-                    return qol:QuickThanksAvailable()
-                        and addon.Utils.EventExists('COMBAT_LOG_EVENT_UNFILTERED') ~= false
-                end,
+                name = 'Buff detection is unavailable on this client: readable player aura updates are required.',
+                hidden = function() return qol:QuickThanksAvailable() end,
             },
             preview = {
                 type = 'execute', name = 'Preview Quick Thanks', order = 4,
